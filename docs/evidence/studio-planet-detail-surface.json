@@ -1,0 +1,10 @@
+{
+  "sha": "826d0882b477ae0d1d6dba23d2d751fcca66e5b1",
+  "argv": [
+    "bash",
+    "/tmp/planet-detail-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-planet-detail-surface.log.txt",
+  "sha256": "12c9311492c0afad6b674475d6f35e2d0a2ca6a1e76526f1a310cd4d17332d97"
+}

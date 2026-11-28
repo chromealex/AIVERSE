@@ -64,7 +64,6 @@ export default function RenderLightingControls({ projectPath }: { projectPath: s
             }} onKeyDown={event => { if(event.key === 'Enter') event.currentTarget.blur(); }}/>
         </StudioField>)}
       <StudioAlert>{status}</StudioAlert>
-      <StudioAlert>Settings are stored with the map. Use Save in the main toolbar.</StudioAlert>
     </>}
   </StudioSection>;
 }

@@ -16,6 +16,7 @@
 #include <vector>
 #include "../render/Math3D.h"
 
+namespace aiverse { class Json; }
 namespace aiverse::bake {
 
 using render::float3;
@@ -76,6 +77,6 @@ std::string bakeFolderFor(const std::string& mapPath);
 // Reads a bake folder. False (with a readable error) when missing or broken; pages decoded to RGBA8.
 bool loadLightmapData(const std::string& folder, const ReadFn& read, LightmapData& out, std::string& error);
 // Only the header (hash, mode, counts): cheap check whether a rebake is needed.
-bool readLightmapHeader(const std::string& folder, const ReadFn& read, LightmapData& out, std::string& error);
+bool readLightmapHeader(const std::string& folder, const ReadFn& read, LightmapData& out, std::string& error, Json* index = nullptr);
 
 } // namespace aiverse::bake

@@ -23,7 +23,7 @@ This is not Nanite: no virtual geometry pages, disk streaming or software microp
    All booleans default false, errorPixels defaults 1 (0.1..16). Type policies also apply to
    its model LOD variants; attachments retain the ordinary rendering path. Built-in procedural
    shapes without prepared geometry fall back to the ordinary path.
-4. For static scenery, use `geometry_scene_validate`, `geometry_scene_set`, `geometry_scene_get`.
+4. For static scenery, use `geometry_scene_validate`, `geometry_scene_set`, `geometry_scene_get`. In HTML Studio open **Static Geometry** to choose Auto, STRATA or LOD for an instance. The equivalent workspace operations are `geometry_instances_list` to inspect the configured scene and `geometry_strata_set` to save an instance mode. Both use the project’s `geometryScene` path.
    The set operation loads source assets for validation, saves `geometry.json`, and for RTS sets
    `game.json.geometryScene` and requests a view rebuild. This is **game-wide flat-map scenery**;
    do not use it for map-specific objects or planetary surfaces. FPS uses the map's `geometryScene`

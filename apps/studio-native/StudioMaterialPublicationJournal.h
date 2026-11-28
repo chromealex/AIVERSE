@@ -1,4 +1,5 @@
 #pragma once
+#include "apps/editor/core/MaterialOps.h"
 // Create-only building material publication intent. Recovery is deliberately
 // read-only: a second process may still own the publication, and other assets
 // may reference the generated files. Never infer permission to delete them.
@@ -153,8 +154,8 @@ public:
             return Json::parseFile(file.string());
         };
         const auto candidate=read(dir/"candidate.json",65536);
-        const auto library=read(project/"materials.json",16*1024*1024);
-        if(!candidate.isObject()||!library["materials"][name].isObject()||!(library["materials"][name]==candidate))
+        const auto library=editor::resolveMaterialLibraryIndex(project,read(project/"materials.json",16*1024*1024),16*1024*1024);
+        if(!candidate.isObject()||!library[name].isObject()||!(library[name]==candidate))
             throw std::runtime_error("Recovery requires matching committed material");
         const auto records=read(dir/"assets.json",65536);
         if(!records.isArray()||records.size()>4)throw std::runtime_error("Invalid asset evidence");
@@ -201,7 +202,7 @@ public:
         if(fs::is_symlink(materialFile))throw std::runtime_error("Unsafe material library");
         if(fs::exists(materialFile)){
             if(!fs::is_regular_file(materialFile)||fs::file_size(materialFile)>16*1024*1024)throw std::runtime_error("Invalid material library");
-            library=Json::parseFile(materialFile.string())["materials"];
+            library=editor::resolveMaterialLibraryIndex(project,Json::parseFile(materialFile.string()),16*1024*1024);
             if(!library.isObject())throw std::runtime_error("Invalid material library");
         }
         const std::string prefix="GeneratedBuildingMaterials/"+name+"/";
@@ -273,7 +274,7 @@ public:
         if(fs::exists(libraryFile)) {
             if(fs::is_symlink(libraryFile)||!fs::is_regular_file(libraryFile)||fs::file_size(libraryFile)>16*1024*1024)
                 throw std::runtime_error("Unsafe material library for publication inspection");
-            library=Json::parseFile(libraryFile.string())["materials"];
+            library=editor::resolveMaterialLibraryIndex(project,Json::parseFile(libraryFile.string()),16*1024*1024);
         }
         for(const auto& entry:fs::directory_iterator(parent)) {
             const auto name=entry.path().filename().string();

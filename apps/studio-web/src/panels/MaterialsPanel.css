@@ -15,7 +15,9 @@
 .material-chip{width:17px;height:17px;border:1px solid #7992ae;border-radius:5px;flex:none}
 .materials-detail{flex:1;min-width:0;min-height:0;overflow:auto}
 .materials-selected{display:flex;align-items:center;gap:10px;padding:15px;border-bottom:1px solid #28364a;font-size:13px}
-.materials-selected small{margin-left:auto;color:#7f91ab;font-size:10px}
+.materials-file-info{flex:1;min-width:0;display:grid;gap:3px;overflow-wrap:anywhere}
+.materials-file-info small{color:var(--au-text-muted);font-size:var(--au-font-xs);user-select:text}
+.materials-selected button,.materials-selected .materials-swatch{flex:none}
 .materials-swatch{width:37px;height:37px;flex:none;border-radius:9px;border:1px solid #7592b7}
 .materials-fields{padding:16px;max-width:510px}
 .materials-fields .property-row{grid-template-columns:minmax(80px,43%) minmax(0,1fr);gap:10px}
@@ -47,5 +49,28 @@
 .materials-detail--graph .materials-graph-host{flex:1;overflow:auto}
 .materials-graph-host[hidden],.material-graph-modes>[hidden],.materials-fields[hidden]{display:none!important}
 .material-dependency-view,.material-quick-view{padding:12px}
+.material-texture-reference{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.material-texture-reference code{min-width:0;overflow-wrap:anywhere;user-select:text}
 .material-dependency-canvas{height:420px;display:flex;flex-direction:column}
 .material-dependency-view .au-row>.au-button,.material-quick-view .au-row>.au-button{flex:0 1 auto}
+
+.materials-editor{container-type:inline-size}
+@container (max-width:540px){
+  .materials-main{flex-direction:column}
+  .materials-list{flex:none;width:100%;min-width:0;max-width:none;max-height:35%;border-right:0;border-bottom:1px solid var(--studio-border)}
+  .materials-selected{padding:10px}
+  .materials-heading,.materials-footer{flex-wrap:wrap}
+  .materials-footer{padding:6px 10px;gap:6px}
+  .materials-fields{padding:10px}
+}
+
+@container (max-width:540px){
+  .material-dependency-canvas{height:clamp(240px,72cqw,360px)}
+}
+
+.materials-heading .materials-library-toggle{display:none}
+@container (max-width:540px){
+  .materials-heading .materials-heading-label,.materials-list[data-collapsed]{display:none}
+  .materials-heading .materials-library-toggle{display:inline-flex}
+  .materials-editor>.asset-native-surface{height:clamp(90px,16vh,140px)}
+}

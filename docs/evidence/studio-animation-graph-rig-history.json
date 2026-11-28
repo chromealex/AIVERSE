@@ -1,0 +1,10 @@
+{
+  "sha": "ab012abd784d518690c198c87b57e497139861da",
+  "argv": [
+    "bash",
+    "/tmp/studio-graph-history.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-animation-graph-rig-history.log.txt",
+  "sha256": "6fdff166b30187479626bc4ccf3780f95bbc274c5e1151cde9964cd2ccc87825"
+}

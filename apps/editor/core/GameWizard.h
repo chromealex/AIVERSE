@@ -78,9 +78,9 @@ Json wizardCatalog(const std::string& engineDir);
 // What the wizard would make (no files written): template + why, features, maps, tutorial archetype, meta.
 Json planGame(const std::string& engineDir, const WizardSpec& spec);
 
-// Downloads `url` (a file or a .zip / .tar.gz archive; http(s)) with the system curl into `dir` and unpacks archives.
+// Downloads `url` (a file or a .zip / .tar.gz archive; http(s)) into a new staging folder inside `dir` and unpacks archives.
 // Blocking (the window runs it on a thread). Returns the folder with the content or "" + `err`.
-std::string fetchWizardArt(const std::string& url, const std::string& dir, std::string* err);
+std::string fetchWizardArt(const std::string& engineDir, const std::string& url, const std::string& dir, std::string* err);
 
 // Makes the game step by step, so the window can show progress (one step per frame) and MCP can run it at once.
 // The workspace opens the new project when the files are written (later steps use its ops: screens, branding, checks).

@@ -1,0 +1,10 @@
+{
+  "sha": "57aba77e0ab3d2f0bdcc4c5692b02504533aaea3",
+  "argv": [
+    "bash",
+    "/tmp/fx-play-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-particle-effect-playback.log.txt",
+  "sha256": "3675ee5e6a1c6ec219d31b4bbbea5e2d3ce513a27ffac6eafbd6ed54c069e101"
+}

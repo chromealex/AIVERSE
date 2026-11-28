@@ -1,0 +1,10 @@
+{
+  "sha": "ba1c7a956ab4e3888f5be564fc41d1503194cced",
+  "argv": [
+    "bash",
+    "../build-limits.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-package-limits.log.txt",
+  "sha256": "38a2a584a791629348163fdf8e3d3a8a9865479ada7ee3d2687a9001d7776a49"
+}

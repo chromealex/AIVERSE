@@ -537,6 +537,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       backend:state.backend,camera:state.camera??null,snapshotMaxSide:captureSide,
       capturedAt:new Date().toISOString()};
     try {
+      await showPreview();
+      if(!mounted.current)return;
       const result=await invokePreview({
         action:'capture',maxSide:captureSide,expectedGeneration:state.generation,
         ...(replayPreset&&state.replayReady?{requireReplayReady:true}:{})
@@ -647,7 +649,15 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       transferId=undefined; // Native queue owns the uploaded bytes.
     }catch(e){if(transferId)await invokePreview({action:'checkpointFileCancel',transferId,expectedGeneration:state?.generation}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
   };
+  const stage=useRef<HTMLDivElement>(null);
+  const showPreview=async()=>{
+    stage.current?.querySelector('.spectra-native__surface')?.scrollIntoView({block:'center',inline:'nearest'});
+    // Let the viewport scroll listener publish its clipped native rectangle before dispatch.
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+  };
   const launch=async()=>{
+    await showPreview();
+    if(!mounted.current)return;
     // Actual graph validation and device eligibility occur in StudioScene.
     await command('load',{graph,gpuBirthRandom,gpuOwnedAllocation});
   };
@@ -666,7 +676,32 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
     }catch(e){setError(message(e));}finally{setBusy(false);}
   };
   return <StudioSection title="Particle Preview">
+    <div ref={stage} className="spectra-native__stage">
     <SpectraDockViewport/>
+    <div className="spectra-native__toolbar">
+      <StudioButton size="sm" variant="primary" disabled={!active||!state||busy||disabled}
+        onClick={()=>void launch()}><Eye size={14}/> Load graph</StudioButton>
+      <StudioButton size="sm" disabled={!active||!state?.ready||busy}
+        onClick={()=>void command(state?.playing?'pause':'play')}>
+        {state?.playing?<Pause size={14}/>:<Play size={14}/>}
+        {state?.playing?'Pause':'Play'}
+      </StudioButton>
+      <StudioField label="Snapshot" htmlFor="spectra-capture-size">
+        <StudioSelect id="spectra-capture-size" value={String(captureSide)}
+          disabled={!active||busy||capturePending}
+          onChange={e=>setCaptureSide(Number(e.target.value))}>
+          <option value="256">256 px</option>
+          <option value="512">512 px</option>
+          <option value="768">768 px</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" variant="secondary"
+        disabled={!active||!state?.ready||busy||capturePending}
+        onClick={()=>void captureFrame()}>
+        {capturePending?'Capturing GPU frame…':'Capture Frame'}
+      </StudioButton>
+    </div>
+    </div>
     <div className="spectra-native__camera">
       <span>VFX camera · Left drag orbit · Wheel zoom</span>
       <StudioButton size="sm" variant="ghost" disabled={!active||busy}
@@ -734,19 +769,12 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
     </div>}
     {state?.dispatch&&<small className="spectra-native__hint">Native dispatch #{state.dispatch.sequence} · {state.dispatch.action} · {state.dispatch.elapsedMs.toFixed(2)} ms · failed {state.dispatch.failed}</small>}
     <div className="spectra-native__toolbar">
-      <StudioButton size="sm" variant="primary" disabled={!active||!state||busy||disabled}
-        onClick={()=>void launch()}><Eye size={14}/> Load graph</StudioButton>
       <StudioCheckbox label="GPU birth random (applies on Load)" checked={gpuBirthRandom} disabled={!active||busy}
         onChange={e=>setGpuBirthRandom(e.target.checked)}/>
       <StudioCheckbox label="GPU-owned allocator (applies on Load)" checked={gpuOwnedAllocation} disabled={!active||busy}
         onChange={e=>setGpuOwnedAllocation(e.target.checked)}/>
       <StudioCheckbox label="Auto-reload graph" checked={autoReload} disabled={!active||busy}
         onChange={e=>setAutoReload(e.target.checked)}/>
-      <StudioButton size="sm" disabled={!active||!state?.ready||busy}
-        onClick={()=>void command(state?.playing?'pause':'play')}>
-        {state?.playing?<Pause size={14}/>:<Play size={14}/>}
-        {state?.playing?'Pause':'Play'}
-      </StudioButton>
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
         onClick={()=>void command('step')}><SkipForward size={14}/> Step</StudioButton>
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
@@ -767,20 +795,6 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
         onClick={()=>void command('clear')}>
         Clear Particles
-      </StudioButton>
-      <StudioField label="Snapshot" htmlFor="spectra-capture-size">
-        <StudioSelect id="spectra-capture-size" value={String(captureSide)}
-          disabled={!active||busy||capturePending}
-          onChange={e=>setCaptureSide(Number(e.target.value))}>
-          <option value="256">256 px</option>
-          <option value="512">512 px</option>
-          <option value="768">768 px</option>
-        </StudioSelect>
-      </StudioField>
-      <StudioButton size="sm" variant="secondary"
-        disabled={!active||!state?.ready||busy||capturePending}
-        onClick={()=>void captureFrame()}>
-        {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
       {libraryAsset&&<StudioButton size="sm" disabled={!active||!state||state.ready||busy||disabled||capturePending}
         onClick={()=>void generateLibraryThumbnail()}>Generate library thumbnail</StudioButton>}

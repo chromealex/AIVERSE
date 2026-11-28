@@ -664,6 +664,10 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if(!probe.canUndo())throw std::runtime_error("Staged move exceeds retained history budget");
                 *history=std::move(recorded);
             }
+            for(const auto& edit:repairs)if(view::materialAssetPath(edit.path.generic_string())){
+                const auto before=Json::parse(edit.before),after=Json::parse(edit.after);
+                for(const auto* field:kStudioTextureFields)if(before[field]!=after[field])++materialUpdates;
+            }
             response.set("repairedMaterialReferences",Json::number(int64_t(materialUpdates)));
             return response;
         }

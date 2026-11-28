@@ -1,0 +1,14 @@
+{
+  "sha": "fafcd1d9ade2fef0c980d12b4e65a406ecdf8fb0",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_(session|move_journal)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-world-scene-fafcd1d9a.log.txt",
+  "sha256": "cd53098156632d5c3a65236b0b00248337e76e239df3b66d51a930957702fd70"
+}

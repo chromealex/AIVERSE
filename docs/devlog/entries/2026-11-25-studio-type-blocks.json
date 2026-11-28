@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-type-blocks",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "a7c3bafe0",
+  "author": null,
+  "links": [],
+  "title": "Блоки свойств для типов объектов",
+  "titleEn": "Property blocks for object types",
+  "summary": "В Project доступны 36 шаблонов для типов объектов.",
+  "summaryEn": "Project offers 36 property templates for object types.",
+  "body": [
+    "В Project → Types выберите объект и блок в Add property block. Его значения появятся в All properties. Сохраните черновик кнопкой Save item."
+  ],
+  "bodyEn": [
+    "In Project → Types, select a type and choose Add property block. Review the defaults under All properties and use Save item."
+  ],
+  "verified": "На macOS после перезапуска сохранились энергия, теги и параметры захвата. Исходные свойства объекта совпали с оригиналом.",
+  "verifiedEn": "On macOS the energy, tags and capture defaults persisted after restart. All pre-existing properties matched the source.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-type-blocks/type-properties.png",
+      "caption": "Свойства типа Scout",
+      "captionEn": "Scout type properties"
+    }
+  ]
+}

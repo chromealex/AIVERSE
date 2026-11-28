@@ -1,0 +1,10 @@
+{
+  "sha": "6cd36eaec61706aed2f479a8a99e3f89a478aff7",
+  "argv": [
+    "bash",
+    "../build-exclude.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-file-inclusion-cycle.log.txt",
+  "sha256": "908c6b0f60deb9d85824aadd54bea25a22e78de2dcf63709feba6951a4ab4129"
+}

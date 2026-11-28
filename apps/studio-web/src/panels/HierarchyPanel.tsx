@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { shortcutKey } from '../keyboard';
-import { Box, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, Search, Shield, Trash2, User, X } from 'lucide-react';
-import { matchesHierarchy, parseHierarchyFilter, rangeIds } from '../hierarchyFilter';
+import { Box, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, RefreshCw, Search, Shield, Trash2, User, X } from 'lucide-react';
+import { nestedDocumentRows, groupedHierarchy, matchesHierarchy, parseHierarchyFilter, rangeIds, type HierarchyGrouping } from '../hierarchyFilter';
+import { HierarchyPreviewRow } from './HierarchyPreviewRow';
 import { invoke } from '../bridge';
-import type { StudioEntity, StudioEntityCatalog, StudioSnapshot } from '../types';
-import { StudioButton, StudioContextMenu, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
+import type { StudioMapProperties, StudioEntity, StudioEntityCatalog, StudioSnapshot, StudioHierarchyPaths } from '../types';
+import { StudioButton, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import './HierarchyPanel.css';
+import { useLuaMenu } from './useLuaMenu';
 
 const DRAG_MIME = 'application/x-aiverse-entity';
 const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
@@ -14,43 +16,152 @@ const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
 
 /** Compact, content-first Hierarchy: search on top, dense rows, drag reorder, context menu. */
 export default function HierarchyPanel({ snapshot, busy, connected, search, setSearch,
-  rows, select, selectIds, hoverId, updateSnapshot, setBusy }: StudioPanelContext) {
+  rows, select, selectIds, hoverId, updateSnapshot, setBusy, showPanel }: StudioPanelContext) {
+  const [grouping, setGrouping] = useState<HierarchyGrouping>('scene');
+  const [preview,setPreview]=useState<StudioEntity[]>([]);
+  const [paths,setPaths]=useState<StudioHierarchyPaths>();
+  const [parents,setParents]=useState<Record<string,string>>();
+  const [refresh,refreshGroups]=useState(0);
+  const refreshSeen=useRef(0);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const anchor = useRef<string | null>(null);
   const [catalog, setCatalog] = useState<StudioEntityCatalog | null>(null);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [type, setType] = useState('');
-  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [status, setStatus] = useState('');
+  const lua = useLuaMenu(updateSnapshot, showPanel, setStatus, setError);
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
+  const [rename, setRename] = useState<{id: string; epoch: unknown; value: string} | null>(null);
+  const renameTarget = snapshot?.inspector;
+  const startRename = (id: string) => {
+    if (renameTarget?.id === id && renameTarget.nameEditable)
+      setRename({ id, epoch: snapshot?.graphDocument?.epoch, value: renameTarget.name });
+  };
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const project = snapshot?.project.path;
   useEffect(() => {
     let active = true;
+    setGrouping('scene'); setCollapsed(new Set()); anchor.current = null;
     setCatalog(null); setCreating(false); setError('');
     if (connected && project) void invoke('studio.entityCatalog', {}).then(result => {
       if (active) { setCatalog(result); setType(result.types[0]?.id ?? ''); }
     }).catch(e => { if (active) setError(String(e)); });
     return () => { active = false; };
   }, [connected, project]);
+  const [playersOpen, setPlayersOpen] = useState(false);
+  const [areasOpen, setAreasOpen] = useState(false);
+  const [blocksOpen,setBlocksOpen]=useState(false);
+  const [roadsOpen,setRoadsOpen]=useState(false);
+  const [scenarioOpen,setScenarioOpen]=useState(false);
+  const [surfacesOpen,setSurfacesOpen] = useState(false);
+  const planetary = snapshot?.scene.mapProperties && snapshot.scene.mapRegions === false && !snapshot.scene.worldSpace;
+  const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; blocks:NonNullable<StudioMapProperties['blockIndexList']>; roads:NonNullable<StudioMapProperties['roadIndex']>; scenario:NonNullable<StudioMapProperties['scenarioIndex']>; areas: string[]; bodies: {id:string;faceSize:number;metadata:Record<string,unknown>}[]}>();
+  const searching = search.trim().length > 0;
+  const needRecords = playersOpen || areasOpen || blocksOpen || roadsOpen || scenarioOpen || (planetary && surfacesOpen) || searching;
+  const scope = snapshot?.graphDocument;
+  useEffect(() => {
+    if (!needRecords || !scope || snapshot?.scene.worldSpace) return;
+    let current = true;
+    void invoke('studio.mapProperties', {scope,includeBodies:!!planetary,scenarioIndex:searching || scenarioOpen,blockIndexList:searching || blocksOpen,roadIndex:searching || roadsOpen}).then(data => {
+      if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort(), blocks:data.blockIndexList ?? [], roads:data.roadIndex ?? [], scenario:data.scenarioIndex ?? [], bodies:data.bodies ?? [] });
+    }).catch(e => { if (current) setError(String(e)); });
+    return () => { current = false; };
+  }, [needRecords, searching, blocksOpen, roadsOpen, scenarioOpen, planetary, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
+  const currentRecords = scope && records?.revision === scope.revision && records.epoch === scope.epoch ? records : undefined;
+  const [regionsOpen,setRegionsOpen] = useState(false);
+  const [regionList,setRegionList] = useState<{epoch:string;revision:string;items:{letter:string;name:string;cells:number}[]}>();
+  const needRegions = (searching || regionsOpen) && snapshot?.scene.mapRegions;
+  useEffect(() => {
+    if (!needRegions || !scope) return;
+    let current = true;
+    void invoke('studio.mapRegions',{scope,letter:'A'}).then(data=>{
+      if (current) setRegionList({epoch:scope.epoch,revision:scope.revision,items:data.regions.filter(r=>r.cells || r.name)});
+    }).catch(e=>{if(current)setError(String(e));});
+    return ()=>{current=false;};
+  },[needRegions,scope?.projectPath,scope?.mapPath,scope?.epoch,scope?.revision]);
+  const currentRegions = scope && regionList?.epoch===scope.epoch && regionList.revision===scope.revision ? regionList.items : undefined;
+  const selectRecord = (params: {kind:'block';key:string;index?:number} | {kind:'player'|'wave'|'trigger'|'road';index:number} | {kind:'area'|'region'|'body';key:string}) => {
+    if (scope && (params.kind==='region' ? currentRegions : currentRecords)) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
+      expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision, params }).catch(e => setError(String(e)));
+  };
   const mapEntities = !!catalog?.mapEntities;
   const canCreate = mapEntities && (catalog?.types.length ?? 0) > 0;
   const selectedId = snapshot?.selectedId ?? null;
   const selectedSet = useMemo(() => new Set(snapshot?.selectedIds ?? (selectedId ? [selectedId] : [])), [snapshot?.selectedIds, selectedId]);
   const editable = (id: string | null | undefined) => mapEntities && !!id?.startsWith('entity:');
-  const visible = useMemo(() => {
-    if (!search.trim()) return rows;
-    const filter = parseHierarchyFilter(search);
-    return rows.filter(({node}) => matchesHierarchy(node, filter, selectedSet));
-  }, [rows, search, selectedSet]);
+  const allRows=useMemo(()=>[...rows,...preview.map(node=>({node,depth:0}))],[rows,preview]);
+  const filter = useMemo(() => parseHierarchyFilter(search), [search]);
+  const matches = useMemo(() => allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet, currentRecords?.names)), [allRows, filter, selectedSet, currentRecords]);
+  const players = (currentRecords?.names ?? []).map((name, i) => ({name, index:i+1}))
+    .filter(({name, index}) => matchesHierarchy({id:`player:${index}`, name, kind:'player', owner:index}, filter, selectedSet, currentRecords?.names));
+  const areas = (currentRecords?.areas ?? []).filter(name =>
+    matchesHierarchy({id:`area:${name}`, name, kind:'area'}, filter, selectedSet));
+
+  const regions = (currentRegions ?? []).filter(({letter,name}) =>
+    matchesHierarchy({id:`region:${letter}`,name:letter+' '+name,kind:'region'},filter,selectedSet));
+
+  const blocks=(currentRecords?.blocks ?? []).flatMap(({key,entries})=>{
+    const hit=(name:string)=>matchesHierarchy({id:key,name,kind:'block'},filter,selectedSet);
+    const children=entries.map((name,index)=>({name,index})).filter(row=>hit(key+' '+row.name));
+    return hit(key) || children.length ? [{key,children}] : [];
+  });
+  const roads=(currentRecords?.roads ?? []).filter(({name,index})=>
+    matchesHierarchy({id:'road:'+index,kind:'road',name},filter,selectedSet));
+  const scenario=(currentRecords?.scenario ?? []).filter(({kind,name,index})=>
+    matchesHierarchy({id:kind+':'+index,kind,name},filter,selectedSet));
+  const bodies = (currentRecords?.bodies ?? []).filter(({id,faceSize,metadata}) =>
+    matchesHierarchy({id,name:id,kind:[metadata.kind,'body',faceSize ? 'planet surface' : ''].join(' ')},filter,selectedSet));
+  const showSurface = (body:string) => {
+    if(scope && currentRecords) void invoke('studio.planetSceneBody',{body,mapPath:scope.mapPath,expectedRevision:scope.revision})
+      .catch(e=>setError(String(e)));
+  };
+
+  const selectPreview=async(id:string)=>{
+    if(!scope || !snapshot || busy)return;
+    try {
+      updateSnapshot(await invoke('studio.select',{previewRef:id.slice('preview:'.length),scope,historyVersion:snapshot.project.historyVersion ?? ''}));
+      setError('');
+    }catch(e){setError(String(e));}
+  };
+  const group=grouping.startsWith('project:')?Number(grouping.slice(8)):-1;
+  useEffect(()=>{
+    setPaths(undefined);setParents(undefined);setPreview([]);
+    if(!mapEntities || !project || !scope)return;
+    let active=true,timer:number|undefined;
+    const load=async(force:boolean)=>{
+      try{
+        const result=await invoke('studio.hierarchyGroups',{expectedProject:project,scope,...(group>=0?{group}:{}),refresh:force});
+        if(!active)return;
+        if(result.pending)timer=window.setTimeout(()=>void load(false),120);
+        else {setPreview(result.preview??[]);setParents(result.parents);setPaths(result.paths??{});setError('');}
+      }catch(e){if(active)setError(String(e));}
+    };
+    const force=refreshSeen.current!==refresh;
+    refreshSeen.current=refresh;
+    void load(force);
+    return ()=>{active=false;window.clearTimeout(timer);};
+  },[mapEntities,project,scope?.mapPath,scope?.epoch,scope?.revision,snapshot?.project.historyVersion,group,refresh]);
+  const display = useMemo(() => group>=0 && !paths ? [] : group>=0 && parents ? nestedDocumentRows(matches,parents,collapsed) : groupedHierarchy(matches, grouping, collapsed,paths), [matches, grouping, collapsed,paths,group,parents]);
+  const visible = useMemo(() => display.flatMap(row => 'node' in row && !row.node.preview ? [row] : []), [display]);
+  const occurrenceKeys = useMemo(() => visible.map(r => r.occurrence ?? r.node.id), [visible]);
+  const idsByOccurrence = useMemo(() => new Map(visible.map(r => [r.occurrence ?? r.node.id, r.node.id])), [visible]);
+  const canReorder = grouping === 'scene' && !search && !busy;
   // Selection targets for row actions: the whole selection when the row is part of it.
+  const toggleCollapsed=(key:string)=>setCollapsed(current=>{
+    const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next;
+  });
   const targets = (id: string) => selectedSet.has(id) ? [...selectedSet] : [id];
-  const click = (event: React.MouseEvent, id: string) => {
+  const click = (event: React.MouseEvent, id: string, occurrence:string) => {
     if (event.shiftKey && anchor.current) {
-      void selectIds(rangeIds(visible.map(r => r.node.id), anchor.current, id), event.metaKey || event.ctrlKey ? 'add' : 'replace');
+      const range=rangeIds(occurrenceKeys, anchor.current, occurrence);
+      const ids=new Set(range.map(key=>idsByOccurrence.get(key)!));
+      ids.delete(id);
+      void selectIds([...ids,id], event.metaKey || event.ctrlKey ? 'add' : 'replace');
       return;
     }
-    anchor.current = id;
+    anchor.current = occurrence;
     void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace');
   };
   const setFlags = (ids: string[], flags: { hidden?: boolean; locked?: boolean }) =>
@@ -88,27 +199,98 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.target instanceof HTMLElement && event.target.closest('input,select,textarea')) {
       if (event.key === 'ArrowDown' && event.target === searchRef.current) {
-        event.preventDefault(); listRef.current?.querySelector<HTMLElement>('[role=option]')?.focus();
+        event.preventDefault();
+        listRef.current?.querySelector<HTMLElement>('.hier__group button[aria-expanded], [role=option], .hier-preview summary')?.focus();
       }
       return;
     }
     const key = shortcutKey(event);
     if ((event.metaKey || event.ctrlKey) && key === 'f') { event.preventDefault(); searchRef.current?.focus(); return; }
-    if (!selectedId || busy) return;
-    const index = visible.findIndex(({node}) => node.id === selectedId);
-    if ((event.metaKey || event.ctrlKey) && key === 'a') { event.preventDefault(); void selectIds(visible.map(r => r.node.id)); return; }
+    if (busy) return;
+    const focusedRow = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-hierarchy-key]') : null;
+    if (focusedRow && !event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[data-hierarchy-key]') ?? []);
+      const next = rows[rows.indexOf(focusedRow) + (event.key === 'ArrowDown' ? 1 : -1)];
+      if (next?.dataset.id) {
+        anchor.current = next.dataset.occurrence ?? next.dataset.id;
+        next.focus();
+        void select(next.dataset.id, 'replace');
+      } else if (next?.dataset.previewId) {
+        next.querySelector('summary')?.focus();
+      } else {
+        next?.querySelector('button')?.focus();
+      }
+      return;
+    }
+    // A group heading has keyboard focus independently of the selected entity.
+    if (focusedRow && !focusedRow.dataset.id &&
+        (['F2','Delete','Backspace'].includes(event.key) || key === 'd' || key === 'f')) return;
+    const focused = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-occurrence]')?.dataset.occurrence : undefined;
+    if (event.key === 'F2' && event.target instanceof HTMLElement) {
+      const id = event.target.closest<HTMLElement>('[data-id]')?.dataset.id ?? selectedId;
+      if (id && id === selectedId) { event.preventDefault(); startRename(id); }
+      return;
+    }
+    const index = focused ? occurrenceKeys.indexOf(focused) : visible.findIndex(({node}) => node.id === selectedId);
+    if ((event.metaKey || event.ctrlKey) && key === 'a') {
+      event.preventDefault();
+      if (group >= 0 && !paths) return;
+      const expanded = group >= 0 && parents
+        ? nestedDocumentRows(matches, parents, new Set())
+        : groupedHierarchy(matches, grouping, new Set(), paths);
+      const ids = new Set(expanded.flatMap(row => 'node' in row && !row.node.preview ? [row.node.id] : []));
+      if (ids.size) void selectIds([...ids]);
+      return;
+    }
+    if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[role=option]')) {
+      const id = event.target.dataset.id;
+      if (id) { event.preventDefault(); anchor.current = focused ?? id; void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace'); }
+      return;
+    }
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && event.target instanceof HTMLElement) {
+      const element = event.target.closest<HTMLElement>('[data-hierarchy-key]');
+      if (!element) return;
+      const key = element.dataset.hierarchyKey!;
+      const rowIndex = display.findIndex(row => ('members' in row ? row.key : row.occurrence ?? row.node.id) === key);
+      const row = display[rowIndex];
+      if (!row) return;
+      const branch = 'members' in row || !!row.children;
+      const collapseKey = 'members' in row ? row.key : row.node.id;
+      event.preventDefault();
+      if (branch && collapsed.has(collapseKey) === (event.key === 'ArrowRight')) {
+        toggleCollapsed(collapseKey);
+      } else {
+        const next = event.key === 'ArrowLeft'
+          ? display.slice(0, rowIndex).reverse().find(candidate => candidate.depth < row.depth)
+          : display[rowIndex + 1];
+        if (!next || (event.key === 'ArrowRight' && (!branch || next.depth <= row.depth))) return;
+        const nextKey = 'members' in next ? next.key : next.occurrence ?? next.node.id;
+        const target = listRef.current?.querySelector<HTMLElement>(`[data-hierarchy-key="${CSS.escape(nextKey)}"]`);
+        if ('members' in next) target?.querySelector('button')?.focus();
+        else if (next.node.preview) target?.querySelector('summary')?.focus();
+        else {
+          target?.focus();
+          anchor.current = nextKey;
+          void select(next.node.id, 'replace');
+        }
+      }
+      return;
+    }
+    if (!visible.length) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const next = visible[Math.max(0, Math.min(visible.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))];
-      if (next) { anchor.current = next.node.id; void select(next.node.id, event.shiftKey ? 'add' : 'replace');
-        listRef.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next.node.id)}"]`)?.focus(); }
-    } else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); remove(selectedId); }
+      if (next) { anchor.current = next.occurrence ?? next.node.id; void select(next.node.id, event.shiftKey ? 'add' : 'replace');
+        listRef.current?.querySelector<HTMLElement>(`[data-occurrence="${CSS.escape(next.occurrence ?? next.node.id)}"]`)?.focus(); }
+    } else if (!selectedId) return;
+    else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); remove(selectedId); }
     else if ((event.metaKey || event.ctrlKey) && key === 'd') { event.preventDefault(); duplicate(selectedId); }
     else if (key === 'f' && !event.metaKey && !event.ctrlKey) { event.preventDefault(); void focus(selectedId); }
   };
 
   const dragOver = (event: DragEvent<HTMLElement>, id: string) => {
-    if (!event.dataTransfer.types.includes(DRAG_MIME) || !editable(id)) return;
+    if (!canReorder || !event.dataTransfer.types.includes(DRAG_MIME) || !editable(id)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     const r = event.currentTarget.getBoundingClientRect();
@@ -119,13 +301,14 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     const entityId = event.dataTransfer.getData(DRAG_MIME);
     const placement = drop?.placement ?? 'before';
     setDrop(null);
-    if (!entityId || entityId === targetId || !editable(entityId) || !editable(targetId)) return;
+    if (!canReorder || !entityId || entityId === targetId || !editable(entityId) || !editable(targetId)) return;
     event.preventDefault();
     void mutate(() => invoke('studio.entityMove', { entityId, targetId, placement }));
   };
 
   const menuItems = (id: string): StudioMenuItem[] => [
     { id: 'focus', label: 'Focus in Scene', shortcut: 'F', icon: <Focus size={13}/>, onSelect: () => void focus(id) },
+    { id: 'rename', label: 'Rename', shortcut: 'F2', disabled: busy || renameTarget?.id !== id || !renameTarget.nameEditable, onSelect: () => startRename(id) },
     { id: 'duplicate', label: 'Duplicate', shortcut: '⌘D', icon: <Copy size={13}/>, disabled: !editable(id) || busy, onSelect: () => duplicate(id) },
     { id: 'delete', label: 'Delete', shortcut: '⌫', icon: <Trash2 size={13}/>, danger: true, disabled: !editable(id) || busy, onSelect: () => remove(id) },
     { id: 'hide', label: rows.find(r => r.node.id === id)?.node.visible === false ? 'Show in Scene' : 'Hide in Scene', icon: <EyeOff size={13}/>, separator: true,
@@ -135,11 +318,17 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     { id: 'create', label: 'Create Entity…', icon: <Plus size={13}/>, separator: true, disabled: !canCreate || busy, onSelect: () => setCreating(true) },
   ];
 
-  return <div className="hier" onKeyDown={onKeyDown}>
+  const currentItems = useRef(menuItems);
+  currentItems.current = menuItems;
+
+  return <div className="hier" onKeyDown={onKeyDown} onContextMenu={event => {
+    const row = (event.target as Element).closest<HTMLElement>('[data-hierarchy-label]');
+    if (project && row) void lua.open(event, 'hierarchy', row.dataset.hierarchyLabel ?? '');
+  }}>
     <div className="hier__toolbar">
       <label className="hier__search">
         <Search size={12} aria-hidden="true"/>
-        <input ref={searchRef} type="search" placeholder="Find scene objects…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
+        <input ref={searchRef} type="search" placeholder="Search hierarchy…" title="Search by name, #map-id, t:type, p:player, owner:1 or is:hidden" aria-label="Search scene objects"
           value={search} onChange={event => setSearch(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape' && search) { event.stopPropagation(); setSearch(''); } }}/>
         {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><X size={11}/></button>}
@@ -148,6 +337,17 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         icon={<Plus size={14}/>} disabled={busy || !canCreate} aria-expanded={creating}
         onClick={() => setCreating(value => !value)}/>
     </div>
+    {project && <div className="hier__grouping"><span>Group by</span>
+      <StudioSelect value={grouping} aria-label="Group scene objects by" onChange={event => {
+        setGrouping(event.target.value as HierarchyGrouping); setCollapsed(new Set()); anchor.current = null; setDrop(null);
+      }}>
+        <option value="scene">Scene order</option><option value="type">Type</option><option value="owner-type">Owner → type</option>
+        {snapshot?.scene.groupings?.map((title,i)=><option key={i} value={'project:'+i}>{title}</option>)}
+      </StudioSelect>
+      {mapEntities && <StudioIconButton className="hier__tool" aria-label="Refresh preview" title="Refresh preview from project files"
+        icon={<RefreshCw size={13}/>} onClick={()=>refreshGroups(v=>v+1)}/>}
+    </div>}
+    {group>=0&&!paths&&!error&&<div className="hier__create" role="status">Reading preview…</div>}
     {creating && <form className="hier__create" onSubmit={event => { event.preventDefault(); create(); }}>
       <StudioSelect aria-label="Entity type" value={type} disabled={busy} onChange={event => setType(event.target.value)}>
         {catalog?.types.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
@@ -155,34 +355,76 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       <StudioButton type="submit" variant="primary" disabled={busy || !type}>Create</StudioButton>
       <StudioIconButton aria-label="Cancel" icon={<X size={13}/>} onClick={() => setCreating(false)}/>
     </form>}
+    {status && <div className="hier__footer" role="status">{status}</div>}
     {error && <div className="hier__error" role="alert">{error}
       <button type="button" aria-label="Dismiss" onClick={() => setError('')}><X size={11}/></button></div>}
     <div ref={listRef} className="hier__list" role="listbox" aria-label="Scene objects" aria-multiselectable="true"
+      onContextMenu={event => {
+        if (!project || !(event.target === event.currentTarget || (event.target as Element).closest('.hier__empty'))) return;
+        void lua.open(event, 'hierarchy', '', [{ id: 'create', label: 'Create Entity…', disabled: !canCreate || busy,
+          onSelect: () => setCreating(true) }], 'Hierarchy actions');
+      }}
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
-      {project && visible.length === 0 && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
-      {visible.map(({node, depth}) => {
+      {project && matches.length === 0 && (!searching || (!players.length && !areas.length && !regions.length && !bodies.length && !scenario.length && !roads.length && !blocks.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
+      {display.map(row => {
+        if ('members' in row) {
+          const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
+          const Chevron = row.collapsed ? ChevronRight : ChevronDown;
+          return <div key={'group:'+row.key} className="hier__group" data-hierarchy-key={row.key} data-hierarchy-label={row.label} style={{paddingInlineStart:4+row.depth*12}}>
+            <button type="button" aria-label={(row.collapsed?'Expand ':'Collapse ')+row.label} aria-expanded={!row.collapsed}
+              onClick={() => toggleCollapsed(row.key)}><Chevron size={13}/></button>
+            <button type="button" title={documentMembers.length?'Select '+documentMembers.length+' map objects':'Preview objects'} disabled={busy || !documentMembers.length}
+              onClick={event => {anchor.current = visible.find(r=>r.node.id===documentMembers.at(-1) && r.occurrence?.startsWith(row.key.slice(0,-1)+','))?.occurrence ?? null; void selectIds(documentMembers, event.metaKey || event.ctrlKey ? 'add' : 'replace');}}>
+              <span>{row.label}</span><small>{row.members.length}</small>
+            </button>
+            {scope && snapshot?.scene.mapRegions && <StudioIconButton icon={<Focus size={13}/>} disabled={busy}
+              aria-label={'Show '+row.label+' group in Scene'} title="Show group in Scene"
+              onClick={()=>void invoke('studio.viewportInput',{kind:'focusGroup',ids:row.members,scope}).catch(e=>setError(String(e)))}/>}
+          </div>;
+        }
+        const {node, depth} = row;
         const Icon = kindIcon(node);
         const selected = selectedSet.has(node.id);
         const hidden = node.visible === false;
-        const dragging = editable(node.id) && !search;
-        return <div key={node.id} data-id={node.id} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
+        const dragging = editable(node.id) && canReorder;
+        const occurrence=row.occurrence ?? node.id;
+        if(node.preview)return <HierarchyPreviewRow key={occurrence} occurrence={occurrence} onSelect={()=>void selectPreview(node.id)} selected={snapshot?.selectedPreviewIds?.includes(node.id)} node={node} depth={depth}
+          childCount={row.children} collapsed={collapsed.has(node.id)} toggle={()=>toggleCollapsed(node.id)}/>;
+        return <div key={occurrence} data-hierarchy-key={occurrence} data-occurrence={occurrence} data-id={node.id} data-nested-leaf={row.children===0 || undefined} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
             (node.id === hoverId ? ' is-hover' : '') + (hidden ? ' is-hidden' : '') +
             (drop?.id === node.id ? ' is-drop-' + drop.placement : '')}
           style={{ paddingInlineStart: 6 + depth * 12 }}
-          draggable={dragging && !busy}
+          draggable={dragging}
           onDragStart={event => { event.dataTransfer.setData(DRAG_MIME, node.id); event.dataTransfer.effectAllowed = 'move'; }}
           onDragEnd={() => setDrop(null)}
           onDragOver={event => dragOver(event, node.id)}
           onDrop={event => onDrop(event, node.id)}
-          onClick={event => click(event, node.id)}
+          onClick={event => click(event, node.id, occurrence)}
           onMouseEnter={() => hover(node.id)}
           onDoubleClick={() => void focus(node.id)}
-          onContextMenu={event => { event.preventDefault(); if (!selectedSet.has(node.id)) void select(node.id); setMenu({ x: event.clientX, y: event.clientY, id: node.id }); }}>
+          onContextMenu={event => { if (!selectedSet.has(node.id)) void select(node.id); void lua.open(event, 'hierarchy', node.name, () => currentItems.current(node.id), 'Entity actions'); }}>
+          {!!row.children && <button type="button" className="hier__disclosure" aria-expanded={!collapsed.has(node.id)}
+            aria-label={(collapsed.has(node.id)?'Expand ':'Collapse ')+node.name}
+            onClick={event=>{event.stopPropagation();toggleCollapsed(node.id);}}>{collapsed.has(node.id)?<ChevronRight size={13}/>:<ChevronDown size={13}/>}</button>}
           <Icon size={12} className="hier__icon"/>
-          <span className="hier__name" title={node.name}>{node.name}</span>
+          {rename?.id === node.id && renameTarget?.id === node.id && rename.epoch === snapshot?.graphDocument?.epoch ?
+            <input className="au-input hier__name" aria-label="Rename object" autoFocus value={rename.value}
+              onFocus={event => event.currentTarget.select()} onClick={event => event.stopPropagation()}
+              onChange={event => setRename({ ...rename, value: event.target.value })}
+              onBlur={() => setRename(null)} onKeyDown={event => {
+                event.stopPropagation();
+                if (event.key === 'Escape') setRename(null);
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  const value = rename.value.trim();
+                  setRename(null);
+                  if (value && value !== renameTarget.name) void mutate(() => invoke('studio.setProperty',
+                    { entityId: node.id, componentId: 'Entity', key: 'name', value }));
+                }
+              }}/> : <span className="hier__name" title={node.name}>{node.name}</span>}
           {node.kind && node.kind !== node.name && <span className="hier__kind">{node.kind}</span>}
           <button type="button" className={'hier__flag' + (hidden ? ' is-on' : '')} aria-label={hidden ? 'Show in Scene' : 'Hide in Scene'}
             title={hidden ? 'Hidden in Scene' : 'Hide in Scene'} disabled={busy}
@@ -195,8 +437,69 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         </div>;
       })}
     </div>
-    <div className="hier__footer">{search ? `${visible.length} / ${rows.length}` : rows.length} objects{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
-    {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Entity actions"
-      items={menuItems(menu.id)} onClose={() => setMenu(null)}/>}
+    {scope && !snapshot?.scene.worldSpace && (!searching || players.length > 0) && <details className="hier__players" open={searching || playersOpen}
+      onToggle={event => { if (!searching) setPlayersOpen(event.currentTarget.open); }}>
+      <summary>Map players</summary>
+      {(playersOpen || searching) && players.map(({name,index}) => <StudioButton key={index} size="sm" disabled={busy}
+          data-hierarchy-label={name} onClick={() => selectRecord({kind:'player',index})}>
+          {index} · {name}
+        </StudioButton>)}
+    </details>}
+    {scope && !snapshot?.scene.worldSpace && (!searching || areas.length > 0) && <details className="hier__players" open={searching || areasOpen}
+      onToggle={event => { if (!searching) setAreasOpen(event.currentTarget.open); }}>
+      <summary>Map areas</summary>
+      {(areasOpen || searching) && currentRecords && (areas.length ? areas.map(key =>
+        <StudioButton key={key} size="sm" disabled={busy} data-hierarchy-label={key} onClick={() => selectRecord({kind:'area',key})}>{key}</StudioButton>)
+        : <span>No named areas</span>)}
+    </details>}
+    {scope && snapshot?.scene.mapRegions && (!searching || regions.length > 0) && <details className="hier__players" open={searching || regionsOpen}
+      onToggle={event => { if (!searching) setRegionsOpen(event.currentTarget.open); }}>
+      <summary>Map regions</summary>
+      {(regionsOpen || searching) && currentRegions && (regions.length ? regions.map(({letter,name,cells}) =>
+        <StudioButton key={letter} size="sm" disabled={busy} data-hierarchy-label={name || letter} onClick={()=>selectRecord({kind:'region',key:letter})}>
+          {letter}{name && ' · '+name} ({cells})
+        </StudioButton>) : <span>No named or painted regions</span>)}
+    </details>}
+    {scope && !snapshot?.scene.worldSpace && (!searching || blocks.length>0) && <details className="hier__players" open={searching || blocksOpen}
+      onToggle={e=>{if(!searching)setBlocksOpen(e.currentTarget.open);}}>
+      <summary>Additional map blocks</summary>
+      {(searching || blocksOpen) && blocks.map(({key,children})=><div key={key}>
+        <StudioButton size="sm" disabled={busy} data-hierarchy-label={key} onClick={()=>selectRecord({kind:'block',key})}>{key}</StudioButton>
+        {!!children.length && <details open={searching || undefined}><summary>Entries ({children.length})</summary>
+          {children.map(({name,index})=><StudioButton key={index} size="sm" disabled={busy}
+            data-hierarchy-label={name} onClick={()=>selectRecord({kind:'block',key,index})}>{name}</StudioButton>)}</details>}
+      </div>)}
+      {blocksOpen && !searching && currentRecords && !blocks.length && <span>No additional blocks</span>}
+    </details>}
+    {scope && snapshot?.scene.mapRegions && (!searching || roads.length>0) && <details className="hier__players" open={searching || roadsOpen}
+      onToggle={event=>{if(!searching)setRoadsOpen(event.currentTarget.open);}}>
+      <summary>Movement roads</summary>
+      {(searching || roadsOpen) && roads.map(({index,name})=><StudioButton key={index} size="sm" disabled={busy}
+        data-hierarchy-label={name} onClick={()=>selectRecord({kind:'road',index})}>{name}</StudioButton>)}
+      {roadsOpen && !searching && currentRecords && !roads.length && <span>No movement roads</span>}
+    </details>}
+    {scope && !snapshot?.scene.worldSpace && (!searching || scenario.length>0) && <details className="hier__players" open={searching || scenarioOpen}
+      onToggle={event=>{if(!searching)setScenarioOpen(event.currentTarget.open);}}>
+      <summary>Waves and triggers</summary>
+      {(searching || scenarioOpen) && scenario.map(({kind,index,name})=><StudioButton key={kind+index} size="sm" disabled={busy}
+        data-hierarchy-label={name} onClick={()=>selectRecord({kind,index})}>{name}</StudioButton>)}
+      {scenarioOpen && !searching && currentRecords && !scenario.length && <span>No waves or triggers</span>}
+    </details>}
+    {planetary && (!searching || bodies.length > 0) && <details className="hier__players" open={searching || surfacesOpen}
+      onToggle={event=>{if(!searching)setSurfacesOpen(event.currentTarget.open);}}>
+      <summary>Celestial bodies</summary>
+      {(surfacesOpen || searching) && currentRecords && <>
+        {!searching && <StudioButton size="sm" disabled={busy} onClick={()=>showSurface('')}>Follow entity selection</StudioButton>}
+        {bodies.map(({id,faceSize})=><div key={id}>
+          <StudioButton size="sm" disabled={busy} data-hierarchy-label={id} onClick={()=>selectRecord({kind:'body',key:id})}>
+            {id} · {faceSize ? faceSize+' × '+faceSize+' per face' : 'No surface'}
+          </StudioButton>
+          {faceSize>0 && <StudioIconButton aria-label={'Show '+id+' in Scene'} title={'Show '+id+' in Scene'} disabled={busy}
+            icon={<Focus size={13}/>} onClick={()=>showSurface(id)}/>}
+        </div>)}
+      </>}
+    </details>}
+    <div className="hier__footer">{search ? `${matches.length} / ${allRows.length}` : allRows.length} objects{preview.length>0 && ` · ${preview.length} preview`}{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
+    {lua.popup}
   </div>;
 }

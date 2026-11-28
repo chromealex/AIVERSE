@@ -8,8 +8,8 @@ description: Publish AIVERSE editor packages for Windows and macOS to the builds
 Rules: AGENTS.md section 8. Only MAIN publishes; other agents write "republish due" in their report.
 
 1. When: `main` got a verified change to the editor, engine or tools, and tests plus template matches passed on that exact commit.
-2. Windows: cross-compile with mingw-w64 into `build/.temp/windows` (Ninja, Release, `AIVERSE_BUILD_TESTS=OFF`), targets `aiverse_editor aiversemcp aiversebuild aiverse_headless aiverse_client assetpipe`.
-3. macOS: the Mac build (`build/mac`) of the same commit.
+2. Build the HTML UI from the verified commit with `npm install --no-audit --no-fund --package-lock=false` and `npm run build` in `apps/studio-web`. For each desktop host, configure CMake with `-DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF` and set `AIVERSE_STUDIO_WEB_DIST` to the absolute path of that built web bundle.
+3. Windows: cross-compile with mingw-w64 (Ninja, Release, `AIVERSE_BUILD_TESTS=OFF`, Vulkan enabled). Build `aiverse_studio aiversemcp aiversebuild aiverse_headless aiverse_client assetpipe`. The Windows Studio output includes `AiverseStudio.exe`, the matching WebView2 loader and the web bundle. Build the macOS host and tools from the same commit; the editor bundle is `AiverseStudioHTML5.app`.
 4. Package: `python3 tools/release/package_engine.py --platform windows|macos --bin <build dir>` -> `build/dist/*.zip` (Linux optional).
 5. Publish: `python3 tools/release/publish_builds.py <zips>` - replaces the orphan `builds` branch with one commit keeping the newest 5 versions per platform (force-push) and writes `index.json`; keep its fields backward compatible. A zip over 95 MB is not committed: add `--release v<x.y.z>` and attach it to that GitHub release; index.json then points to the release asset.
 6. Version: `project(AIVERSE VERSION x.y.z)` + short hash; bump for releases worth naming.

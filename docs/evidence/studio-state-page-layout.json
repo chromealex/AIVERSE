@@ -1,0 +1,10 @@
+{
+  "sha": "20e7e9222d5280e1b9f8ab2e22c731479dfd7de2",
+  "argv": [
+    "bash",
+    "/tmp/studio-state-page.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-state-page-layout.log.txt",
+  "sha256": "d8deee4743ff237cff80b44ae078e985d313924959bb351cbc7ae4404e779234"
+}

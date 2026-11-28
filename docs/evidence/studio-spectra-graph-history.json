@@ -1,0 +1,10 @@
+{
+  "sha": "967d946a2e9b993ba59ea9b4b846c8fd8ff75a8e",
+  "argv": [
+    "bash",
+    "/tmp/studio-fx-undo-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-spectra-graph-history.log.txt",
+  "sha256": "2de025bcf33a33fb4f78d123113b8f5e56064c330a92c8a399bdccfd7bc13893"
+}

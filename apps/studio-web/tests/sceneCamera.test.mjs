@@ -75,3 +75,31 @@ test('camera events are validated before use', () => {
   assert.ok(!isSceneCameraState({ yaw: 0, pitch: Number.NaN, distance: 3, ortho: true }));
   assert.ok(!isSceneCameraState(null));
 });
+
+test('failed bookmark writes preserve the saved slot and report failure', async () => {
+  const { saveBookmark, removeBookmark, readBookmarks } = await import('../src/components/sceneBookmarks.ts');
+  const mark={slot:1,name:'View 1',x:2,y:3,z:4,distance:12,yaw:0,pitch:1,ortho:false};
+  const store={getItem:()=>JSON.stringify([mark]),setItem:()=>{throw Error('quota');}};
+  assert.throws(()=>saveBookmark('A',{...mark,x:100},store),/quota/);
+  assert.throws(()=>removeBookmark('A',1,store),/quota/);
+  assert.deepEqual(readBookmarks('A',store),[mark]);
+  assert.throws(()=>saveBookmark('A',mark,null),/unavailable/);
+});
+
+test('previous editor shortcuts fill original slots first, then free slots, once per project', async () => {
+  const { importBookmarks, saveBookmark, removeBookmark } = await import('../src/components/sceneBookmarks.ts');
+  const data = new Map();
+  const store = { getItem: k => data.get(k) ?? null, setItem: (k, v) => data.set(k, v) };
+  const legacy = Array.from({length: 6}, (_, i) => ({
+    slot: i + 1, name: 'Imported view ' + (i + 1), x: i, y: 0, z: 0,
+    distance: 10, yaw: 0, pitch: 0.8, fov: 0.6, ortho: false
+  }));
+  saveBookmark('A', { ...legacy[0], name: 'My angle' }, store);
+  const imported = importBookmarks('A', legacy, store);
+  assert.deepEqual(imported.map(v => v.name), ['My angle', ...legacy.slice(1).map(v => v.name), legacy[0].name]);
+  removeBookmark('A', 3, store);
+  assert.deepEqual(importBookmarks('A', legacy, store).map(v => v.slot), [1, 2, 4, 5, 6, 7]);
+  assert.deepEqual(importBookmarks('B', legacy, store), legacy);
+  for (let slot = 1; slot <= 9; slot++) saveBookmark('C', { ...legacy[0], slot, name: 'Mine' }, store);
+  assert.ok(importBookmarks('C', legacy, store).every(v => v.name === 'Mine'));
+});

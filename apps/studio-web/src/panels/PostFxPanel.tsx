@@ -3,17 +3,20 @@ import { Eye, EyeOff, Plus, Trash2, Wrench } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
 import ToolPanel from './ToolPanel';
+import PrismaPreviewControls from './PrismaPreviewControls';
+import PrismaFrameDiagnostics from './PrismaFrameDiagnostics';
+import PrismaVolumeEditor from './PrismaVolumeEditor';
 import PrismaCompositorEditor from './PrismaCompositorEditor';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
 import './PostFxPanel.css';
 
 type Scope = 'game' | 'map';
-interface CatalogParam { name: string; kind: string; range?: [number, number]; default?: unknown; help: string }
-interface CatalogEffect { type: string; help: string; class: string; defaultMinQuality: string; params: CatalogParam[]; msPerFrame: Record<string, Record<string, number>> }
+export interface CatalogParam { name: string; kind: string; range?: [number, number]; default?: unknown; help: string }
+export interface CatalogEffect { type: string; help: string; class: string; defaultMinQuality: string; params: CatalogParam[]; msPerFrame: Record<string, Record<string, number>> }
 interface Catalog { effects: CatalogEffect[]; presets: Array<{ id: string; help: string }>; profiles?: Array<{ id: string; device: string }> }
 interface ChainTotal { device: string; tier: string; ms: number; fpsAt60: number; effects: number; passes: number }
-interface PostFxState { game: any; map: any; chain: { effects: any[]; total: Record<string, ChainTotal>; warnings: string[]; enabled: boolean; issues?: string[] } }
+interface PostFxState { gameVolumes: string; mapVolumes: string; game: any; map: any; chain: { effects: any[]; total: Record<string, ChainTotal>; warnings: string[]; enabled: boolean; issues?: string[] } }
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as any;
@@ -84,7 +87,18 @@ export default function PostFxPanel({ snapshot, commitSnapshot }: { snapshot: St
           <span>{t.device}</span><b>{t.ms.toFixed(2)} ms</b><small>60 → {t.fpsAt60.toFixed(0)} fps</small>
           <i style={{ width: Math.min(100, (t.ms / (budget * 2)) * 100) + '%' }}/></div>;
       })}</div>
+      <PrismaPreviewControls key={path} project={path}/>
+      <PrismaFrameDiagnostics key={JSON.stringify([path,snapshot?.graphDocument?.epoch])} project={path}/>
       {scope === 'map' && <p className="ptp__hint">Map effects override the game's chain for this map only.</p>}
+      {state && snapshot?.graphDocument && <PrismaVolumeEditor key={JSON.stringify([path,snapshot.graphDocument.epoch,scope])}
+        scope={scope} catalog={catalog?.effects??[]} project={path} stored={scope==='map'?state.mapVolumes:state.gameVolumes}
+        save={async (block, expected) => {
+          const doc = snapshot.graphDocument!;
+          await invoke('studio.op',{op:'postfx_volumes_set',params:{scope,block,expected},
+            expectedProject:path,expectedDocumentEpoch:doc.epoch,expectedDocumentRevision:doc.revision});
+          await read();
+          commitSnapshot(await invoke('studio.snapshot',{}));
+        }}/>}
       {effects.map(e => {
         const def = byType.get(e.type);
         return <section key={e.type} className={'pfx__fx' + (e.enabled === false ? ' is-off' : '')}>

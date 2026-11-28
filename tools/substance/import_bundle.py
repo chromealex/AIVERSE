@@ -80,14 +80,30 @@ def import_bundle(bundle, project, name):
         for field in maps:
             if field in material:
                 material[field] = (relative / material[field]).as_posix()
-        document['materials'][name] = material
+        asset = Path('content/materials') / (name + '.material.json')
+        file = project / asset
+        if file.resolve() != file:
+            raise ValueError('Material destination crosses a symbolic link')
+        file.parent.mkdir(parents=True, exist_ok=True)
+        document['materials'][name] = asset.as_posix()
         with tempfile.NamedTemporaryFile(dir=project, prefix='.materials-', delete=False) as stream:
             pending = Path(stream.name)
             stream.write((json.dumps(document, indent=2, allow_nan=False) + '\n').encode())
         try:
             if (library.read_bytes() if library.exists() else None) != before:
                 raise ValueError('Material library changed during import; retry with Studio closed')
-            pending.replace(library)
+            with file.open('x') as output:
+                try:
+                    json.dump(material, output, indent=2, allow_nan=False)
+                    output.write('\n')
+                except BaseException:
+                    file.unlink(missing_ok=True)
+                    raise
+            try:
+                pending.replace(library)
+            except BaseException:
+                file.unlink(missing_ok=True)
+                raise
         finally:
             pending.unlink(missing_ok=True)
     finally:

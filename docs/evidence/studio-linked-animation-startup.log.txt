@@ -1,0 +1,2 @@
+2026-11-26 10:02:34.684 AiverseStudioHTML5[70208:83794162] [studio-web] JS: CROSS main DONE_1
+2026-11-26 10:02:34.683 AiverseStudioHTML5[70208:83794162] [studio-web] JS: CROSS main VERIFIED linked animation_editor clips and embedded graph, protected dirty draft, discard resumes queued request, invalid requests and default robot, disk unchanged

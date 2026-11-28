@@ -6,10 +6,14 @@
 #include "apps/editor/core/ProjectDocumentJournal.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
+#include "apps/studio-native/StudioNetworkPlay.h"
 #include "engine/actor/Project.h"
+#include "engine/game/gen/MapGen.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
+#include "apps/studio-native/StudioDeviceMask.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
+#include "engine/actor/ActorComponents.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
@@ -25,6 +29,22 @@
 #include <chrono>
 
 namespace {
+void regionOverviewContract(){
+    using namespace aiverse;
+    editor::Workspace ws;
+    ws.map.reset(197,9);
+    auto& map=ws.map.data;
+    map.regions[map.idx(0,0)]='B';
+    map.regions[map.idx(196,8)]='B';
+    map.regions[map.idx(195,8)]='A';
+    const auto report=ws.call("region_list",Json::parse(R"({"letter":"B"})"));
+    AIVERSE_TEST_CHECK(report.getInt("stride")==3 && report["coverage"].size()==3);
+    AIVERSE_TEST_CHECK(report["coverage"][0].str().size()==66 && report["coverage"][0].str()[0]=='#');
+    AIVERSE_TEST_CHECK(report["coverage"][2].str().back()=='#');
+    AIVERSE_TEST_CHECK(report["regions"][0].getInt("cells")==1 && report["regions"][1].getInt("cells")==2);
+    AIVERSE_TEST_CHECK(ws.call("region_name",Json::parse(R"({"letter":".","name":"Sea"})")).has("error"));
+    AIVERSE_TEST_CHECK(!ws.map.canUndo());
+}
 void mapCompoundHistoryContract(){
     using namespace aiverse::editor;
     MapDoc map;map.reset(8,8);
@@ -58,6 +78,7 @@ void mapHistoryPersistenceContract(){
     MapDoc doc;doc.reset(8,8);std::string error;
     DocEntity entity;entity.id="unit";entity.type="unit";entity.x=1.2345678f;entity.z=2.3456789f;
     doc.data.entities.push_back(entity);
+    doc.data.regionNames['R']="Ridge";
     doc.data.corners.assign(81,0);doc.data.corners[3]=-321;
     doc.data.detailScale=2;doc.data.detail.assign(17*17,0);doc.data.detail[8]=-1023;
     doc.data.detailSplat.assign(17*17*4,0);doc.data.detailSplat[11]=217;
@@ -77,6 +98,7 @@ void mapHistoryPersistenceContract(){
     AIVERSE_TEST_CHECK(doc.save(file,&error)&&doc.historyPersistenceWarning().empty());
     MapDoc reopened;
     AIVERSE_TEST_CHECK(reopened.load(file,&error)&&reopened.historyPersistenceWarning().empty());
+    AIVERSE_TEST_CHECK(reopened.data.regionNames.at('R')=="Ridge");
     AIVERSE_TEST_CHECK(reopened.undoDepth()==1&&reopened.redoDepth()==1);
     AIVERSE_TEST_CHECK(reopened.historyEpoch()!=epoch&&reopened.undoId(0)!=previousId);
     AIVERSE_TEST_CHECK(reopened.historyLabel(reopened.undoId(0))=="Terrain stroke");
@@ -236,6 +258,20 @@ void projectOwnerSaveContract(){
     std::ofstream(manifest)<<manifestBytes<<"\n";
     AIVERSE_TEST_CHECK(ws.call("set_manifest",Json::parse(R"({"path":"name","value":"New name"})")).has("error"));
     AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Fixture"&&readProjectFileBytes(manifest)==manifestBytes+"\n");
+    auto script=Json::parse(R"({"path":"scripts/main.lua","text":"function on_start() end","register":true,"createOnly":true})");
+    const auto existingRules=ws.project.rulesJson;
+    AIVERSE_TEST_CHECK(ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(!fs::exists(root/"scripts/main.lua") && ws.project.rulesJson==existingRules);
+    std::ofstream(manifest)<<manifestBytes;
+    AIVERSE_TEST_CHECK(!ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(root/"scripts/main.lua")==script.getStr("text"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["scripts"][0].str()=="scripts/main.lua");
+    script.set("text",Json::string("-- different"));
+    AIVERSE_TEST_CHECK(ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(root/"scripts/main.lua")=="function on_start() end");
+    script.set("path",Json::string("scripts/view/hud.lua"));
+    AIVERSE_TEST_CHECK(!ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["viewScripts"][0].str()=="scripts/view/hud.lua");
     fs::remove_all(root);
 }
 void projectHistoryContract(){
@@ -658,6 +694,19 @@ void projectFileRecoveryWorkflow() {
         AIVERSE_TEST_CHECK(fs::is_regular_file(project/".aiverse-cache"/"asset-writer.lock"));
     }
     {
+        const auto fixture=project/"file-material-recovery";
+        fs::create_directories(fixture/"content/materials");
+        studio::StudioMaterialPublicationJournal publication(fixture,"stone");
+        publication.candidate(Json::parse(R"({"roughness":0.75})"));
+        std::ofstream(fixture/"materials.json")<<R"({"materials":{"stone":"content/materials/stone.material.json"}})";
+        const auto file=fixture/"content/materials/stone.material.json";
+        std::ofstream(file)<<R"({"roughness":0.75})";
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(fixture)[size_t(0)].getStr("status")=="material_committed");
+        std::ofstream(file)<<R"({"roughness":0.25})";
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(fixture)[size_t(0)].getStr("status")=="material_conflict");
+        publication.finish();
+    }
+    {
         studio::StudioMaterialPublicationJournal publication(project,"fixture_pending");
         const auto pending=studio::StudioMaterialPublicationJournal::inspect(project);
         AIVERSE_TEST_CHECK(pending.size()==1 && pending[size_t(0)].getStr("status")=="incomplete_or_active");
@@ -900,8 +949,21 @@ void authoredEntityWorkflow() {
    editor::MapDoc map;map.reset(16,16);editor::DocEntity e;e.id="first";e.type="tree";e.x=2;e.z=3;
    e.extra=Json::parse(R"({"components":{"Transform":{"y":4,"yaw":0,"scale":1},"StaticModel":{"asset":"content/tree.gltf"}}})");map.data.entities.push_back(e);e.id="second";map.data.entities.push_back(e);
    AIVERSE_TEST_CHECK(map.save((project/"maps/scene.json").string(),nullptr));
+   const auto occupied=project/"content/materials/basalt.material.json";
+   fs::create_directories(occupied.parent_path());
+   std::ofstream(occupied)<<R"({"roughness":0.9})";
+   std::ofstream(project/"materials.json")<<R"({"materials":{"existing":"content/materials/basalt.material.json","basalt":{"roughness":0.4}}})";
    studio::StudioSession session(root.string(),project.string());
    auto call=[&](const char* method,const char* params="{}") {auto request=Json::object();request.set("id",Json::number(int64_t(1)));request.set("method",Json::string(method));request.set("params",Json::parse(params));return session.dispatch(request);};
+   {
+       const auto entries=Json::parseFile((project/"materials.json").string())["materials"];
+       AIVERSE_TEST_CHECK(entries.getStr("existing")=="content/materials/basalt.material.json");
+       const auto migrated=entries.getStr("basalt");
+       AIVERSE_TEST_CHECK(migrated=="content/materials/basalt~1.material.json");
+       AIVERSE_TEST_CHECK(Json::parseFile(occupied.string())["roughness"].toDouble()==0.9);
+       AIVERSE_TEST_CHECK(Json::parseFile((project/migrated).string())["roughness"].toDouble()==0.4);
+       AIVERSE_TEST_CHECK(call("studio.assets")["result"]["files"].dump().find("materials/basalt~1.material.json")!=std::string::npos);
+   }
    AIVERSE_TEST_CHECK(!call("studio.select",R"({"id":"entity:@second"})").has("error"));
    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","key":"y","value":9})").has("error"));
    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[1].extra["components"]["Transform"]["y"].integer()==9);
@@ -947,7 +1009,14 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.materialCreate",create.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"MeshRenderer","key":"material:*","value":"cliff"})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.save").has("error"));
-       const auto graph=Json::parseFile((project/"materials.json").string())["materials"]["cliff"]["shaderGraph"];
+       const auto materialPath=Json::parseFile((project/"materials.json").string())["materials"].getStr("cliff");
+       AIVERSE_TEST_CHECK(materialPath=="content/materials/cliff.material.json");
+       const auto catalog=call("studio.assets");
+       bool listed=false;
+       for(const auto& asset:catalog["result"]["files"].items())
+           if("content/"+asset.getStr("path")==materialPath && !asset.getStr("guid").empty()) listed=true;
+       AIVERSE_TEST_CHECK(listed);
+       const auto graph=Json::parseFile((project/materialPath).string())["shaderGraph"];
        AIVERSE_TEST_CHECK(graph["outputs"].has("normal"));
        bool colorBound=false,normalBound=false;
        for (const auto& node:graph["nodes"].items()) {
@@ -1246,6 +1315,113 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.assetPlace",R"({"asset":"content/missing.glb","x":5,"z":6})").has("error") && map.data.entities.size()==before+1);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
+   {
+       const auto invalidTrack=call("studio.op",R"({"op":"animation_root_motion_generate","params":{"model":"missing.gltf","id":4294967297}})");
+       AIVERSE_TEST_CHECK(invalidTrack.getStr("error").find("Invalid root motion track ID")!=std::string::npos);
+       const auto avatars=project/"animations"/"avatar";
+       fs::create_directories(avatars);
+       std::ofstream(avatars/"saved_profile.json")<<R"({"format":"aiverse-humanoid-v1","model":"content/avatar.gltf","bones":{}})";
+       const auto files=call("studio.op",R"({"op":"animation_asset_list","params":{"kind":"avatar"}})");
+       const auto& catalog=files["result"]["result"];
+       AIVERSE_TEST_CHECK(!files.has("error") && !files["result"].getBool("changed") &&
+           catalog["names"][0].str()=="saved_profile" && catalog["roles"].size()==23);
+       const auto loaded=call("studio.op",R"({"op":"animation_asset_get","params":{"kind":"avatar","name":"saved_profile"}})");
+       AIVERSE_TEST_CHECK(loaded["result"]["result"].getStr("revision").size()==64);
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"animation_asset_list","params":{"kind":"../"}})").has("error"));
+       fs::remove(avatars/"saved_profile.json");
+       const auto branding=call("studio.op",R"({"op":"branding_get","params":{}})");
+       AIVERSE_TEST_CHECK(branding["result"]["result"]["iconsVersion"].isString());
+       const auto conflict=call("studio.op",R"({"op":"branding_set","params":{"expectedIconsVersion":"outdated","icons":{}}})");
+       AIVERSE_TEST_CHECK(conflict.getStr("error").find("Icon settings changed")!=std::string::npos);
+       AIVERSE_TEST_CHECK(branding["result"]["result"]["splashVersion"].isString());
+       const auto staleSplash=call("studio.op",R"({"op":"branding_set","params":{"expectedSplashVersion":"stale","splash":false}})");
+       AIVERSE_TEST_CHECK(staleSplash.getStr("error").find("Splash settings changed")!=std::string::npos);
+       const auto splashFrames=call("studio.op",R"({"op":"splash_preview","params":{"frames":true,"times":[0,1],"width":64,"height":48}})");
+       AIVERSE_TEST_CHECK(!splashFrames.has("error") && !splashFrames["result"].getBool("changed"));
+       const auto& frames=splashFrames["result"]["result"]["frames"].items();
+       AIVERSE_TEST_CHECK(frames.size()==2 && frames[0].str().starts_with("iVBOR") && frames[0].str()!=frames[1].str());
+       const auto android=call("studio.op",R"({"op":"icons_preview","params":{"platform":"Android"}})");
+       AIVERSE_TEST_CHECK(!android.has("error") && !android["result"].getBool("changed"));
+       const auto& variants=android["result"]["result"]["variants"].items();
+       AIVERSE_TEST_CHECK(std::any_of(variants.begin(),variants.end(),[](const Json& icon){
+           return icon.getStr("label")=="ADAPT CIRCLE" && icon.getInt("size")>0 && icon.getStr("png").starts_with("iVBOR");
+       }));
+       const auto animation=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"new"}})");
+       AIVERSE_TEST_CHECK(!animation.has("error")&&!animation["result"].getBool("changed"));
+       AIVERSE_TEST_CHECK(animation["result"]["result"]["graph"].getStr("output")=="bind");
+       const auto graphCatalog=call("studio.op",R"({"op":"animation_graph_list","params":{}})");
+       const auto& rigItems=graphCatalog["result"]["result"]["rigItemPresets"];
+       AIVERSE_TEST_CHECK(rigItems.size()==7&&rigItems["effectors"].getStr("target")=="target");
+       AIVERSE_TEST_CHECK(rigItems["joints"]["min"].size()==3&&rigItems["legs"].has("hip")&&rigItems["obstacles"].getStr("kind")=="box");
+       const auto contacts=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"addContacts","id":"body","index":0,"graph":{"nodes":[{"id":"body","kind":"rig","units":[{"op":"fullBodyIK","bone":"hip","effectors":[{"bone":"toe"}]}]}]}}})");
+       const auto& settings=contacts["result"]["result"]["graph"]["nodes"][0]["units"][0]["contacts"];
+       AIVERSE_TEST_CHECK(settings["feet"][0].getStr("bone")=="toe"&&settings["capsules"][0].getStr("bone")=="hip");
+       const auto surface=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"addUnit","kind":"surfaceLocomotion","id":"body","graph":{"nodes":[{"id":"body","kind":"rig","units":[]}]}}})");
+       const auto& surfaceGraph=surface["result"]["result"]["graph"];
+       AIVERSE_TEST_CHECK(surfaceGraph["parameters"]["velocity"].size()==3&&surfaceGraph["nodes"][0]["units"][0].getStr("op")=="surfaceLocomotion");
+       Json save=Json::object(),args=Json::object();
+       args.set("name",Json::string("pose_revision"));
+       args.set("graph",animation["result"]["result"]["graph"]);
+       save.set("op",Json::string("animation_graph_set"));save.set("params",args);
+       const auto initial=call("studio.op",save.dump().c_str());
+       const auto version=initial["result"]["result"].getStr("revision");
+       AIVERSE_TEST_CHECK(version.size()==64);
+       args.set("expectedRevision",Json::string(version));
+       auto changed=args["graph"];changed.set("model",Json::string("content/actor.gltf"));args.set("graph",changed);
+       save.set("params",args);
+       AIVERSE_TEST_CHECK(!call("studio.op",save.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",save.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"animation_graph_list","expectedProject":"/wrong","params":{}})").has("error"));
+       const auto materials=call("studio.materialCreate",R"({"name":"docked_steel","preset":"metal"})");
+       const auto assetPath=materials["result"]["files"].getStr("docked_steel");
+       AIVERSE_TEST_CHECK(assetPath=="content/materials/docked_steel.material.json");
+       AIVERSE_TEST_CHECK(Json::parseFile((project/assetPath).string()).isObject());
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"materials.json").string())["materials"].getStr("docked_steel")==assetPath);
+       AIVERSE_TEST_CHECK(call("studio.assets")["result"]["files"].dump().find("materials/docked_steel.material.json")!=std::string::npos);
+       const auto legacyFile=project/"content/materials/stone.material.json";
+       auto stone=Json::parseFile(legacyFile.string());stone.set("roughness",Json::number(0.125));
+       std::ofstream(legacyFile)<<stone.dump();
+       AIVERSE_TEST_CHECK(call("studio.materials")["result"]["library"]["stone"]["roughness"].toDouble()==0.125);
+       const char* create=R"({"op":"shader_graph_create","params":{"name":"studio_tint","domain":"material"}})";
+       AIVERSE_TEST_CHECK(!call("studio.op",create).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",create).has("error"));
+       auto graph=call("studio.shaderGraphGet",R"({"name":"studio_tint"})");
+       AIVERSE_TEST_CHECK(graph["result"]["graph"].getStr("domain")=="material");
+       auto preview=Json::object();preview.set("projectPath",Json::string(session.workspace().project.dir));
+       preview.set("name",Json::string("studio_tint"));preview.set("graph",graph["result"]["graph"]);
+       AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.previewGraphFactors()["studioGraphDraft"]==graph["result"]["graph"]);
+       AIVERSE_TEST_CHECK(!call("studio.materialPreview",R"({"name":"stone"})").has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone");
+       const auto materialRevision=session.previewMaterialRevision();
+       AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone" && session.previewMaterialRevision()==materialRevision);
+       AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint");
+       Json rigRequest=Json::parse(R"({"rig":{"version":1,"morphs":[{"parameter":"jawOpen","node":"Face","target":"jawOpen"}],"rig":[]}})");
+       const auto rigAssets=call("studio.assets");
+       for(const auto& asset:rigAssets["result"]["files"].items())
+           if(asset.getStr("path")=="rock.glb")rigRequest.set("guid",asset["guid"]);
+       AIVERSE_TEST_CHECK(!call("studio.facialPreviewBind",rigRequest.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.rigPreviewBinding().bound()&&!session.facialPreviewBinding().bound());
+       AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint"&&session.previewMaterialName()=="stone");
+       AIVERSE_TEST_CHECK(!call("studio.humanCreatorPreview",R"({"enabled":true})").has("error"));
+       AIVERSE_TEST_CHECK(session.facialPreviewBinding().creatorMode()&&session.rigPreviewBinding().bound());
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone"&&session.previewGraphTitle()=="Shader Graph / studio_tint");
+       AIVERSE_TEST_CHECK(!call("studio.humanCreatorPreview",R"({"enabled":false})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.facialPreviewBind",R"({"guid":""})").has("error"));
+       AIVERSE_TEST_CHECK(!session.rigPreviewBinding().bound());
+       auto particle=Json::parse(R"({"version":1,"domain":"particle","nodes":[{"id":"age","op":"particleAge01"}],"outputs":{"color":"age"}})");
+       preview.set("graph",particle);
+       AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.previewGraphFactors()["studioGraphDraft"]==particle);
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone");
+       preview.set("graph",Json::object());
+       AIVERSE_TEST_CHECK(call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.materialPreview",R"({"name":""})").has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialName().empty());
+       AIVERSE_TEST_CHECK(!call("studio.op",R"({"op":"shader_graph_apply","params":{"name":"studio_tint","target":"studio_brass"}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"shader_graph_create","params":{"name":"bad_domain","domain":"invalid"}})").has("error"));
+   }
    // Rules form: read own + resolved types, edit a type field (validated and saved), reject other paths.
    {
        auto rules=call("studio.rules");
@@ -1261,8 +1437,29 @@ void authoredEntityWorkflow() {
        rules=call("studio.rules");
        AIVERSE_TEST_CHECK(rules["result"]["resolved"]["tree"]["health"]["max"].integer()==150);
        AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"resources.gold","value":1})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"triggers","value":{}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"damageTable","value":[]})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"damageTable","value":{"strike":{"plate":"bad"}}})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"damageTable","value":{"strike":{"plate":0.75}}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rules")["result"]["damageTable"]["strike"]["plate"].toDouble()==0.75);
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"triggers","value":[]})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rules")["result"]["triggers"].isArray());
        AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.health.max","value":null})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.rules")["result"]["types"]["tree"]["health"].has("max"));
+       auto query=Json::object();query.set("section",Json::string("global"));
+       const std::string before=call("studio.rulesDocument",query.dump().c_str())["result"].getStr("text");
+       auto globals=Json::parse(before);
+       AIVERSE_TEST_CHECK(!globals.has("types")&&!globals.has("triggers"));
+       globals.set("supplyCap",Json::number(int64_t(123)));
+       query.set("projectPath",Json::string(session.workspace().project.dir));
+       query.set("original",Json::string(before));query.set("value",globals);
+       AIVERSE_TEST_CHECK(!call("studio.rulesDocumentSave",query.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesDocumentSave",query.dump().c_str()).has("error"));
+       query.set("section",Json::string("document"));
+       auto full=Json::parse(call("studio.rulesDocument",query.dump().c_str())["result"].getStr("text"));
+       AIVERSE_TEST_CHECK(full["types"].has("tree")&&full.getInt("supplyCap")==123);
+       query.set("original",Json::string(full.dump()));query.set("value",full);
+       AIVERSE_TEST_CHECK(!call("studio.rulesDocumentSave",query.dump().c_str()).has("error"));
    }
    // Build panel: targets and identity; unknown targets/configs rejected; a project with unsaved
    // changes is never built (no implicit save); no estimate yet is an error, not an empty report.
@@ -1282,6 +1479,12 @@ void authoredEntityWorkflow() {
        const auto log=call("studio.buildLog",R"({"from":999999})");
        AIVERSE_TEST_CHECK(!log.has("error") && log["result"]["text"].str().empty());
        AIVERSE_TEST_CHECK(log["result"]["next"].integer()==log["result"]["size"].integer());
+       auto& workspace=const_cast<editor::Workspace&>(session.workspace());
+       workspace.appendBuildLog("новая строка");
+       const auto replay=call("studio.buildLog",R"({"from":999999,"run":999999})");
+       AIVERSE_TEST_CHECK(replay["result"]["from"].integer()==0);
+       AIVERSE_TEST_CHECK(replay["result"]["text"].str().find("новая строка")!=std::string::npos);
+       AIVERSE_TEST_CHECK(replay["result"]["run"].integer()==log["result"]["run"].integer());
    }
    // Align: one undo step, labelled in History; History jump undoes/redoes to a position.
    {
@@ -1454,10 +1657,96 @@ void authoredEntityWorkflow() {
        for(const auto& r:audit["result"]["missing"].items())found|=r.getStr("reference")=="content/missing_icon.png";
        AIVERSE_TEST_CHECK(!audit.has("error") && found);
    }
+#if !defined(_WIN32)
+   // Exercise the actual Agent session bridge without launching a remote client.
+   {
+       const auto bin=project/"fixture-client";
+       fs::create_directories(bin);
+       const auto cli=bin/"codex";
+       std::ofstream(cli)<<R"(#!/bin/sh
+printf '%s\n' "$@" > fixture-args
+cat > fixture-input
+echo '{"type":"item.started","item":{"type":"mcp_tool_call","tool":"rules_list"}}'
+if test -f fixture-wait; then
+  trap '' TERM
+  touch fixture-ready
+  sleep 30
+fi
+echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture completed"}}'
+)";
+       fs::permissions(cli,fs::perms::owner_all);
+       const std::string oldPath=std::getenv("PATH");
+       setenv("PATH",(bin.string()+":"+oldPath).c_str(),1);
+       AIVERSE_TEST_CHECK(editor::agentCliPath("codex")==cli.string());
+       session.setMcpTool(cli.string());
+       Json request=Json::object();
+       request.set("client",Json::string("codex"));request.set("prompt",Json::string("Review fixture economy"));
+       request.set("expectedProject",Json::string("wrong-project"));
+       AIVERSE_TEST_CHECK(call("studio.agentStart",request.dump().c_str()).has("error"));
+       request.set("expectedProject",Json::string(session.workspace().project.dir));
+       auto start=[&]{return call("studio.agentStart",request.dump().c_str());};
+       auto finish=[&]{
+           for(int i=0;i<150;++i){
+               const auto result=call("studio.agentInfo")["result"];
+               if(!result.getBool("running"))return result;
+               std::this_thread::sleep_for(std::chrono::milliseconds(30));
+           }
+           throw std::runtime_error("Local agent did not finish");
+       };
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       const auto completed=finish();
+       AIVERSE_TEST_CHECK(completed.getStr("result")=="Fixture completed" && completed.getStr("runClient")=="codex");
+       std::ifstream argvFile(project/"fixture-args"),inputFile(project/"fixture-input");
+       const std::string args{std::istreambuf_iterator<char>(argvFile),{}},input{std::istreambuf_iterator<char>(inputFile),{}};
+       AIVERSE_TEST_CHECK(args.find("mcp_servers.aiverse.args=")!=std::string::npos && args.find("--no-editor")!=std::string::npos &&
+           args.find(std::to_string(completed["port"].integer()))!=std::string::npos && input.find("Review fixture economy")!=std::string::npos);
+       request.set("useWizardBrief",Json::fromBool(true));
+       AIVERSE_TEST_CHECK(start().has("error"));
+       const std::string wizardTask="Write the final report to WIZARD.md. "+std::string(20500,'w');
+       std::ofstream(project/"WIZARD_TASK.md")<<wizardTask;
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       finish();
+       std::ifstream taskFile(project/"fixture-input");
+       const std::string sent{std::istreambuf_iterator<char>(taskFile),{}};
+       AIVERSE_TEST_CHECK(sent.find(wizardTask)!=std::string::npos);
+       fs::remove(project/"WIZARD_TASK.md");
+       const std::string report="# Fixture\n\n## Agent\nFinished.";
+       std::ofstream(project/"WIZARD.md")<<report;
+       Json read=Json::object();read.set("reportForProject",Json::string(session.workspace().project.dir));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo",read.dump().c_str())["result"].getStr("wizardReport")==report);
+       read.set("reportForProject",Json::string("/other"));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo",read.dump().c_str()).has("error"));
+       request.set("useWizardBrief",Json::fromBool(false));
+       std::ofstream(project/"fixture-wait")<<"wait";
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       for(int i=0;i<150 && !fs::exists(project/"fixture-ready");++i)std::this_thread::sleep_for(std::chrono::milliseconds(30));
+       AIVERSE_TEST_CHECK(fs::exists(project/"fixture-ready"));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo")["result"]["lines"].dump().find("rules_list")!=std::string::npos);
+       AIVERSE_TEST_CHECK(!call("studio.agentStop").has("error"));
+       const auto stopped=finish();
+       AIVERSE_TEST_CHECK(!stopped.getBool("running") && stopped["lines"].dump().find("Stopped by user")!=std::string::npos);
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       call("studio.agentStop");
+       AIVERSE_TEST_CHECK(!finish().getBool("running"));
+       call("studio.agentReset");
+       session.setMcpTool("");
+       setenv("PATH",oldPath.c_str(),1);
+   }
+#endif
    // Agent link: aiversemcp's protocol (hello + token, then calls); an edit is a History step "Agent · …" and a change.
    {
        const auto info=call("studio.agentInfo");
        AIVERSE_TEST_CHECK(!info.has("error") && info["result"]["port"].integer()>0);
+       AIVERSE_TEST_CHECK(!info["result"].getBool("hasWizardBrief"));
+       std::ofstream(project/"WIZARD_TASK.md")<<"Review the harbor markets.";
+       Json briefRequest=Json::object();
+       briefRequest.set("briefForProject",Json::string(session.workspace().project.dir));
+       const auto brief=call("studio.agentInfo",briefRequest.dump().c_str());
+       AIVERSE_TEST_CHECK(brief["result"].getBool("hasWizardBrief") &&
+           brief["result"].getStr("wizardBrief")=="Review the harbor markets." &&
+           !brief["result"].getBool("running"));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo",R"({"briefForProject":"different-project"})").has("error"));
+       std::filesystem::remove(project/"WIZARD_TASK.md");
        const int port=int(info["result"]["port"].integer());
        std::string token;
        AIVERSE_TEST_CHECK(editor::net::readAgentToken(port,token));
@@ -1484,10 +1773,29 @@ void authoredEntityWorkflow() {
        // view_screenshot waits for the host's capture; the host answers through finishAgentScreenshot.
        client.send(R"({"id":3,"method":"call","params":{"name":"view_screenshot","arguments":{}}})");
        for(int i=0;i<100 && !session.agentScreenshotPending();++i){session.pollAgentLink();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
-       AIVERSE_TEST_CHECK(session.agentScreenshotPending());
+       AIVERSE_TEST_CHECK(session.agentWindowScreenshotPending() && !session.agentGameScreenshotPending());
        session.finishAgentScreenshot("iVBORw0KGgo=",2,2,"");
        std::string shot;client.recv(shot,1000);
        AIVERSE_TEST_CHECK(!shot.empty() && Json::parse(shot)["result"].getStr("png_base64")=="iVBORw0KGgo=" && !session.agentScreenshotPending());
+       AIVERSE_TEST_CHECK(Json::parse(shot)["result"].getStr("view")=="HTML Studio window");
+       auto sceneRequest=[](const char* options){
+           return std::string(R"({"id":4,"method":"call","params":{"name":"view_screenshot","arguments":{"window":"scene",)")+options+"}}}";
+       };
+       for(const char* invalid:{R"("width":512)",R"("width":4096,"height":4096)",R"("width":256.5,"height":256)",
+               R"("x":1)",R"("yaw":"90")",R"("y":1000001)",R"("clean":false,"width":256,"height":256)",R"("device":"none")"}){
+           AIVERSE_TEST_CHECK(roundTrip(sceneRequest(invalid))["result"].has("error") && !session.agentScreenshotPending());
+       }
+       client.send(sceneRequest(R"("x":1,"z":3,"distance":100000,"pitch":100,"yaw":90,"width":2048,"height":4096)"));
+       for(int i=0;i<100 && !session.agentScreenshotPending();++i){session.pollAgentLink();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
+       AIVERSE_TEST_CHECK(session.agentScreenshotPending());
+       const auto& options=session.agentSceneScreenshotOptions();
+       render::Camera base;base.target.y=42;
+       const auto camera=options.camera(base);
+       AIVERSE_TEST_CHECK(options.clean && options.width==2048 && options.height==4096 && camera.target.x==1 &&
+           camera.target.y==0 && camera.target.z==3 && base.target.y==42 && camera.distance==base.maxDistance &&
+           std::abs(camera.pitch-1.55334f)<.0001f && std::abs(camera.yaw-1.5708f)<.0001f);
+       session.finishAgentScreenshot("",0,0,"fixture finished");
+       client.recv(shot,1000);
        client.close();
        AIVERSE_TEST_CHECK(call("studio.agentStart",R"({"prompt":""})").has("error"));
    }
@@ -1508,6 +1816,120 @@ void authoredEntityWorkflow() {
        const auto steps=call("studio.history")["result"]["steps"];
        AIVERSE_TEST_CHECK(steps.size()>0 && steps[steps.size()-1].getStr("label")=="Terrain brush");
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.undoDepth()==depth);
+       const auto originalDetail=session.workspace().map.data.detail;
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"op":"stamp","stamp":"dunes","angle":90,"seed":17,"hardness":0.75})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"seed":1.5})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"stamp":"other"})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err));
+       const auto stamped=session.workspace().map.data.detail;
+       AIVERSE_TEST_CHECK(stamped!=originalDetail);
+       AIVERSE_TEST_CHECK(session.strokeDab(12,12,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(session.workspace().map.data.detail==stamped && session.workspace().map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.detail==originalDetail);
+       AIVERSE_TEST_CHECK(!call("studio.redo").has("error") && session.workspace().map.data.detail==stamped);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"strength":-2})")["result"]["strength"].toDouble()==-2);
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(session.workspace().map.data.detail!=stamped && session.workspace().map.data.detail!=originalDetail);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"op":"raise"})")["result"]["strength"].toDouble()==1);
+       const auto heightDepth=session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"op":"set","targetHeight":-3.25,"pickHeight":true})").has("error"));
+       AIVERSE_TEST_CHECK(!session.strokeBegin(4,4,&err) && session.workspace().map.undoDepth()==heightDepth);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"pickHeight":false})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       const auto& heightMap=session.workspace().map.data;
+       AIVERSE_TEST_CHECK(heightMap.corners[size_t(4*(heightMap.w+1)+4)]==-52);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.undoDepth()==heightDepth);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"terrainGrid":"detail"})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       const auto detailHeights=heightMap.detail;
+       AIVERSE_TEST_CHECK(heightMap.detailScale>0 && !detailHeights.empty());
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"terrainGrid":"base","targetHeight":5})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"op":"erode"})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(heightMap.detail==detailHeights && heightMap.corners[size_t(4*(heightMap.w+1)+4)]==80);
+       const auto cellMaterials=heightMap.extra["terrainMaterial"];
+       const auto splat=heightMap.detailSplat;
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"paint","layer":3})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(heightMap.extra["terrainMaterial"][size_t(4)].str().at(4)=='3' && heightMap.detailSplat==splat);
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err,0,true) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(heightMap.extra["terrainMaterial"]==cellMaterials);
+       for(int i=0;i<4;++i)AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==heightDepth);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"terrainGrid":"auto"})").has("error"));
+       {
+           aiverse::editor::MapDoc globe;
+           AIVERSE_TEST_CHECK(globe.loadJson(Json::parse(R"({"world":{"bodies":[{"id":"a","faceSize":8},{"id":"b","faceSize":8}]}})"),&err));
+           auto& map=session.workspace().map;
+           map.data.bodies.swap(globe.data.bodies);
+           const auto start=map.toJson();
+           AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"terrain","op":"set","targetHeight":4,"terrainGrid":"base"})").has("error"));
+           AIVERSE_TEST_CHECK(!session.strokeBegin(1,0,&err,0,false));
+           AIVERSE_TEST_CHECK(session.strokeBegin(1,0,&err,0,false,"b"));
+           AIVERSE_TEST_CHECK(!session.strokeDab(0,1,&err,0,false,"a"));
+           AIVERSE_TEST_CHECK(map.toJson()==start);
+           AIVERSE_TEST_CHECK(session.strokeBegin(1,0,&err,.98,false,"b") && session.strokeDab(.98,0,&err,1,false,"b") && session.strokeEnd(&err));
+           const auto& body=map.data.bodies[1];
+           AIVERSE_TEST_CHECK(std::count_if(body.corners.begin(),body.corners.end(),[](auto h){return h>0;})>0);
+           AIVERSE_TEST_CHECK(map.data.bodies[0].corners!=body.corners);
+           AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.toJson()==start);
+           map.data.bodies.swap(globe.data.bodies);
+       }
+       const auto sparseDepth=session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"sparse","sparseMode":"raise","chunkMetres":16,"depthCm":80,"radius":2})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(-32,-40,&err) && session.strokeDab(-48,-40,&err) && session.strokeEnd(&err));
+       const auto sparse=session.workspace().map.data.extra["terraweaveSparse"];
+       AIVERSE_TEST_CHECK(sparse.getInt("chunkMetres")==16 && sparse["chunks"].size()>=2 && sparse["heights"].size()>0);
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==sparseDepth+1);
+       AIVERSE_TEST_CHECK(session.strokeBegin(-32,-40,&err,0,true) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(session.workspace().map.data.extra["terraweaveSparse"]["heights"]!=sparse["heights"]);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.extra["terraweaveSparse"]==sparse);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.extra["terraweaveSparse"].isNull());
+       const auto originalRegions=session.workspace().map.data.regions;
+       const auto borderDepth=session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":true})")["result"].getBool("regionBorders"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":1})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"regionBorders":false})")["result"].getBool("regionBorders"));
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==borderDepth);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"region","regionLetter":"B","radius":0.5})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionLetter":"BC"})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeDab(5,4,&err) && session.strokeEnd(&err));
+       const auto& grid=session.workspace().map.data;
+       AIVERSE_TEST_CHECK(grid.regions[grid.idx(4,4)]=='B' && grid.regions[grid.idx(5,4)]=='B');
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"regionLetter":"."})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(grid.regions[grid.idx(4,4)]=='.' && grid.regions[grid.idx(5,4)]=='B');
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && grid.regions[grid.idx(4,4)]=='B');
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && grid.regions==originalRegions);
+       {
+           auto& map=session.workspace().map.data;
+           const auto players=map.players;
+           const auto extra=map.extra;
+           map.players.resize(2);
+           map.extra.member("gridFields").set("influence",Json::parse(R"({"type":"int","perPlayer":true})"));
+           auto value=[&](int player){
+               Json query=Json::parse(R"({"id":"influence","rect":[4,4,1,1]})");
+               query.set("player",Json::number(int64_t(player)));
+               return session.workspace().call("field_get",query)["rows"][0][0].integer();
+           };
+           AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"field","field":"influence","fieldMode":"set","fieldPlayer":1,"value":7})").has("error"));
+           AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+           AIVERSE_TEST_CHECK(value(1)==7 && value(2)==0);
+           AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"fieldPlayer":2,"value":12})")["result"].getInt("fieldPlayer")==2);
+           AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"fieldPlayer":3})").has("error"));
+           AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"fieldPlayer":1.5})").has("error"));
+           AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+           AIVERSE_TEST_CHECK(value(1)==7 && value(2)==12);
+           AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err,0,true) && session.strokeEnd(&err));
+           AIVERSE_TEST_CHECK(value(1)==7 && value(2)==0 && session.sceneBrush().fieldMode=="set");
+           AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && value(2)==12);
+           AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && !call("studio.undo").has("error"));
+           map.extra=extra;
+           map.players=players;
+       }
        // Object scatter: three dabs far apart place three entities, one History step "Scatter objects".
        const size_t entities=session.workspace().map.data.entities.size(),depth2=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"kind":"objects","type":"tree","radius":2})")["result"].getStr("kind")=="objects");
@@ -1580,12 +2002,62 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.extensionAction",R"({"id":"radius","value":25})")["result"]["command"].getStr("command")=="status");
        AIVERSE_TEST_CHECK(session.extensionGizmos()[0]["radius"].toDouble()==25);
    }
+   // Popup scripts have their own Lua state and receive the same target for list and action.
+   {
+       const auto project = std::filesystem::path(session.workspace().project.dir);
+       const auto script = project / "editor" / "context_menus.lua";
+       AIVERSE_TEST_CHECK(call("studio.contextMenu", R"({"window":"lua.widget"})")["result"]["items"].size()==0);
+       std::ofstream(script) << "local opened=0\n"
+           "function context_menu(ctx) opened=opened+1 return {{label=ctx.window,children={{id='inspect',label=ctx.element}}}} end\n"
+           "function on_context_action(ctx,id) if id=='tag' then return {command='set_entity_extra',key='menu_tag',value=false} end if id=='identity' then return {command='status',text=tostring(ctx.entity_id)..'/'..tostring(ctx.entity_type)} end if id=='first' then return {command='select_entity',index=0} end return {command='status',text=ctx.element..id..opened} end";
+       const auto menu = call("studio.contextMenu", R"({"window":"lua.widget","element":"radius"})");
+       AIVERSE_TEST_CHECK(menu["result"]["items"][0]["children"][0].getStr("label")=="radius");
+       const auto action = call("studio.contextAction", R"({"window":"lua.widget","element":"radius","id":"inspect"})");
+       AIVERSE_TEST_CHECK(action["result"]["command"].getStr("text")=="radiusinspect1");
+       const auto first = call("studio.contextAction", R"({"window":"lua.widget","element":"radius","id":"first"})");
+       const auto entityId = first["result"]["command"].getStr("entityId");
+       AIVERSE_TEST_CHECK(!entityId.empty());
+       Json select = Json::object();
+       select.set("id",Json::string(entityId));
+       AIVERSE_TEST_CHECK(call("studio.select",select.dump(-1).c_str())["result"].getStr("selectedId")==entityId);
+       const auto identity = [&] {
+           return call("studio.contextAction", R"({"window":"scene","id":"identity"})")["result"]["command"].getStr("text");
+       };
+       const auto& entity=session.workspace().map.data.entities.front();
+       AIVERSE_TEST_CHECK(identity()==entity.id+"/"+entity.type);
+       call("studio.select",R"({"id":null})");
+       AIVERSE_TEST_CHECK(identity()=="nil/nil");
+       auto& doc=session.workspace().map;
+       const size_t added=doc.data.entities.size();
+       auto second=doc.data.entities.front();
+       second.id.clear();
+       doc.data.entities.push_back(second);
+       const auto before=doc.toJson();
+       const auto depth=doc.undoDepth();
+       Json targets=Json::array();
+       targets.push(Json::string(entityId));targets.push(Json::string("entity:"+std::to_string(added)));
+       Json selection=Json::object();selection.set("ids",targets);
+       AIVERSE_TEST_CHECK(!call("studio.select",selection.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.contextAction",R"({"window":"scene","id":"tag","playing":true})").has("error"));
+       const auto tag=[&]{return call("studio.contextAction",R"({"window":"scene","id":"tag"})");};
+       AIVERSE_TEST_CHECK(tag()["result"].getBool("changed"));
+       for (size_t i : {size_t(0),added}) AIVERSE_TEST_CHECK(doc.data.entities[i].extra["menu_tag"]==Json::fromBool(false));
+       AIVERSE_TEST_CHECK(!tag()["result"].getBool("changed") && doc.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && doc.toJson()==before);
+       doc.data.entities.pop_back();
+       AIVERSE_TEST_CHECK(session.extensionGizmos()[0]["radius"].toDouble()==25);
+   }
    // Attachments layout: invalid entries are refused, a valid one round-trips through the codec.
    {
        AIVERSE_TEST_CHECK(!call("studio.attachmentsGet")["result"].getBool("exists"));
        AIVERSE_TEST_CHECK(call("studio.attachmentsSet",R"({"document":{"parent":"content/a.glb","attachments":[{"model":"content/b.glb"}]}})").has("error"));
        AIVERSE_TEST_CHECK(call("studio.attachmentsGet",R"({"path":"../x.json"})").has("error"));
        const auto saved=call("studio.attachmentsSet",R"({"document":{"parent":"content/a.glb","attachments":[{"model":"content/b.glb","socket":"hand_r","id":"sword"}]}})");
+       AIVERSE_TEST_CHECK(call("studio.attachmentsSet",R"({"expected":null,"document":{"parent":"changed","attachments":[]}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.attachmentsSet",R"({"expected":{"parent":"wrong","attachments":[]},"document":{"parent":"changed","attachments":[]}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.attachmentsGet",R"({"project":"wrong-project"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.attachmentsGet")["result"]["document"]==saved["result"]["document"]);
+
        AIVERSE_TEST_CHECK(!saved.has("error") && saved["result"].getBool("exists") && saved["result"]["document"]["attachments"][0].getStr("socket")=="hand_r");
    }
    // Spline editing: a river's point moves by handle id as one History step.
@@ -1611,6 +2083,19 @@ void authoredEntityWorkflow() {
    }
    // Project hub: templates start with "empty"; recent projects come from the shared registry.
    {
+       AIVERSE_TEST_CHECK(call("studio.hubForget", R"({"dir":""})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.hubForget", R"({"dir":"unlisted-hub-test-entry"})").has("error"));
+       const auto wizard = call("studio.wizardOptions")["result"];
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"languages":["../bad"]})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"stores":["unknown-store"]})").has("error"));
+       AIVERSE_TEST_CHECK(wizard["features"].size() > 0 && wizard["defaults"].has("levels"));
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"genre":"../bad"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"artDir":"unselected-folder"})").has("error"));
+       if (wizard["templates"].size()) {
+           auto plan = call("studio.wizardPlan", R"({"idea":"economy","levels":3,"tutorial":"none","mapPreset":"islands"})");
+           AIVERSE_TEST_CHECK(!plan.has("error") && plan["result"].getInt("levels")==3);
+           AIVERSE_TEST_CHECK(plan["result"].getStr("levelPreset")=="islands" && plan["result"].getStr("tutorialArchetype")=="none");
+       }
        const auto hub=call("studio.hub");
        AIVERSE_TEST_CHECK(!hub.has("error") && hub["result"]["templates"].size()>=1 && hub["result"]["templates"][0].getStr("id")=="empty");
        AIVERSE_TEST_CHECK(hub["result"]["recent"].isArray() && !hub["result"].getStr("defaultLocation").empty());
@@ -1635,8 +2120,10 @@ void entityWorkflow() {
     const auto root=fs::canonical(fs::temp_directory_path())/("studio-entities-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"templates"/"fixture";
     fs::create_directories(project/"maps");
-    std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
-    std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
+    std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","editor":{"hierarchy":{"groupings":[{"title":"By type and origin","by":["type","origin"]}]}},"rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
+    fs::create_directories(project/"scripts");
+    std::ofstream(project/"scripts"/"preview.lua") << "function on_start() game.spawn('unit',0,8,8) end";
+    std::ofstream(project/"rules.json") << R"({"scripts":["scripts/preview.lua"],"types":{"unit":{"health":{"max":100}}}})";
     editor::MapDoc map;
     map.reset(16,16);
     editor::DocEntity entity; entity.type="unit";entity.id="original";entity.x=2;entity.z=3;
@@ -1653,6 +2140,128 @@ void entityWorkflow() {
             request.set("method",Json::string(method));request.set("params",std::move(params));
             return session.dispatch(request);
         };
+        {
+            auto& playerDoc=session.workspace().map;
+            const auto originalOwner=playerDoc.data.entities[0].owner, otherOwner=playerDoc.data.entities[1].owner;
+            playerDoc.data.entities[0].owner=1;playerDoc.data.entities[1].owner=2;
+            {
+                auto& doc=session.workspace().map;
+                const auto savedExtra=doc.data.extra;
+                doc.data.extra.set("triggers",Json::parse(R"([{"event":{"type":"enterArea","area":"Harbor"},"actions":[{"area":"Harbor","text":"Harbor"}]}])"));
+                doc.data.extra.set("waves",Json::parse(R"([{"route":["Harbor",[2,3]]}])"));
+                auto area=[&](const char* json){
+                    auto args=Json::parse(json);
+                    args.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                    return call("studio.mapArea",std::move(args));
+                };
+                AIVERSE_TEST_CHECK(!area(R"({"action":"create","name":"Harbor","rect":[2,3,4,6]})").has("error"));
+                const auto before=doc.toJson();
+                AIVERSE_TEST_CHECK(area(R"({"action":"remove","name":"Harbor"})").has("error") && doc.toJson()==before);
+                AIVERSE_TEST_CHECK(area(R"({"action":"edit","name":"Harbor","newName":"Port","rect":[1,2,-1,4]})").has("error"));
+                AIVERSE_TEST_CHECK(!area(R"({"action":"edit","name":"Harbor","newName":"Port","rect":[3,4,5,7]})").has("error"));
+                AIVERSE_TEST_CHECK(doc.data.extra["triggers"][0]["event"].getStr("area")=="Port");
+                AIVERSE_TEST_CHECK(doc.data.extra["triggers"][0]["actions"][0].getStr("text")=="Harbor");
+                AIVERSE_TEST_CHECK(doc.data.extra["waves"][0]["route"][0].str()=="Port");
+                call("studio.undo");AIVERSE_TEST_CHECK(doc.toJson()==before);
+                call("studio.undo");doc.data.extra=savedExtra;
+            }
+            {
+                auto& doc=session.workspace().map;
+                auto args=Json::parse(R"({"letter":"K","name":"Harbor ridge"})");
+                args.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                const auto original=doc.data.regions;
+                AIVERSE_TEST_CHECK(!call("studio.mapRegionName",args).has("error"));
+                AIVERSE_TEST_CHECK(doc.data.regions==original && doc.data.regionNames.at('K')=="Harbor ridge");
+                AIVERSE_TEST_CHECK(call("studio.mapRegionName",args).has("error"));
+                args.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                const auto depth=doc.undoDepth();
+                AIVERSE_TEST_CHECK(!call("studio.mapRegionName",args).has("error") && doc.undoDepth()==depth);
+                const auto result=call("studio.mapRegions",args)["result"];
+                AIVERSE_TEST_CHECK(result["regions"].size()==26 && result["regions"][10].getStr("name")=="Harbor ridge");
+                AIVERSE_TEST_CHECK(result["coverage"].size()<=96 && result["coverage"][0].str().size()<=96);
+                AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && !doc.data.regionNames.count('K'));
+            }
+            const auto originalDoc=session.workspace().map.toJson();
+            auto playerCall=[&](const Json& request){
+                Json scoped=request;
+                scoped.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                return call("studio.mapPlayer",scoped);
+            };
+            const int previousCount=int(session.workspace().map.data.players.size());
+            Json add=Json::parse(R"({"action":"add"})");
+            add.set("slot",Json::number(int64_t(previousCount+1)));
+            AIVERSE_TEST_CHECK(!playerCall(add).has("error") && !session.workspace().map.data.players.empty());
+            Json edit=Json::parse(R"({"slot":1,"action":"edit","changes":{"name":"North","team":4,"waves":true,"start":[3.5,7]}})");
+            const auto beforeEdit=call("studio.snapshot")["result"]["graphDocument"];
+            AIVERSE_TEST_CHECK(!playerCall(edit).has("error"));
+            edit.set("scope",beforeEdit);
+            AIVERSE_TEST_CHECK(call("studio.mapPlayer",edit).has("error"));
+            const auto& north=session.workspace().map.data.players[0];
+            AIVERSE_TEST_CHECK(north.name=="North" && north.team==4 && north.waves && north.hasStart && north.startX==3.5f);
+            edit.set("changes",Json::parse(R"({"name":"Partial","start":["x",1]})"));
+            AIVERSE_TEST_CHECK(playerCall(edit).has("error") && north.name=="North");
+            edit.set("changes",Json::parse(R"({"start":null})"));
+            AIVERSE_TEST_CHECK(!playerCall(edit).has("error") && !north.hasStart);
+            Json remove=Json::parse(R"({"slot":1,"action":"remove"})");
+            AIVERSE_TEST_CHECK(!playerCall(remove).has("error") && int(session.workspace().map.data.players.size())==previousCount);
+            AIVERSE_TEST_CHECK(playerDoc.data.entities[0].owner==0 && playerDoc.data.entities[1].owner==1);
+            for(int i=0;i<4;++i)call("studio.undo");
+            AIVERSE_TEST_CHECK(session.workspace().map.toJson()==originalDoc && !session.workspace().map.canUndo());
+            playerDoc.data.entities[0].owner=originalOwner;playerDoc.data.entities[1].owner=otherOwner;
+            editor::DocBody body;body.id="home";body.faceSize=8;body.cells.assign(6*8*8,'.');body.levels.resize(6*8*8);body.corners.resize(6*9*9);body.faceExtra.resize(6,Json::object());playerDoc.data.bodies.push_back(body);
+            edit.set("changes",Json::parse(R"({"start":{"body":"home","face":2,"x":3,"y":8}})"));
+            AIVERSE_TEST_CHECK(!playerCall(edit).has("error") && playerDoc.toJson()["players"][0]["start"]==edit["changes"]["start"]);
+            edit.set("changes",Json::parse(R"({"start":{"body":"home","face":2,"x":3,"y":9}})"));
+            AIVERSE_TEST_CHECK(playerCall(edit).has("error"));
+            call("studio.undo");playerDoc.data.bodies.clear();
+            const auto snapshot=call("studio.snapshot")["result"];
+            Json mapRequest=Json::object();mapRequest.set("scope",snapshot["graphDocument"]);
+            mapRequest.set("validate",Json::fromBool(true));
+            const auto old=call("studio.mapProperties",mapRequest)["result"];
+            AIVERSE_TEST_CHECK(old["issues"].isArray() && old.getInt("width")==16);
+            mapRequest.set("changes",Json::parse(R"({"name":"Harbor","size":[20,18],"roadsOnly":true,"victory":{"mode":"score"}})"));
+            const auto updated=call("studio.mapPropertiesSet",mapRequest);
+            AIVERSE_TEST_CHECK(updated["result"]["scene"].getStr("name")=="Harbor" && session.workspace().map.data.w==20);
+            AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",mapRequest).has("error"));
+            mapRequest.set("scope",updated["result"]["graphDocument"]);
+            mapRequest.set("changes",Json::parse(R"({"name":"Partial","size":[10,3.5]})"));
+            AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",mapRequest).has("error"));
+            AIVERSE_TEST_CHECK(session.workspace().map.data.name=="Harbor");
+            const auto restored=call("studio.undo");
+            AIVERSE_TEST_CHECK(session.workspace().map.data.name==old.getStr("name") && session.workspace().map.data.w==16 && !session.workspace().map.canUndo());
+            AIVERSE_TEST_CHECK(snapshot["scene"]["groupings"][0].str()=="By type and origin");
+            const auto unchanged=session.workspace().map.toJson();
+            Json params=Json::object();
+            params.set("expectedProject",snapshot["project"]["path"]);
+            Json reordered=Json::object();
+            for(const char* field:{"revision","epoch","mapPath","projectPath"}) reordered.set(field,restored["result"]["graphDocument"][field]);
+            params.set("scope",reordered);
+            params.set("group",Json::number(int64_t(0)));
+            Json reply;
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+            do {
+                reply=call("studio.hierarchyGroups",params);
+                if(!reply["result"].getBool("pending"))break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }while(std::chrono::steady_clock::now()<deadline);
+            const auto& path=reply["result"]["paths"][snapshot["scene"]["entities"][0].getStr("id")];
+            AIVERSE_TEST_CHECK(path.size()==2 && !path[0].str().empty() && path[1].str()==editor::worldOriginTitle(editor::WorldOrigin::Map));
+            AIVERSE_TEST_CHECK(snapshot["scene"]["groupings"][2].str()=="Component");
+            params.set("group",Json::number(int64_t(2)));
+            const auto byComponent=call("studio.hierarchyGroups",params);
+            const auto& components=byComponent["result"]["paths"][snapshot["scene"]["entities"][0].getStr("id")][0];
+            AIVERSE_TEST_CHECK(components.isArray() && components.size()>1);
+            AIVERSE_TEST_CHECK(session.workspace().map.toJson()==unchanged);
+            const auto previews=byComponent["result"]["preview"];
+            AIVERSE_TEST_CHECK(previews.size()==1 && previews[0].getStr("id").starts_with("preview:"));
+            AIVERSE_TEST_CHECK(previews[0]["preview"]["components"].size()>1);
+            AIVERSE_TEST_CHECK(byComponent["result"]["paths"].has(previews[0].getStr("id")));
+            Json flat=Json::object();flat.set("scope",params["scope"]);flat.set("expectedProject",params["expectedProject"]);
+            AIVERSE_TEST_CHECK(call("studio.hierarchyGroups",flat)["result"]["preview"]==previews);
+            AIVERSE_TEST_CHECK(session.workspace().map.toJson()==unchanged);
+            params.member("scope").set("revision",Json::string("stale"));
+            AIVERSE_TEST_CHECK(call("studio.hierarchyGroups",params).has("error"));
+        }
         {
             fs::create_directories(project/"shaders");
             const auto path=project/"shaders"/"precise.json";
@@ -1747,12 +2356,109 @@ void entityWorkflow() {
             auto page=inspector.entities(&live,"run-1",0,1,"");
             AIVERSE_TEST_CHECK(page["active"].boolean() && page["rows"].size()==1 && page["total"].integer()>=2);
             const auto ref=page["rows"][0].getStr("ref");
+            const auto& placed=static_cast<game::GameCore&>(live.module()).mapPlaced();
+            AIVERSE_TEST_CHECK(!placed.empty() && placed.front().valid());
+            const auto mapRef=std::to_string(editor::worldRef(placed.front()));
+            const auto placedPage=inspector.entities(&live,"run-1",0,1,"ref:"+mapRef);
+            AIVERSE_TEST_CHECK(placedPage.getInt("total")==1 && placedPage["rows"][0].getInt("doc",-1)==0);
+            AIVERSE_TEST_CHECK(placedPage["rows"][0].getStr("origin")=="map");
+            const auto second=inspector.entities(&live,"run-1",1,1,"");
+            AIVERSE_TEST_CHECK(second["total"].integer()==page["total"].integer() && second["rows"].size()==1);
+            AIVERSE_TEST_CHECK(second["rows"][0].getStr("ref")!=ref);
+            const auto filtered=inspector.entities(&live,"run-1",0,100,"ref:"+second["rows"][0].getStr("ref"));
+            AIVERSE_TEST_CHECK(filtered["total"].integer()==1 && filtered["rows"][0]==second["rows"][0]);
+            studio::StudioRuntimeInspect::GroupQuery grouped;
+            grouped.keys={"type","origin"};
+            auto level=inspector.entities(&live,"run-1",0,1,"",grouped);
+            AIVERSE_TEST_CHECK(level.getInt("total")==page.getInt("total") && level["groups"].size()==1);
+            const auto type=level["groups"][0];
+            grouped.path.push_back(type.getStr("name"));
+            level=inspector.entities(&live,"run-1",0,1,"",grouped);
+            AIVERSE_TEST_CHECK(level.getInt("total")==type.getInt("count"));
+            grouped.path.push_back(level["groups"][0].getStr("name"));
+            level=inspector.entities(&live,"run-1",0,1,"",grouped);
+            AIVERSE_TEST_CHECK(level["rows"].size()==1 && !level.has("groups"));
+            grouped.keys={"component"}; grouped.path.clear();
+            level=inspector.entities(&live,"run-1",0,100,"ref:"+ref,grouped);
+            AIVERSE_TEST_CHECK(level.getInt("total")==1 && level["groups"].size()>1);
+            for(const auto& component:level["groups"].items()){
+                grouped.path={component.getStr("name")};
+                const auto members=inspector.entities(&live,"run-1",0,1,"ref:"+ref,grouped);
+                AIVERSE_TEST_CHECK(members.getInt("total")==1 && members["rows"][0].getStr("ref")==ref);
+            }
+            inspector.select(&live,"run-1","run-1",ref);
+            AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-1")==ref);
+            AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-2").empty());
+            bool invalidPick=false;
+            try { inspector.select(&live,"run-1","run-2",second["rows"][0].getStr("ref")); }
+            catch(const std::runtime_error&){invalidPick=true;}
+            AIVERSE_TEST_CHECK(invalidPick && inspector.selectedRef(&live,"run-1")==ref);
             const auto detail=inspector.inspect(&live,"run-1","run-1",ref);
             AIVERSE_TEST_CHECK(detail["components"].has("Transform"));
             AIVERSE_TEST_CHECK(live.checksum()==before);
             bool stale=false;try {inspector.inspect(&live,"run-2","run-1",ref);}catch(...){stale=true;}
             AIVERSE_TEST_CHECK(stale);
+            const auto childRef=second["rows"][0].getStr("ref");
+            const auto parentEntity=editor::worldEntity(std::stoull(ref));
+            const auto childEntity=editor::worldEntity(std::stoull(childRef));
+            live.world().add<Parent>(childEntity,Parent{parentEntity});
+            grouped.keys={"parent"};grouped.path.clear();
+            const auto nested=inspector.entities(&live,"run-1",0,100,"",grouped);
+            auto rowFor=[](const Json& result,const std::string& id){
+                for(const auto& row:result["rows"].items())if(row.getStr("ref")==id)return row;
+                return Json{};
+            };
+            AIVERSE_TEST_CHECK(rowFor(nested,ref).getInt("children")==1 && rowFor(nested,childRef).getInt("depth")==1);
+            grouped.collapsed.insert(std::stoull(ref));
+            AIVERSE_TEST_CHECK(rowFor(inspector.entities(&live,"run-1",0,100,"",grouped),childRef).isNull());
+            const auto orphan=inspector.entities(&live,"run-1",0,1,"ref:"+childRef,grouped);
+            AIVERSE_TEST_CHECK(orphan["rows"][0].getStr("ref")==childRef && orphan["rows"][0].getInt("depth")==0);
+            grouped.collapsed.clear();
+            live.world().add<Parent>(parentEntity,Parent{childEntity});
+            const auto cycle=inspector.entities(&live,"run-1",0,100,"",grouped);
+            AIVERSE_TEST_CHECK(cycle.getInt("total")==nested.getInt("total"));
+            live.world().destroy(editor::worldEntity(std::stoull(ref)));
+            AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-1").empty());
             AIVERSE_TEST_CHECK(inspector.entities(nullptr,"run-2",0,100,"")["rows"].size()==0);
+            auto verifyRuntimeRow = [&](auto component, const char* name, const char* category) {
+                auto entity = live.world().create();
+                live.world().add<decltype(component)>(entity, component);
+                studio::StudioRuntimeInspect::GroupQuery filter;
+                filter.keys = {"category"};
+                filter.path = {category};
+                const auto result = inspector.entities(&live,"run-1",0,100,name,filter);
+                AIVERSE_TEST_CHECK(result.getInt("total")==1);
+                AIVERSE_TEST_CHECK(result["rows"][0].getStr("name")==name);
+                AIVERSE_TEST_CHECK(result["rows"][0].getStr("ref")==std::to_string(editor::worldRef(entity)));
+                const auto detail = inspector.inspect(&live,"run-1","run-1",result["rows"][0].getStr("ref"));
+                AIVERSE_TEST_CHECK(detail.getStr("runtimeName")==name);
+                return entity;
+            };
+            verifyRuntimeRow(actor::CharacterId{7}, "Actor #7", "Runtime Actors");
+            const auto otherActor = live.world().create();
+            live.world().add<actor::CharacterId>(otherActor,actor::CharacterId{42});
+            const auto index = std::to_string(otherActor.index);
+            const auto exact = inspector.entities(&live,"run-1",0,100,"Actor #" + index);
+            for (const auto& row : exact["rows"].items())
+                AIVERSE_TEST_CHECK(row.getStr("name") == "Actor #" + index);
+            const auto byIndex = inspector.entities(&live,"run-1",0,100,"id:" + index);
+            AIVERSE_TEST_CHECK(!rowFor(byIndex,std::to_string(editor::worldRef(otherActor))).isNull());
+            const auto projectile = verifyRuntimeRow(actor::Projectile{103}, "Projectile #103", "Projectiles");
+            verifyRuntimeRow(actor::Loot{214}, "Loot #214", "Loot");
+            verifyRuntimeRow(actor::Vehicle{325}, "Vehicle #325", "Vehicles");
+            const auto projectileRef = std::to_string(editor::worldRef(projectile));
+            const auto actorRef = std::to_string(editor::worldRef(otherActor));
+            inspector.selectMany(&live,"run-1","run-1",{projectileRef,actorRef});
+            live.world().destroy(projectile);
+            const auto replacement = verifyRuntimeRow(actor::Projectile{104}, "Projectile #104", "Projectiles");
+            AIVERSE_TEST_CHECK(replacement.index==projectile.index && editor::worldRef(replacement)!=editor::worldRef(projectile));
+            AIVERSE_TEST_CHECK(inspector.selectedRefs(&live,"run-1")==std::vector<std::string>{actorRef});
+            const auto expired = inspector.entities(&live,"run-1",0,100,"ref:"+projectileRef);
+            AIVERSE_TEST_CHECK(expired.getInt("total")==0);
+            bool staleRefRejected = false;
+            try { inspector.inspect(&live,"run-1","run-1",projectileRef); }
+            catch (const std::runtime_error&) { staleRefRejected = true; }
+            AIVERSE_TEST_CHECK(staleRefRejected);
         }
         const auto plan=studio::studioGameLaunch(session.workspace(),true);
         AIVERSE_TEST_CHECK(plan.map && *plan.map==0);
@@ -1815,6 +2521,25 @@ void entityWorkflow() {
         AIVERSE_TEST_CHECK(call("studio.newMap",Json::parse(R"({"name":"new","width":0,"height":32})")).has("error"));
         AIVERSE_TEST_CHECK(session.workspace().map.toJson()==prior);
         AIVERSE_TEST_CHECK(call("studio.openMap",Json::parse(R"({"file":"../rules.json"})")).has("error"));
+        // Catalog writes reject stale documents and duplicate IDs; dotted IDs are literal.
+        auto catalogRule=Json::parse(R"({"group":"resources","id":"test.crystal","original":null,"value":{"name":"Crystal"}})");
+        catalogRule.set("project",Json::string(session.workspace().project.dir));
+        const auto createdRule=call("studio.projectRule",catalogRule);
+        AIVERSE_TEST_CHECK(!createdRule.has("error"));
+        AIVERSE_TEST_CHECK(call("studio.projectRule",catalogRule).has("error"));
+        catalogRule.set("original",createdRule["result"]["text"]);
+        catalogRule.set("value",Json::parse(R"({"name":"Blue crystal"})"));
+        AIVERSE_TEST_CHECK(!call("studio.projectRule",catalogRule).has("error"));
+        AIVERSE_TEST_CHECK(call("studio.projectRule",catalogRule).has("error"));
+        AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["resources"]["test.crystal"].getStr("name")=="Blue crystal");
+        fs::copy_file(project/"maps"/"scene.json",project/"maps"/"local-copy.json");
+        bool foundLocal=false;
+        const auto projectCatalog=call("studio.project")["result"];
+        for(const auto& map:projectCatalog["maps"].items())foundLocal |= map.getStr("file")=="maps/local-copy.json";
+        AIVERSE_TEST_CHECK(foundLocal);
+        AIVERSE_TEST_CHECK(!call("studio.openMap",Json::parse(R"({"file":"maps/local-copy.json"})")).has("error"));
+        AIVERSE_TEST_CHECK(!call("studio.openMap",Json::parse(R"({"file":"maps/scene.json"})")).has("error"));
+        fs::remove(project/"maps"/"local-copy.json");
         const auto revision=session.workspace().map.revision;
         AIVERSE_TEST_CHECK(!call("studio.newMap",Json::parse(R"({"name":"New document","width":32,"height":24})")).has("error"));
         AIVERSE_TEST_CHECK(session.workspace().map.data.w==32 && session.workspace().map.dirty);
@@ -1842,6 +2567,97 @@ void entityWorkflow() {
     }
     fs::remove_all(root);
 }
+}
+
+static void worldSceneInspectorProperties() {
+    using namespace aiverse;
+    namespace fs=std::filesystem;
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-world-scene-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto project=root/"fixture";
+    fs::create_directories(project);
+    std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
+    std::ofstream(project/"rules.json")<<R"({"actor":{}})";
+    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]},{"id":2,"center":[24,1,0],"half":[1,1,1],"yaw":0.25,"marker":7}],"spawns":[[-6,0,-6],[4,0,4]],"custom":{"marker":7}})");
+    std::ofstream(project/"map.json")<<original.dump();
+    {
+        studio::StudioSession session(root.string(),project.string());
+        auto call=[&](const char* method,Json params=Json::object()){
+            Json req=Json::object();req.set("id",Json::number(int64_t(1)));req.set("method",Json::string(method));
+            req.set("params",std::move(params));return session.dispatch(req);
+        };
+        const auto initial=call("studio.snapshot")["result"];
+        AIVERSE_TEST_CHECK(initial["scene"].getBool("worldSpace")&&initial["scene"].getBool("mapProperties"));
+        const auto rulesReply=call("studio.rules");
+        AIVERSE_TEST_CHECK(!rulesReply.has("error"));
+        for(const auto* key:{"types","resolved"}){
+            const auto& types=rulesReply["result"][key];
+            AIVERSE_TEST_CHECK(types.isObject() && types.size()==0);
+        }
+        Json network=Json::object();
+        network.set("project",initial["project"]["path"]);
+        network.set("mode",Json::string("listen"));
+        const auto hostArgs=studio::studioNetworkArguments(session.workspace(),network);
+        AIVERSE_TEST_CHECK((hostArgs==std::vector<std::string>{"--project",session.workspace().project.dir,"--map-index","0","--listen"}));
+        network.set("mode",Json::string("connect"));
+        network.set("address",Json::string("ws://[::1]:27101"));
+        const auto joinArgs=studio::studioNetworkArguments(session.workspace(),network);
+        AIVERSE_TEST_CHECK(joinArgs.size()==6&&joinArgs[4]=="--connect"&&joinArgs[5]=="ws://[::1]:27101");
+        for(const char* invalid:{"udp://","udp://localhost:65536","ws://[::1]:0","ws://[::1","http://localhost","udp://local host"}){
+            bool rejected=false;
+            try{studio::validateStudioServerAddress(invalid);}catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected);
+        }
+        Json params=Json::object();params.set("scope",initial["graphDocument"]);
+        const auto summary=call("studio.mapProperties",params)["result"];
+        AIVERSE_TEST_CHECK(!summary.getBool("grid")&&summary["worldSpace"].getInt("colliders")==2&&summary["worldSpace"].getInt("spawns")==2);
+        params.set("changes",Json::parse(R"({"name":"Partial","size":[20,18]})"));
+        AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",params).has("error")&&session.workspace().map.toJson()==original);
+        params.set("changes",Json::parse(R"({"name":"Harbor terminal"})"));
+        const auto renamed=call("studio.mapPropertiesSet",params)["result"];
+        AIVERSE_TEST_CHECK(renamed["scene"].getStr("name")=="Harbor terminal");
+        AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",params).has("error"));
+        params.set("scope",renamed["graphDocument"]);
+        const auto depth=session.workspace().map.undoDepth();
+        AIVERSE_TEST_CHECK(!call("studio.mapPropertiesSet",params).has("error")&&session.workspace().map.undoDepth()==depth);
+        AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==original);
+        AIVERSE_TEST_CHECK(!call("studio.redo").has("error")&&!call("studio.save").has("error"));
+        editor::MapDoc disk;std::string error;Json expected=original;expected.set("name",Json::string("Harbor terminal"));
+        AIVERSE_TEST_CHECK(disk.load((project/"map.json").string(),&error)&&disk.toJson()==expected);
+        disk.undo();AIVERSE_TEST_CHECK(disk.toJson()==original);
+        bool rejected=false;
+        try{(void)session.saveMapAs((project/"other.json").string());}catch(const std::exception&){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected&&!fs::exists(project/"other.json"));
+        Json bounds=Json::parse(R"({"entityId":"collider:0","componentId":"BoxCollider","values":{"minX":2,"maxX":5}})");
+        const auto scope=call("studio.snapshot")["result"]["graphDocument"];
+        bounds.set("scope",scope);
+        Json invalid=bounds;invalid.set("entityIds",Json::parse(R"(["collider:0","collider:999"])"));
+        AIVERSE_TEST_CHECK(call("studio.setProperties",invalid).has("error")&&session.workspace().map.toJson()==expected);
+        const auto boundsDepth=session.workspace().map.undoDepth();
+        const auto applied=call("studio.setProperties",bounds);
+        if(applied.has("error"))std::cerr<<applied.getStr("error")<<"\n";
+        AIVERSE_TEST_CHECK(!applied.has("error")&&session.workspace().map.undoDepth()==boundsDepth+1);
+        const auto edited=session.workspace().map.toJson();
+        AIVERSE_TEST_CHECK(edited["colliders"][size_t(0)]["min"][size_t(0)].integer()==2&&edited["colliders"][size_t(0)]["max"][size_t(0)].integer()==5);
+        AIVERSE_TEST_CHECK(call("studio.setProperties",bounds).has("error")&&session.workspace().map.toJson()==edited);
+        bounds.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+        AIVERSE_TEST_CHECK(!call("studio.setProperties",bounds).has("error")&&session.workspace().map.undoDepth()==boundsDepth+1);
+        AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
+        Json oriented=Json::parse(R"({"entityId":"collider:1","componentId":"OrientedBoxCollider","values":{"rotationY":-90,"scaleX":6}})");
+        oriented.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+        const auto orientedEdit=call("studio.setProperties",oriented);
+        if(orientedEdit.has("error"))std::cerr<<orientedEdit.getStr("error")<<"\n";
+        AIVERSE_TEST_CHECK(!orientedEdit.has("error"));
+        Json expectedPose=expected;
+        auto& box=expectedPose.member("colliders").at(1);
+        box.member("half").at(0)=Json::number(int64_t(3));
+        box.set("yaw",Json::number(0.75));
+        AIVERSE_TEST_CHECK(session.workspace().map.toJson()==expectedPose);
+        oriented.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+        oriented.set("values",Json::parse(R"({"rotationY":0,"scaleZ":5000})"));
+        AIVERSE_TEST_CHECK(call("studio.setProperties",oriented).has("error")&&session.workspace().map.toJson()==expectedPose);
+        AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
+    }
+    fs::remove_all(root);
 }
 
 static void actorProjectMapSelection() {
@@ -1890,6 +2706,16 @@ int main() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
     actorProjectMapSelection();
+    // Fixed map seeds round-trip independently of the match seed and the fixed-point coordinate range.
+    gen::GenRequest generated;
+    std::string seedError;
+    AIVERSE_TEST_CHECK(gen::parseRequest(Json::parse(R"({"seed":9007199254740993})"),42,2,generated,&seedError));
+    AIVERSE_TEST_CHECK(generated.seed==9007199254740993ULL);
+    AIVERSE_TEST_CHECK(gen::parseRequest(Json::parse(R"({"seed":9223372036854775807})"),42,2,generated,&seedError));
+    AIVERSE_TEST_CHECK(generated.seed==9223372036854775807ULL);
+    AIVERSE_TEST_CHECK(gen::parseRequest(Json::parse(R"({"seed":"match"})"),42,2,generated,&seedError));
+    AIVERSE_TEST_CHECK(generated.seed==42);
+    worldSceneInspectorProperties();
     localPlayToolContracts(session.workspace());
     bool playRejected=false;
     try { (void)studio::studioGameLaunch(session.workspace(),false); }
@@ -1903,6 +2729,22 @@ int main() {
     AIVERSE_TEST_CHECK(phone.insets().left==44 && phone.insets().bottom==21);
     phone.safeArea=false;AIVERSE_TEST_CHECK(phone.insets().left==0);
     phone.id="none";AIVERSE_TEST_CHECK(phone.size(800,600)==std::make_pair(800.f,600.f));
+    // The composited Game window uses the same oriented device profile as the runtime.
+    for (bool rotated : {false,true}) {
+        const int width=rotated?852:393, height=rotated?393:852;
+        std::vector<uint32_t> pixels(size_t(width)*height);
+        auto at=[&](int x,int y){return pixels[size_t(y)*width+x];};
+        for (bool safe : {false,true}) {
+            studio::StudioGameDevice device{"iphone-15",rotated,safe};
+            studio::drawDeviceMask(pixels.data(),width,height,1,device.json());
+            AIVERSE_TEST_CHECK(at(0,0)==0xff0c0c0e && at(width/2,height/2)==0);
+            AIVERSE_TEST_CHECK(at(rotated?29:196,rotated?196:29)==0xff000000);
+            AIVERSE_TEST_CHECK(at(rotated?40:110,rotated?90:40)==(safe?0x46461310u:0u));
+            AIVERSE_TEST_CHECK(at(rotated?59:110,rotated?90:59)==(safe?0xe6e6bd48u:0u));
+        }
+        studio::drawDeviceMask(pixels.data(),width,height,2,studio::StudioGameDevice{}.json());
+        AIVERSE_TEST_CHECK(std::all_of(pixels.begin(),pixels.end(),[](uint32_t pixel){return pixel==0;}));
+    }
     bool badProfile=false;try {studio::StudioGameDevice::parse(Json::parse(R"({"id":"unknown","landscape":true,"safeArea":true})"));}catch(...){badProfile=true;}
     AIVERSE_TEST_CHECK(badProfile);
     AIVERSE_TEST_CHECK(studio::studioGameKey("w")==platform::Key::W);
@@ -1947,7 +2789,7 @@ int main() {
     planetWorldProcessAuthoringWorkflow();
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
+    regionOverviewContract();mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     caveGraphCaptureWorkflow();
     std::cout << "studio session contract PASS\n";
 }

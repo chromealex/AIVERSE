@@ -1,0 +1,7 @@
+2026-11-26 05:38:16.622 AiverseStudioHTML5[95345:82936806] [studio-web] JS: CROSS main DONE_1
+2026-11-26 05:38:16.622 AiverseStudioHTML5[95345:82936806] [studio-web] JS: CROSS main VERIFIED selected shape geometry, dimensions, transforms and sampling phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-shape-ui-c353kT/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-shape-ui-c353kT/Catalog.app: replacing existing signature
+2026-11-26 05:38:30.225 AiverseStudioHTML5[95978:82939018] [studio-web] JS: CROSS main DONE_2
+2026-11-26 05:38:30.224 AiverseStudioHTML5[95978:82939018] [studio-web] JS: CROSS main VERIFIED selected shape geometry, dimensions, transforms and sampling phase 2
+Metal gold-particle footprint: point width 1 donut width 86

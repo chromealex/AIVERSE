@@ -31,8 +31,59 @@ Json makeUnit(const std::string& op){Json u=Json::object();u.set("op",Json::stri
     if(op=="surfaceLocomotion"){u.set("velocity",Json::string("velocity"));u.set("clearance",Json::number(.5));u.set("probe",Json::number(.8));u.set("stepDistance",Json::number(.3));u.set("stepHeight",Json::number(.15));u.set("stepDuration",Json::number(.25));u.set("turnSpeed",Json::number(4.0));u.set("maxSpeed",Json::number(2.0));u.set("bodyRadius",Json::number(.2));u.set("minSupport",Json::number(int64_t(3)));u.set("maxSwing",Json::number(int64_t(1)));u.set("world",Json::fromBool(true));u.set("followSurface",Json::fromBool(true));u.set("legs",Json::array());u.set("obstacles",Json::array());u.set("capsules",Json::array());u.set("collisionIterations",Json::number(int64_t(24)));}
     if(op=="fullBodyIK"){u.set("iterations",Json::number(int64_t(24)));u.set("rootPull",Json::number(0.0));u.set("damping",Json::number(.05));u.set("tolerance",Json::number(.001));u.set("effectors",Json::parse(R"([{"bone":"","target":"target","weight":1}])"));u.set("joints",Json::array());}return u;
 }
+Json rigItemPresets(){
+    Json presets=Json::object();
+    const auto contacts=makeContacts("","");
+    presets.set("effectors",makeUnit("fullBodyIK")["effectors"][0]);
+    presets.set("feet",contacts["feet"][0]);
+    presets.set("capsules",contacts["capsules"][0]);
+    presets.set("masses",contacts["balance"]["masses"][0]);
+    presets.set("joints",Json::parse(R"({"bone":"","stiffness":0,"min":[-3.14,-3.14,-3.14],"max":[3.14,3.14,3.14],"preferred":[0,0,0]})"));
+    presets.set("legs",Json::parse(R"({"hip":"","knee":"","foot":"","home":[0,-0.5,0],"pole":[0,0.5,0]})"));
+    presets.set("obstacles",Json::parse(R"({"kind":"box","point":[0,0,0],"extent":[0.5,0.5,0.5],"radius":0.5,"normal":[0,1,0]})"));
+    return presets;
+}
 void sort(Json& graph){Json copy=graph;auto& nodes=copy.member("nodes");if(!nodes.isArray()||nodes.size()==0||nodes.size()>128)fail("expected 1..128 nodes");std::map<std::string,size_t> ids;for(size_t i=0;i<nodes.size();++i){auto id=nodes[i].getStr("id");if(id.empty()||!ids.emplace(id,i).second)fail("duplicate/empty node id");}std::vector<int> marks(nodes.size());Json sorted=Json::array();std::function<void(size_t)> visit=[&](size_t i){if(marks[i]==1)fail("cycle");if(marks[i]==2)return;marks[i]=1;for(auto& p:ports(nodes[i])){auto it=ids.find(nodes[i].getStr(p));if(it==ids.end())fail("missing input");visit(it->second);}marks[i]=2;sorted.push(nodes[i]);};for(size_t i=0;i<nodes.size();++i)visit(i);copy.set("nodes",sorted);graph=std::move(copy);}
 void connect(Json& graph,const std::string& source,const std::string& target,const std::string& port){Json copy=graph;bool found=false;for(auto& n:copy.member("nodes").itemsMut())if(n.getStr("id")==target){auto p=ports(n);if(std::find(p.begin(),p.end(),port)==p.end())fail("invalid input port");n.set(port,Json::string(source));found=true;}if(!found)fail("unknown node");sort(copy);graph=std::move(copy);}
 void rename(Json& graph,const std::string& from,const std::string& to){if(to.empty())fail("empty id");Json copy=graph;bool found=false;for(auto& n:copy.member("nodes").itemsMut()){if(n.getStr("id")==to)fail("duplicate id");if(n.getStr("id")==from){n.set("id",Json::string(to));found=true;}for(auto& p:ports(n))if(n.getStr(p)==from)n.set(p,Json::string(to));}if(!found)fail("unknown node");if(copy.getStr("output")==from)copy.set("output",Json::string(to));if(auto* states=copy.find("states"))for(auto& s:states->itemsMut())if(s.getStr("output")==from)s.set("output",Json::string(to));graph=std::move(copy);}
 void remove(Json& graph,const std::string& id){for(const auto& n:graph["nodes"].items())for(auto& p:ports(n))if(n.getStr(p)==id)fail("disconnect consumers first");if(graph.getStr("output")==id)fail("select another output first");for(const auto& s:graph["states"].items())if(s.getStr("output")==id)fail("state uses this node");auto& a=graph.member("nodes").itemsMut();a.erase(std::remove_if(a.begin(),a.end(),[&](auto& n){return n.getStr("id")==id;}),a.end());}
+void renameState(Json& graph,const std::string& id,const std::string& name){
+    auto* states=graph.find("states");
+    if(!states || !states->isArray() || id.empty())fail("unknown state");
+    auto& entries=states->itemsMut();
+    auto named=[&](const std::string& key){
+        return std::find_if(entries.begin(),entries.end(),[&](const Json& s){return s.getStr("id")==key;});
+    };
+    auto state=named(id);
+    if(state==entries.end())fail("unknown state");
+    if(name.empty() || named(name)!=entries.end())fail("enter a unique state name");
+    state->set("id",Json::string(name));
+    for(auto& entry:entries){
+        if(auto* transitions=entry.find("transitions"))
+            for(auto& transition:transitions->itemsMut())
+                if(transition.getStr("to")==id)transition.set("to",Json::string(name));
+    }
+    if(graph.getStr("initial")==id)graph.set("initial",Json::string(name));
+}
+
+void removeState(Json& graph,const std::string& id){
+    auto* states=graph.find("states");
+    if(!states || !states->isArray() || id.empty())fail("unknown state");
+    auto& entries=states->itemsMut();
+    auto state=std::find_if(entries.begin(),entries.end(),[&](const Json& s){return s.getStr("id")==id;});
+    if(state==entries.end())fail("unknown state");
+    entries.erase(state);
+    if(entries.empty()){
+        graph.erase("states");
+        graph.erase("initial");
+        return;
+    }
+    for(auto& entry:entries){
+        if(auto* transitions=entry.find("transitions")){
+            auto& edges=transitions->itemsMut();
+            edges.erase(std::remove_if(edges.begin(),edges.end(),[&](const Json& t){return t.getStr("to")==id;}),edges.end());
+        }
+    }
+    if(graph.getStr("initial")==id)graph.set("initial",Json::string(entries.front().getStr("id")));
+}
 }

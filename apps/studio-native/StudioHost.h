@@ -5,27 +5,34 @@
 // views, dialogs and the timer, and forward bridge messages, input and frame ticks here.
 #include "apps/studio-native/StudioSession.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/studio-native/StudioLightBakeJob.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "apps/studio-native/StudioViewportLayout.h"
 #include "apps/studio-native/StudioRenderThread.h"
 #include "engine/data/Json.h"
+#include "StudioWizardDictation.h"
 #include "engine/platform/Platform.h"
 #include <atomic>
 #include <deque>
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
+namespace aiverse::game { class GameLights; struct TerrainLook; }
+
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game, Fx };
+enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Lighting, EffectFile, GpuEmitter, SourceModel, ImportedClip, Nature, Count };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
+struct StudioNaturePreview;
+class StudioLightBakeFiles;
 class StudioHostPlatform {
 public:
     virtual ~StudioHostPlatform() = default;
@@ -40,7 +47,9 @@ public:
     // The native view is shown in a visible, not minimised window.
     virtual bool surfaceDrawable(StudioSurface surface) = 0;
     // The Game view has keyboard focus (input goes to the game).
+    virtual void humanReference(StudioSurface,const Json&) {}
     virtual bool gameFocused() = 0;
+    virtual void captureStudioWindow(gfx::Device::CaptureFn done) = 0;
     // studio.viewportRect: move / show / hide the native view over the panel's DOM rect, in the web view that sent it.
     // Fill `out` (pixel size for the drawable). False: a stale report from a window that no longer hosts the view.
     virtual bool placeSurface(StudioSurface surface, const ViewportRect& rect, NativeViewportPlacement& out) = 0;
@@ -52,11 +61,16 @@ public:
     // Dialogs. Callbacks run on the main thread; an empty path / list means cancelled.
     virtual bool confirmDiscardChanges(const std::string& title, const std::string& message, const std::string& discardLabel) = 0;
     virtual void chooseProject(std::function<void(std::string)> done) = 0;
+    virtual void dictationStarted() {}
     virtual void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) = 0;
     virtual void chooseSaveFile(const std::string& startDir, const std::string& defaultName, std::function<void(std::string)> done) = 0;
     virtual void chooseImportSources(const std::string& startDir, std::function<void(std::vector<std::filesystem::path>)> done) = 0;
-    virtual void revealInFileManager(const std::filesystem::path& path) = 0;
+    using PlayerExitStatus = std::function<std::optional<int>()>;
+    virtual void openProjectStudio(const std::filesystem::path& executable, const std::string& project) = 0;
+    virtual PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) = 0;
+    virtual void revealInFileManager(const std::filesystem::path& path, bool openFolder) = 0;
     // Per-user cache folder (asset thumbnails) and the last opened project (reopened on the next launch).
+    virtual std::filesystem::path legacyEditorSettingsDir() { return {}; }
     virtual std::filesystem::path cacheDir() = 0;
     virtual void rememberLastProject(const std::string& dir) = 0;
     // Window requests from the UI: studio.windowOpen / windowClose / windowTitle / windowDrag / windowZoom.
@@ -87,8 +101,12 @@ public:
     void runOnSceneThread(const std::function<void()>& fn) { if (renderThread_) renderThread_->invoke(fn); else fn(); }
     // Separate dedicated FX drawable; both GPU Scenes have the same owner
     // thread, but independent devices/swapchains and camera lifetimes.
-    void fxCameraOrbit(double dx,double dy);
-    void fxCameraZoom(double wheel);
+    bool humanPick(StudioSurface surface,double x,double y,double w,double h);
+    void humanOrbit(StudioSurface surface,double dx,double dy);
+    void humanZoom(StudioSurface surface,double amount);
+    void natureClick(double x,double y,double width,double height);
+    void fxCameraOrbit(StudioSurface surface,double dx,double dy);
+    void fxCameraZoom(StudioSurface surface,double wheel);
     bool projectLoading() const { return projectLoading_; }
     bool htmlComposite() const { return htmlComposite_; }
 
@@ -102,6 +120,7 @@ public:
     void openProject(const std::string& path, int64_t requestId);
     // Before the main window closes or the app quits. False: keep it open.
     bool confirmClose();
+    void cancelWizardDictation() { wizardDictation_.cancel(); }
     void shutdown();
 
     // Events to every web view (window.__aiverseReceive).
@@ -116,6 +135,7 @@ public:
     void pan(double dx, double dy);
     void moveCamera(double right, double up, double forward);
     void focusSelection();
+    void focusLiveSelection();
     void resetView();
     void frameAll();
     void setPivotSnap(bool on);
@@ -130,13 +150,14 @@ public:
     void hover(double x, double y, double w, double h); // x < 0: left the view
     void select(double x, double y, double w, double h, const std::string& mode);
     void selectionAction(const std::string& method);
+    bool scenePickerArmed() const { return !scenePickerToken_.empty(); }
     bool brushArmed() const;
-    bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr);
+    bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr,std::string* planetBody=nullptr,double* elevation=nullptr);
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
     bool worldProcessDrag(int phase, double x, double y, double w, double h, bool symmetric = false, bool snap = false);
-    bool terrainStroke(int phase, double x, double y, double w, double h);
+    bool terrainStroke(int phase, double x, double y, double w, double h, bool shift = false);
     bool placeAsset(const std::string& asset, double x, double y, double w, double h);
     bool placeType(const std::string& type, double x, double y, double w, double h);
     // Files dropped from the file manager on the Assets panel (folder: the panel's drop target).
@@ -154,7 +175,10 @@ public:
     void gameSuspend() { if (game_) game_->suspend(); }
     // A native view went back to the main window (its floating window closed): hidden until the UI reports its rect.
     void surfaceDetached(StudioSurface surface);
-    Json gameState();
+    void startGame(const StudioGameLaunch& plan);
+    Json panelInventory_;
+    void stopGame();
+    Json gameState(bool includeScriptErrors = false);
 
 private:
     // The render thread owns the Scene and its GPU resources: every Scene call from the UI thread runs
@@ -167,22 +191,37 @@ private:
     struct FrameInputs {
         int width = 0, height = 0;
         std::shared_ptr<const editor::MapDoc> map;
+        std::shared_ptr<const StudioSceneDocument> document;
         std::shared_ptr<const Json> rules;
+        std::shared_ptr<const game::TerrainLook> planetLook;
+        bool brushArmed=false,editBaseTerrain=false;
+        render::PrismaQuality postQuality=render::PrismaQuality::High;
+        bool postVisible=true;
+        std::shared_ptr<const Json> gamePost;
+        char regionBorderLetter=0;
+        int erosionHighlight=-2;
         bool fps = false;
-        std::string selected, project, hover;
+        std::string selected, project, hover, geometryFile;
         float levelHeight = 1.5f;
         std::set<std::string> selection, hidden, locked;
+        std::shared_ptr<const StudioScene::FieldOutlines> outlines;
+        std::shared_ptr<const StudioScene::HeatmapTiles> heatmap;
+        std::shared_ptr<const world::NaturePresentationFrame> nature;
+        StudioNatureLayers natureLayers;
         StudioWindState wind;
     };
     // Results of the last finished Scene frame, consumed by the UI thread.
     struct FrameOutputs {
-        std::string error, facialError, lightingStatus;
-        bool facialReady = false;
+        std::string error, lightingStatus;
         StudioScene::LoadProgress load;
         StudioScene::CameraState camera;
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
+    void tickAnimationPreview(StudioSurface surface);
+    void tickCharacterPreview(StudioSurface surface);
+    StudioScene* activeHumanRenderer();
+    void tickAssetPreview(StudioSurface surface);
     void ensureScene();
     Json textureGraphGpu(editor::Workspace& ws,const Json& params);
     void tickTextureGraph(const std::string& project);
@@ -199,6 +238,12 @@ private:
     void rebuildOverlay();
     void publishCamera(const StudioScene::CameraState& camera);
     void tickGame();
+    void restartGame();
+    void pollScriptChanges();
+    bool restartOnScriptChange_ = true;
+    double nextScriptPoll_ = 0;
+    std::string scriptWatchProject_;
+    std::map<std::string,std::filesystem::file_time_type> scriptStamps_;
     void tickAgentScreenshot();
     void pollAgentRequests();
     Json assetThumbnail(const std::string& path);
@@ -218,10 +263,18 @@ private:
     bool readImage(const std::filesystem::path& file, int& w, int& h, std::vector<uint8_t>& rgba);
     std::string imageDataUrl(const std::filesystem::path& file, int maxSide, bool jpeg);
 
+    struct LaunchedPlayer {
+        std::string project,mode;
+        StudioHostPlatform::PlayerExitStatus exitStatus;
+    };
+    std::vector<LaunchedPlayer> launchedPlayers_;
+    double nextPlayerCheck_=0;
     StudioHostPlatform& platform_;
     std::string engineRoot_;
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
+    std::mutex animationEditorMutex_;
+    std::array<Json,2> animationEditors_;
     // Separate GPU owner. One outstanding camera request; no main Scene
     // access and no UI-thread GPU readback during orbit.
     struct BuildingPreviewJob {Json id;uint64_t token;float yaw,pitch,zoom,panX,panY;};
@@ -237,20 +290,51 @@ private:
     void publishBuildingPanelFrame();
     Json buildingPanelFrame(const BuildingPreviewJob& job);
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
+    struct AssetSurface {
+        std::string error;
+        NativeViewportPlacement placement;
+        std::unique_ptr<StudioScene> renderer;
+    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_, sourceModelSurface_, importedClipSurface_, lensSurface_, lightingSurface_, effectFileSurface_, gpuEmitterSurface_, natureSurface_;
+    std::string effectFileProject_, gpuEmitterProject_;
+    std::unique_ptr<game::GameLights> weatherLights_;
+    double weatherStart_=0;
+    PreviewDayLighting weatherDay_;
+    std::string weatherEpoch_;
+    std::string attachmentProject_, sourceModelProject_, importedClipProject_, lensProject_;
+    AssetSurface& assetSurface(StudioSurface surface);
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
     bool textureGraphWork_=false;
     std::string textureGraphScope_,textureGraphError_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
+    StudioNatureLayers natureLayers_;
+    std::optional<StudioSceneDocument> erosionHighlightDocument_;
+    int erosionHighlight_=-2; // -2 none, -1 all, otherwise a document-scoped zone index
+    double nextNatureSample_=0;
+    std::shared_ptr<const StudioScene::FieldOutlines> outlines_;
+    std::shared_ptr<const StudioScene::HeatmapTiles> heatmap_;
+    std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     FrameInputs renderInputs_;
     FrameOutputs renderOutputs_;
     bool renderOutputsFresh_ = false;
     std::shared_ptr<const editor::MapDoc> mapSnapshot_;
-    const editor::MapDoc* mapSnapshotSource_ = nullptr;
+    std::shared_ptr<const StudioSceneDocument> mapSnapshotDocument_;
     std::shared_ptr<const Json> rulesSnapshot_;
+    std::shared_ptr<const game::TerrainLook> planetLookSnapshot_;
+    Json planetManifestTerrain_;
     std::string rulesSnapshotProject_;
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
+    std::shared_ptr<StudioNaturePreview> naturePreview_,liveNatureView_;
+    bool natureShowsGame_=false;
+    bool natureRendererHierarchical_=true;
+    std::string natureRendererGeometry_="auto";
+    uint64_t liveNatureEpoch_=0;
+    const auto& displayedNature() const { return natureShowsGame_?liveNatureView_:naturePreview_; }
+    render::PrismaQuality postQuality_=render::PrismaQuality::High;
+    bool postInScene_=true;
+    bool gamePostOverride_=false;
+    std::shared_ptr<const Json> gamePostSnapshot_;
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
     Json agentPlayReview_;
@@ -260,6 +344,18 @@ private:
     bool fxSurfaceVisible_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
+    std::shared_ptr<AgentShot> lensShot_;
+    int64_t lensCameraId_ = 0;
+    double lensCaptureStarted_ = 0;
+    void captureLensFrame(int64_t cameraId);
+    void finishLensCapture();
+    double sceneShotDeadline_=0;
+    std::shared_ptr<const StudioSceneDocument> renderedSceneDocument_; // render thread
+    double windowShotDeadline_=0;
+    double gameShotDeadline_=0;
+    uint64_t gameShotEpoch_=0;
+    double natureShotDeadline_=0;
+    std::weak_ptr<StudioNaturePreview> natureShotSource_;
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
     struct FxShot {
         uint64_t id=0;
@@ -273,11 +369,31 @@ private:
     std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
     double fxShotStartedAt_=0;
     uint64_t nextFxShotId_=1;
+    uint64_t wizardArtRequest_ = 0;
+    StudioWizardDictation wizardDictation_;
+    bool wizardCreating_ = false;
+    bool portJobActive_=false;
+    std::string importedProject_;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
+    bool showSceneBake_=true;
+    bool atlasPreviewBusy_=false;
+    std::shared_ptr<StudioLightBakeFiles> bakeFiles_;
+    StudioLightBakeJob bakeJob_;
+    std::optional<bake::CapturedBake> pendingBake_;
+    std::string bakeEpoch_,bakeMessage_;
+    uint64_t bakeRevision_=0;
+    Json natureCommand(const Json& params,bool showcase=false);
+    void tickNaturePreview();
+    void tickLightBake();
+    bool bakeFailed_=false;
+    Json lightBakeJob(const Json& params,const Json& settings = {});
+    Json linkedLightBake(const std::string& name,const Json& params);
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
     uint64_t sceneFrameCount_ = 0;
-    std::deque<std::pair<float, uint32_t>> frameHistory_;
+    struct SceneFrameSample { float cpuMs; uint32_t draws; double simulationMs; };
+    std::deque<SceneFrameSample> frameHistory_;
+    double simulationMsSinceSceneFrame_ = 0;
     std::vector<StudioScene::OverlayShape> extShapes_;
     uint64_t buildingGraphOverlayScene_=0;
     uint32_t buildingGraphOverlayLayers_=1;
@@ -303,6 +419,16 @@ private:
     double wpHitX_=0,wpHitY_=0;
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
+    void finishScenePick(Json result);
+    void roadPick(double x, double y, double w, double h, bool chain);
+    bool pickingRoad_ = false;
+    std::string roadOrigin_;
+    Json roadScope_;
+    std::string scenePickerToken_;
+    bool pickingArea_=false;
+    Json areaScope_;
+    std::optional<StudioMapCell> areaOrigin_;
+    void updateAreaPick(int phase,double x,double y,double w,double h);
     Json forestPlantArm_; // one-shot, bound to project/map/revision
     StudioWorldProcessLiveOptions wpLiveOptions_;
     double wpLiveRefresh_=0;
@@ -316,7 +442,7 @@ private:
     Json sampleWorldProcessLive();
     Json planetSceneBodyRequest(const Json& params);
     Json planetForestLiveRequest();
-    Json planetViewAgentRequest(const std::string& name,const Json& params);
+    Json sceneViewAgentRequest(const std::string& name,const Json& params);
     std::int64_t wpPreviewRevision_=-1;
     std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;
@@ -328,7 +454,7 @@ private:
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
     bool lastCameraOrtho_ = false, cameraSent_ = false;
     // sceneMouse state (shells that use the neutral mapping)
-    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, marquee = false, active = false; } mouse_;
+    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, playerStart = false, marquee = false, active = false; } mouse_;
     double lastHoverTime_ = 0;
 };
 

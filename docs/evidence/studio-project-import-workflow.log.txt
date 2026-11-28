@@ -1,0 +1,8 @@
+2026-11-26 05:00:18.787 AiverseStudioHTML5[73810:82824255] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/port-ui-z0xLeT/Catalog.app/Contents/Resources/studio-web
+2026-11-26 05:00:18.916 AiverseStudioHTML5[73810:82824255] [studio-web] served index.html (6971 bytes)
+2026-11-26 05:00:18.921 AiverseStudioHTML5[73810:82824255] [studio-web] served assets/index-zab6P1eZ.js (1563839 bytes)
+2026-11-26 05:00:18.950 AiverseStudioHTML5[73810:82824255] [studio-web] JS: CROSS main boot
+2026-11-26 05:00:18.958 AiverseStudioHTML5[73810:82824255] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 05:00:22.989 AiverseStudioHTML5[73810:82824255] [studio-web] JS: CROSS main SHOT_ready
+2026-11-26 05:00:24.498 AiverseStudioHTML5[73810:82824255] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Project is loading

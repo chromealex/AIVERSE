@@ -1,10 +1,20 @@
 #include "Simulation.h"
+#include "SimulationStepTiming.h"
+#include <chrono>
 #include <algorithm>
 #if AIVERSE_SIM_PHYSIS
 #include "engine/physis/PhysisAutoInstall.h"
 #endif
 
 namespace aiverse {
+
+namespace {
+thread_local double* stepMilliseconds = nullptr;
+}
+SimulationStepTiming::SimulationStepTiming(double& milliseconds) : previous_(stepMilliseconds) {
+    stepMilliseconds = &milliseconds;
+}
+SimulationStepTiming::~SimulationStepTiming() { stepMilliseconds = previous_; }
 
 void writeCommand(ByteWriter& w, const Command& c) {
     w.u32(c.tick); w.u8(c.player); w.u8(uint8_t(c.args.empty() ? c.flags & ~kCmdHasArgs : c.flags | kCmdHasArgs)); w.u16(c.type); w.u32(c.seq);
@@ -119,6 +129,8 @@ void Simulation::step() { (void)stepWithInput({}); }
 
 bool Simulation::stepWithInput(const std::function<void()>& prepareInput) {
     if(!readyToStep())return false;
+    using Clock = std::chrono::steady_clock;
+    const auto start = stepMilliseconds ? Clock::now() : Clock::time_point{};
     if(prepareInput)prepareInput();
     const bool captureStep=profileWindowActive();
     const int64_t stepStart=captureStep?profClock_():0;
@@ -156,6 +168,7 @@ bool Simulation::stepWithInput(const std::function<void()>& prepareInput) {
         }
     }
     ++tick_;
+    if (stepMilliseconds) *stepMilliseconds += std::chrono::duration<double, std::milli>(Clock::now() - start).count();
     if(captureStep&&profileWindowActive()){
         profileSteps_.push_back(profClock_()-stepStart);
         if(profileSteps_.size()>=profileTarget_)endProfileWindow();

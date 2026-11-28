@@ -47,7 +47,7 @@ test('choice fields start on their first option', () => {
   const [q] = schemaFields({ properties: { minQuality: { type: 'string', enum: ['low', 'high'] } } });
   assert.equal(fieldDraft(q), '');
 });
-import { agentLineKind } from '../src/panels/agentLogic.ts';
+import { agentLineKind, extensionPanelFor, extensionWindowFor } from '../src/panels/agentLogic.ts';
 test('agent transcript line kinds', () => {
   assert.equal(agentLineKind('› make a river'), 'user');
   assert.equal(agentLineKind('→ water_set {"id":1}'), 'tool');
@@ -72,7 +72,15 @@ test('frame summary and byte formatting', () => {
   assert.equal(frameSummary([]).count, 0);
   assert.equal(formatBytes(2 * 1024 * 1024), '2.0 MB');
 });
-import { fromTrs, toTrs, IDENTITY } from '../src/panels/attachMath.ts';
+import { fromTrs, toTrs, IDENTITY, editAffine } from '../src/panels/attachMath.ts';
+test('editing a socket offset or one basis component preserves the rest of a custom affine matrix',()=>{
+ const source=[1,.25,0,0,-.3,2,.1,0,0,.2,3,0,4,5,6,1];
+ const changed=editAffine(source,3,1,-.75);
+ assert.deepEqual(changed,source.map((value,i)=>i===13?-.75:value));
+ assert.equal(source[13],5);
+ assert.deepEqual(editAffine(changed,1,2,8),changed.map((value,i)=>i===6?8:value));
+});
+
 test('attachment transforms: TRS round trip, custom matrices flagged', () => {
   const m = fromTrs([1, 2, 3], 90, 2);
   const t = toTrs(m);
@@ -104,4 +112,16 @@ test('splash sky pick is stable and in range', () => {
   assert.equal(pickSky('Iron and Gold', 6), pickSky('Iron and Gold', 6));
   for (const n of ['a', 'Iron and Gold', '', 'Kingston']) { const i = pickSky(n, 6); assert.ok(i >= 0 && i < 6); }
   assert.equal(pickSky('x', 0), -1);
+});
+
+test('Lua window names round-trip through the panel registry', async () => {
+  const { STUDIO_PANELS } = await import('../src/nestedDock.ts');
+  for (const panel of STUDIO_PANELS) {
+    assert.equal(extensionPanelFor(panel),panel);
+    assert.equal(extensionPanelFor(extensionWindowFor(panel)),panel);
+  }
+  assert.equal(extensionWindowFor('actor'),'actor');
+  assert.equal(extensionPanelFor('studio_camera_bookmarks'),'scene');
+  assert.equal(extensionPanelFor('spectrafx_graph'),'fx_graph');
+  assert.equal(extensionPanelFor('toString'),null);
 });

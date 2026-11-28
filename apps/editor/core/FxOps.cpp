@@ -20,6 +20,7 @@ namespace aiverse::editor {
 
 // SpectraFX graph authoring is in a separate translation unit.
 void registerSpectraGraphOps(Workspace& ws);
+void registerSpectraGpuFileOps(Workspace& ws);
 
 namespace {
 
@@ -284,10 +285,15 @@ void registerFxOps(Workspace& ws) {
 
     add("fx_get", "Read an effect (name without .json; 'fx' = the event bindings): raw text and the parsed JSON. Format: engine/fx/FxEffect.h "
         "(top comment lists every key incl. trails, sub-emitters, noise, lights), bindings: engine/fx/GameFx.h.",
-        R"({"properties": {"name": {"type": "string"}}, "required": ["name"]})", [&ws](const Json& p) {
+        R"({"properties": {"name": {"type": "string"}, "allowMissing": {"type": "boolean"}}, "required": ["name"]})", [&ws](const Json& p) {
         needGame(ws);
         const std::string n = needName(p);
         std::string text;
+        if (n == "fx" && p.getBool("allowMissing") && !fs::exists(fxFile(ws, n))) {
+            Json missing = Json::object();
+            missing.set("missing", Json::fromBool(true));
+            return missing;
+        }
         if (!readText(fxFile(ws, n), text)) throw std::runtime_error("fx/" + n + ".json not found (fx_list shows the effects, fx_templates gives starting points)");
         Json r = Json::object();
         r.set("name", str(n));
@@ -299,7 +305,7 @@ void registerFxOps(Workspace& ws) {
     add("fx_set", "Create or replace an effect (name without .json; 'fx' = the event bindings) from 'json' (object) or 'text'. Validated "
         "with the engine's loader first: unknown keys, out-of-range values and missing particle sources are errors with the exact path "
         "(emitters[1].trail.time: must be in 0.01..10); missing textures / sub-effects are warnings. Then fx_preview to look at it.",
-        R"({"properties": {"name": {"type": "string"}, "json": {"type": "object"}, "text": {"type": "string"}}, "required": ["name"]})",
+        R"({"properties": {"name": {"type": "string"}, "json": {"type": "object"}, "text": {"type": "string"}, "expectedSource": {"type": ["string","null"]}}, "required": ["name"]})",
         [&ws](const Json& p) {
         needGame(ws);
         const std::string n = needName(p);
@@ -314,6 +320,13 @@ void registerFxOps(Workspace& ws) {
         FxCheck c = checkFx(ws, n, j);
         if (!c.errors.empty()) { Json r = result(c, ""); r.set("summary", str("Не сохранено: " + std::to_string(c.errors.size()) + " ошибок")); return r; }
         const bool existed = fs::exists(fxFile(ws, n));
+        if (p.has("expectedSource")) {
+            const Json& expected = p["expectedSource"];
+            std::string current;
+            const bool matches = expected.isNull() ? !existed :
+                expected.isString() && readText(fxFile(ws, n), current) && current == expected.str();
+            if (!matches) throw std::runtime_error("File changed on disk. Reload it before saving.");
+        }
         writeText(fxFile(ws, n), text);
         noteFx(ws, (existed ? "Изменён эффект " : "Создан эффект ") + n);
         return result(c, (existed ? "Эффект изменён: fx/" : "Эффект создан: fx/") + n + ".json");
@@ -600,6 +613,7 @@ void registerFxOps(Workspace& ws) {
         return r;
     });
     registerSpectraGraphOps(ws);
+    registerSpectraGpuFileOps(ws);
 }
 
 } // namespace aiverse::editor

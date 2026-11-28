@@ -1,0 +1,10 @@
+{
+  "sha": "f028d922ccb5cac6f35c083a5ed67c059bbd405c",
+  "argv": [
+    "bash",
+    "/tmp/studio-anim-props.sh"
+  ],
+  "exit_code": -15,
+  "log": "docs/evidence/studio-animation-node-properties.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

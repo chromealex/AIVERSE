@@ -1,0 +1,12 @@
+{
+  "sha": "ece11f75fc6df65dd067fb970da43012b98262cf",
+  "argv": [
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+    "apps/studio-native/tests/overlay-plan/run.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native/AiverseStudioHTML5.app",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/tmp"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-ground-overlay-plan.log.txt",
+  "sha256": "7c6d559a33d1bf8194c3facbade2bfb2f9d7c5d99b57b72e83cd74fbdbd5f87c"
+}

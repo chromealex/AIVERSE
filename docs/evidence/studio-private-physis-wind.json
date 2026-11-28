@@ -1,0 +1,10 @@
+{
+  "sha": "5c32f15c9728b90d3c4ed9ee67110da7c745b053",
+  "argv": [
+    "bash",
+    "/tmp/forest-motion.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-physis-wind.log.txt",
+  "sha256": "3961e9e1fe4092e3b00296cb7a0b3a0425e286e8b7c8c2053de0d1142eceb7c7"
+}

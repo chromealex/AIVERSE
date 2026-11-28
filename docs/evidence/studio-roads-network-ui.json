@@ -1,0 +1,10 @@
+{
+  "sha": "c25100d65a4cc9b66acac7be89033064b5dda0a1",
+  "argv": [
+    "bash",
+    "/tmp/studio-roads-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-roads-network-ui.log.txt",
+  "sha256": "2283101157a480f03ad9e454aab805d2d6204df1022d7f8ad92cebc79c03eaeb"
+}

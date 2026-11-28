@@ -18,7 +18,7 @@ void parameters(AnimationGraphInstance &instance, const Json &p) {
     }
 }
 } // namespace
-Json sample(const Model &m, const Json &request) {
+Pose samplePose(const Model &m, const Json &request) {
     float t = number(request["time"], 0, "time");
     require(t >= 0 && t <= 600, "sample time must be 0..600");
     Pose pose;
@@ -38,6 +38,10 @@ Json sample(const Model &m, const Json &request) {
         if (clip >= 0)
             sampleClip(m.clips[size_t(clip)], t, pose);
     }
+    return pose;
+}
+Json sample(const Model &m, const Json &request) {
+    const Pose pose = samplePose(m, request);
     std::vector<mat4> world;
     worldMatrices(m, pose, world);
     auto out = Json::object(), nodes = Json::array();

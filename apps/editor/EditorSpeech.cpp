@@ -5,6 +5,8 @@ namespace aiverse::editor::speech {
 bool supported() { return false; }
 void start(const std::string&, const std::vector<std::string>&) {}
 void stop() {}
+void cancel() {}
+bool recording() { return false; }
 bool busy() { return false; }
 bool listening() { return false; }
 std::string transcript() { return {}; }

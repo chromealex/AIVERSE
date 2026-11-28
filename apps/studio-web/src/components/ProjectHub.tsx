@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Clock, FolderOpen, Package, Plus, Search, Sparkles } from 'lucide-react';
+import { Check, Clock, Folder, FolderOpen, Package, Plus, Search, X } from 'lucide-react';
 import { invoke } from '../bridge';
 import { StudioLoader } from '../ui';
 import type { StudioHub, StudioSnapshot, StudioTemplate } from '../types';
+import GameWizard from './GameWizard';
 import './ProjectHub.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -14,9 +15,9 @@ const ago = (t: number) => {
 const mb = (n?: number) => !n ? '' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
 
 function TemplateCard({ t, on, pick }: { t: StudioTemplate; on: boolean; pick: () => void }) {
-  return <button type="button" className={'hub__tmpl' + (on ? ' is-on' : '') + (t.preview ? ' has-preview' : '')} onClick={pick} title={t.description}>
+  return <button type="button" className={'hub__tmpl' + (on ? ' is-on' : '') + (t.preview ? ' has-preview' : '')} onClick={pick} aria-pressed={on} aria-label={t.name} title={t.description}>
     {t.preview && <img src={t.preview} alt="" loading="lazy"/>}
-    <b>{t.name}</b>
+    <b>{t.name}{on && <Check size={14}/>}</b>
     <span>{t.id === 'empty' ? 'minimal' : t.genre}{t.maps ? ` · ${t.maps} map${t.maps > 1 ? 's' : ''}` : ''}
       {t.source === 'catalog' && t.size ? ` · ${mb(t.size)}` : ''}</span>
     {t.source === 'catalog' && !t.official && <small className="hub__badge">community</small>}
@@ -27,7 +28,7 @@ function TemplateCard({ t, on, pick }: { t: StudioTemplate; on: boolean; pick: (
  *  Templates: the official ones of the package catalog (AIVERSE-PACKAGES) first; "More templates" searches
  *  every template package of the catalog. */
 export default function ProjectHub({ onOpened, openOther, compact }: {
-  onOpened: (s: StudioSnapshot) => void; openOther: () => void; compact?: boolean;
+  onOpened: (s: StudioSnapshot, openAgent?: boolean, warning?: string) => void; openOther: () => void; compact?: boolean;
 }) {
   const [hub, setHub] = useState<StudioHub | null>(null);
   const [error, setError] = useState('');
@@ -35,19 +36,25 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
   const [templ, setTempl] = useState<StudioTemplate | null>(null);
   const [name, setName] = useState('');
   const [browse, setBrowse] = useState(false);
+  const [page, setPage] = useState<'projects' | 'templates' | 'wizard'>('projects');
+  const [wizardVisited, setWizardVisited] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<StudioTemplate[] | null>(null);
   const [catalogError, setCatalogError] = useState('');
   const searchSeq = useRef(0);
   useEffect(() => {
+    let active = true;
     void invoke('studio.hub', {}).then(h => {
+      if (!active) return;
       setHub(h);
       // the hub opened from the package cache; refresh the official templates from the catalog
       void invoke('studio.hubTemplates', {}).then(r => {
+        if (!active) return;
         if (r.templates.length) setHub(cur => cur ? { ...cur, templates: r.templates } : cur);
-        setCatalogError(r.error ?? '');
       }).catch(() => undefined);
-    }).catch(e => setError(message(e)));
+    }).catch(e => { if (active) setError(message(e)); });
+    return () => { active = false; };
   }, []);
   useEffect(() => {
     if (!browse) return;
@@ -59,66 +66,78 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
         setFound(r.templates); setCatalogError(r.error ?? '');
       }).catch(e => { if (seq === searchSeq.current) { setFound([]); setCatalogError(message(e)); } });
     }, query ? 250 : 0);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); ++searchSeq.current; };
   }, [browse, query]);
   const done = (r: { snapshot?: StudioSnapshot | null; cancelled?: boolean }) => { if (r.snapshot) onOpened(r.snapshot); };
   const open = async (dir: string) => {
     setBusy(dir);
     try { done(await invoke('studio.hubOpen', { dir })); setError(''); } catch (e) { setError(message(e)); } finally { setBusy(''); }
   };
+  const forget = async (dir: string) => {
+    setBusy(dir);
+    try {
+      await invoke('studio.hubForget', { dir });
+      setHub(current => current && { ...current, recent: current.recent.filter(project => project.dir !== dir) });
+      setError('');
+    } catch (e) { setError(message(e)); } finally { setBusy(''); }
+  };
   const create = async () => {
     if (!templ || !name.trim()) return;
     setBusy('create');
     try { done(await invoke('studio.hubCreate', { template: templ.id, name: name.trim() })); setError(''); } catch (e) { setError(message(e)); } finally { setBusy(''); }
   };
-  const pick = (t: StudioTemplate) => { setTempl(t); if (!name) setName(t.id === 'empty' ? 'My Game' : 'My ' + t.name); };
-  const recent = (hub?.recent ?? []).filter(p => p.exists).slice(0, compact ? 5 : 12);
-  const createForm = templ && <>
-    <form className="hub__create" onSubmit={e => { e.preventDefault(); void create(); }}>
-      <input className="au-input" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Project name"/>
-      <button type="submit" className="au-button au-button--sm au-button--primary" disabled={!name.trim() || !!busy}>
-        {busy === 'create' ? <StudioLoader size={14}/> : <Plus size={13}/>}Create…</button>
-    </form>
-    <p className="hub__muted">{templ.source === 'catalog'
-      ? `“${templ.name}” ${templ.version ?? ''} is downloaded from the package catalog into a folder you choose (default ${hub?.defaultLocation}).`
-      : `A copy of the template goes to a folder you choose (default ${hub?.defaultLocation}); the template itself is never changed.`}</p>
-  </>;
+  const suggestedName = (t: StudioTemplate) => t.id === 'empty' ? 'My Game' : 'My ' + t.name;
+  const pick = (t: StudioTemplate) => {
+    if (!name.trim() || (templ && name === suggestedName(templ))) setName(suggestedName(t));
+    setTempl(t);
+  };
+  const needle = projectQuery.trim().toLowerCase();
+  const recent = hub?.recent.filter(p => (p.name + ' ' + p.dir).toLowerCase().includes(needle)) ?? [];
   return <div className={'hub' + (compact ? ' hub--compact' : '')}>
     <header className="hub__head">
-      <h2>AIVERSE</h2>
-      <button type="button" className="au-button au-button--sm" onClick={openOther}><FolderOpen size={14}/>Open…</button>
+      <h2>Project Hub</h2>
+      <button type="button" className="au-button" onClick={openOther} disabled={!!busy}><FolderOpen size={15}/>Open folder…</button>
     </header>
-    {error && <div className="hub__error" role="alert">{error}</div>}
-    <div className="hub__cols">
-      <section>
-        <h3><Clock size={13}/>Recent</h3>
-        {!hub && <p className="hub__muted"><StudioLoader size={22} label="Loading…"/></p>}
-        {hub && !recent.length && <p className="hub__muted">No recent projects yet.</p>}
-        {recent.map(p => <button key={p.dir} type="button" className="hub__item" disabled={!!busy} onClick={() => void open(p.dir)} title={p.dir}>
-          <b>{p.name || p.dir.split('/').pop()}</b><span>{p.dir}</span><small>{ago(p.lastOpened)}</small>
-          {busy === p.dir && <StudioLoader size={14}/>}</button>)}
-      </section>
-      {!browse ? <section>
-        <h3><Sparkles size={13}/>New from template</h3>
-        <div className="hub__templates">
-          {(hub?.templates ?? []).map(t => <TemplateCard key={t.id} t={t} on={templ?.id === t.id} pick={() => pick(t)}/>)}
-        </div>
-        <button type="button" className="au-button au-button--sm hub__more" onClick={() => { setBrowse(true); setTempl(null); }}>
-          <Package size={13}/>More templates from the catalog…</button>
-        {createForm}
-      </section> : <section>
-        <h3><button type="button" className="hub__back" onClick={() => { setBrowse(false); setTempl(null); }} aria-label="Back"><ArrowLeft size={13}/></button>
-          <Package size={13}/>Template catalog</h3>
-        <label className="hub__search"><Search size={13}/>
-          <input className="au-input" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search templates: genre, mechanic, name"/></label>
-        {catalogError && <p className="hub__error">{catalogError}</p>}
-        {!found && <p className="hub__muted"><StudioLoader size={18} label="Searching the catalog…"/></p>}
-        {found && !found.length && <p className="hub__muted">Nothing found.</p>}
-        <div className="hub__templates">
-          {(found ?? []).map(t => <TemplateCard key={t.id} t={t} on={templ?.id === t.id} pick={() => pick(t)}/>)}
-        </div>
-        {createForm}
-      </section>}
+    <nav className="hub__nav" aria-label="Project Hub pages">
+      <button aria-current={page === 'projects' ? 'page' : undefined} disabled={!!busy} onClick={() => setPage('projects')}><Clock size={15}/>Recent projects</button>
+      <button aria-current={page === 'templates' ? 'page' : undefined} disabled={!!busy} onClick={() => setPage('templates')}><Plus size={15}/>New project</button>
+      <button aria-current={page === 'wizard' ? 'page' : undefined} disabled={!!busy} onClick={() => { setWizardVisited(true); setPage('wizard'); }}>Game wizard</button>
+    </nav>
+    {error && <p className="hub__error" role="alert">{error}</p>}
+    <div className="hub__body">
+    {wizardVisited && <div hidden={page !== 'wizard'}><GameWizard visible={page === 'wizard'} onOpened={onOpened} onBusy={active => setBusy(active ? 'wizard' : '')}/></div>}
+    {page === 'wizard' ? null : page === 'projects' ? <section aria-label="Recent projects">
+      <label className="hub__search"><Search size={15}/><input type="search" aria-label="Search recent projects" placeholder="Find by name or folder" value={projectQuery} onChange={e => setProjectQuery(e.target.value)}/></label>
+      {!hub && !error && <StudioLoader size={20} label="Loading recent projects…"/>}
+      {hub && !recent.length && <p>{needle ? 'No projects match your search.' : 'Your recently opened projects will appear here.'}</p>}
+      {recent.map(p => <div key={p.dir} className="hub__row"><button type="button" className="hub__item" disabled={!!busy || !p.exists} onClick={() => void open(p.dir)} title={p.dir}>
+        <Folder size={20}/><span><b>{p.name || p.dir.split('/').pop()}</b><small>{p.dir}</small></span>
+        <small>{busy === p.dir ? <StudioLoader size={14}/> : p.exists ? ago(p.lastOpened) : 'Folder missing'}</small>
+      </button>
+        <button type="button" className="hub__forget" disabled={!!busy} aria-label={`Remove ${p.name || p.dir} from recent projects`}
+          title="Remove from recent projects" onClick={() => void forget(p.dir)}><X size={15}/></button>
+      </div>)}
+    </section> : <section className="hub__workspace" aria-label="Create a project">
+      <div><div className="hub__subhead"><h3>{browse ? 'Template catalog' : 'Project templates'}</h3>
+        <button type="button" className="au-button au-button--sm" disabled={!!busy} onClick={() => setBrowse(!browse)}><Package size={14}/>{browse ? 'Featured templates' : 'Browse catalog'}</button></div>
+        {browse && <label className="hub__search"><Search size={15}/><input type="search" aria-label="Search templates" placeholder="Search by name, genre or mechanic" value={query} onChange={e => setQuery(e.target.value)}/></label>}
+        {browse && catalogError && <p className="hub__error" role="alert">{catalogError}</p>}
+        {(browse ? !found : !hub) && <StudioLoader size={18} label="Loading templates…"/>}
+        {browse && found?.length === 0 && <p>No matching templates.</p>}
+        <fieldset className="hub__templates" aria-label="Choose a template" disabled={!!busy}>
+          {(browse ? found ?? [] : hub?.templates ?? []).map(t => <TemplateCard key={t.id} t={t} on={templ?.id === t.id} pick={() => pick(t)}/>)}
+        </fieldset>
+      </div>
+      <aside className="hub__details"><h3>{templ?.name || 'Project setup'}</h3>
+        {templ ? <form onSubmit={e => { e.preventDefault(); void create(); }}>
+          {templ.description && <p>{templ.description}</p>}
+          <label>Project name<input className="au-input" value={name} onChange={e => setName(e.target.value)} disabled={!!busy} required/></label>
+          <p>{templ.source === 'catalog' ? 'Download this template into a new project folder.' : 'Create a new project folder from this template.'} Choose the parent folder in the next step.</p>
+          {hub?.defaultLocation && <small>Default parent folder<br/>{hub.defaultLocation}</small>}
+          <button type="submit" className="au-button au-button--primary" disabled={!name.trim() || !!busy}>{busy === 'create' ? <StudioLoader size={15}/> : <FolderOpen size={15}/>}Choose folder…</button>
+        </form> : <p>Select a template to name your project and choose its folder.</p>}
+      </aside>
+    </section>}
     </div>
   </div>;
 }

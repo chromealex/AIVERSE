@@ -11,10 +11,12 @@ python3 tools/renderbench/install_material_library.py --project /path/to/game
 ```
 
 Проект должен содержать `game.json`. Установщик добавляет графы `shaders/sg_*.json`
-и снимки в `materials.json`, сохраняя остальные материалы и поля файла.
+и файлы материалов `content/materials/sg_*.material.json`. В HTML Studio они видны в **Assets → content → materials**. Индекс `materials.json` хранит пути к этим файлам, остальные записи и поля сохраняются.
 Исходный файл сохраняется как `materials.before-shader-library.json`.
 Совпадения имён и существующая резервная копия останавливают установку;
-перезапись не поддерживается. При ошибке диска установка может быть частичной.
+перезапись не поддерживается.
+
+Для уже установленной библиотеки со встроенными записями откройте **Materials → Convert library to material files**.
 
 Откройте проект заново в редакторе. В **Graphics → Shader Graph** выберите
 граф `sg_*`. Узлы `tint`, `roughness`, `metallic` и `emission` редактируются отдельно.

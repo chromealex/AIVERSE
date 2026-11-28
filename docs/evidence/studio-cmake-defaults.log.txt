@@ -1,0 +1,2 @@
+mac fresh CMake configure generated HTML Studio as the only editor
+windows fresh CMake configure generated HTML Studio as the only editor

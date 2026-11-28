@@ -1,0 +1,10 @@
+{
+  "sha": "9ab5ac6029f44a75f786537f780cbb5be3eff946",
+  "argv": [
+    "bash",
+    "/tmp/play-stop.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-play-stop.log.txt",
+  "sha256": "634a2658c191929bed4d5bef6eb88c43d73cb88febebcc1f4d5aa8c59f8ff7c8"
+}

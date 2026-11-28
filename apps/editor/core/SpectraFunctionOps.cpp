@@ -4,6 +4,7 @@
 // subsequent fx_graph_set or fx_graph_draft_publish.
 #include "Workspace.h"
 #include "FxOps.h"
+#include "GraphAssetTransaction.h"
 #include "engine/fx/SpectraFX.h"
 #include <algorithm>
 #include <filesystem>
@@ -37,14 +38,16 @@ std::string readText(const fs::path& path) {
     if(content.size()>(1u<<20))throw std::runtime_error("function graph exceeds 1 MiB");
     return content;
 }
-void writeText(const fs::path& path,const std::string& content) {
-    if(content.size()>(1u<<20))throw std::runtime_error("function library exceeds 1 MiB");
-    std::error_code ec;
-    fs::create_directories(path.parent_path(),ec);
-    if(ec)throw std::runtime_error("cannot create function folder: "+ec.message());
-    std::ofstream out(path,std::ios::binary|std::ios::trunc);
-    if(!out || !(out<<content) || !out.flush())
-        throw std::runtime_error("cannot write "+path.generic_string());
+void writeLibrary(const Workspace& ws,const std::string& name,const Json& definition,const Json& request) {
+    graph_asset::Transaction tx(libraryPath(ws,name),ws.project.dir);
+    if(request.has("expectedSource")){
+        const auto& expected=request["expectedSource"];
+        const bool exists=fs::exists(tx.target());
+        if(!(expected.isNull()&&!exists) &&
+           !(expected.isString()&&exists&&readText(tx.target())==expected.str()))
+            throw std::runtime_error("Function library changed on disk. Reload before exporting.");
+    }
+    tx.replace(definition.dump(2)+"\n",1u<<20);
 }
 Json sourceGraph(const Workspace& ws,const Json& p) {
     if(p.has("graph")) {
@@ -108,11 +111,13 @@ void registerSpectraFunctionOps(Workspace& ws) {
         [&ws](const Json& p) {
         requireProject(ws);
         const std::string name=safeName(p,"library");
-        Json def=Json::parse(readText(libraryPath(ws,name)));
+        const auto text=readText(libraryPath(ws,name));
+        Json def=Json::parse(text);
         std::vector<std::string> errors;
         Json out=Json::object();
         out.set("name",Json::string(name));
         out.set("library",def);
+        out.set("source",Json::string(text));
         out.set("valid",Json::fromBool(spectra::validateFunctionLibrary(def,errors)));
         out.set("errors",reportErrors(errors));
         return out;
@@ -131,7 +136,7 @@ void registerSpectraFunctionOps(Workspace& ws) {
         out.set("ok",Json::fromBool(valid));
         out.set("errors",reportErrors(errors));
         if(!valid)return out;
-        writeText(libraryPath(ws,name),def.dump(2)+"\n");
+        writeLibrary(ws,name,def,p);
         out.set("name",Json::string(name));
         out.set("summary",Json::string("Saved valid function library "+name));
         return out;
@@ -163,7 +168,7 @@ void registerSpectraFunctionOps(Workspace& ws) {
     add("fx_function_export",
         "Export the v2 graph's embedded typed functions into a validated reusable package; never alters the source graph.",
         R"({"properties":{"library":{"type":"string"},"graph":{"type":"object"},
-             "text":{"type":"string"},"source":{"type":"string"}},"required":["library"]})",
+             "text":{"type":"string"},"source":{"type":"string"},"expectedSource":{"type":["string","null"]}},"required":["library"]})",
         [&ws](const Json& p) {
         requireProject(ws);
         const std::string name=safeName(p,"library");
@@ -180,7 +185,7 @@ void registerSpectraFunctionOps(Workspace& ws) {
         out.set("ok",Json::fromBool(valid));
         out.set("errors",reportErrors(errors));
         if(valid) {
-            writeText(libraryPath(ws,name),package.dump(2)+"\n");
+            writeLibrary(ws,name,package,p);
             out.set("summary",Json::string("Exported reusable function library "+name));
         }
         return out;

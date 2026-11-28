@@ -1,0 +1,2 @@
+2026-11-27 04:54:33.142 AiverseStudioHTML5[27114:87091890] [studio-web] JS: CROSS main VERIFIED native model graph edit
+Reopened revision 2 from disk; only arm0.parent changed

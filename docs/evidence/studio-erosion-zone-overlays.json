@@ -1,0 +1,11 @@
+{
+  "sha": "10b21f322bd6b63b90e9c5358361a93ff480243c",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_terrain_geometry$\" && bash /tmp/scene-erosion-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-erosion-zone-overlays.log.txt",
+  "sha256": "e0788414f594bd2f50d06b643e78e1bc35d23d6ee6af0d358cb65686a676a1df"
+}

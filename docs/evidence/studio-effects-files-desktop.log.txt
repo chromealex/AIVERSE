@@ -1,0 +1,6 @@
+2026-11-26 05:04:55.291 AiverseStudioHTML5[76418:82838289] [studio-web] JS: CROSS main DONE_1
+2026-11-26 05:04:55.291 AiverseStudioHTML5[76418:82838289] [studio-web] JS: CROSS main VERIFIED effect and bindings editor phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-files-ui-66iLtC/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-files-ui-66iLtC/Catalog.app: replacing existing signature
+2026-11-26 05:05:00.774 AiverseStudioHTML5[76840:82840370] [studio-web] JS: CROSS main DONE_2
+2026-11-26 05:05:00.773 AiverseStudioHTML5[76840:82840370] [studio-web] JS: CROSS main VERIFIED effect and bindings editor phase 2

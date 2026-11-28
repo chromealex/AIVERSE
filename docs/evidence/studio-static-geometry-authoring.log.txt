@@ -1,0 +1,3 @@
+2026-11-26 08:14:05.455 AiverseStudioHTML5[92042:83420686] [studio-web] JS: CROSS main DONE_1
+2026-11-26 08:14:05.454 AiverseStudioHTML5[92042:83420686] [studio-web] JS: CROSS main VERIFIED Scene before Play; two models, switched STRATA to LOD and back, removed and restored both; scenery/launcher.obj: strata (auto: lod, small mesh: an instanced LOD chain is cheaper) instances strata=1 lod=0 (forced on 1, forced off 0) | scenery/target.obj: lod (auto: lod, small mesh: an instanced LOD chain is cheaper) instances strata=0 lod=1 (forced on 0, forced off 1)
+Scene samples changing by >12/255: removed 6285 restored 6285 between populated frames 0

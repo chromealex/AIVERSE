@@ -2,10 +2,11 @@
 // AI agent rebuilds it into the game the description / GDD asks for, 1 to 1, through the editor's own MCP tools (the
 // same aiversemcp link as the Agent window: connect once, both use it). Agents that can run headless are launched here:
 //   Claude Code  claude -p (stream-json), the aiverse MCP tools allowed
-//   Codex CLI    codex exec --full-auto
+//   Codex CLI    codex exec with the read-only shell sandbox
 // Others (Cursor, Windsurf, Claude Desktop) get the task to paste. The task text is WIZARD_TASK.md in the project.
 #pragma once
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -40,15 +41,17 @@ public:
     std::string sessionId();                      // Claude Code session of the last run (for --resume), "" if unknown
 
 private:
-    void reader(std::string cmd, std::string logFile);
+    void reader(int output, std::string logFile);
     void add(const std::string& line);
-    std::thread thread_;
+    std::thread thread_, stopTimer_;
+    std::condition_variable finishedCv_;
+    int childPid_ = -1;
     std::atomic<bool> running_{false}, started_{false};
     std::atomic<int> rc_{0}, tools_{0};
     std::mutex m_;
     std::vector<std::string> lines_;
     size_t taken_ = 0;
-    std::string result_, client_, pidFile_, session_;
+    std::string result_, client_, session_;
 };
 
 } // namespace aiverse::editor

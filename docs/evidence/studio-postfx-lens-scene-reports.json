@@ -1,0 +1,10 @@
+{
+  "sha": "1975c878994601b217436e18aa4542f6de3dd049",
+  "argv": [
+    "bash",
+    "/tmp/pfx-lens-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-postfx-lens-scene-reports.log.txt",
+  "sha256": "cf05c610598afdaedde422c2e972d6d5adcc65cd26e1bab8aa863a6333c1ef8d"
+}

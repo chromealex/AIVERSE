@@ -1,0 +1,10 @@
+{
+  "sha": "d82ea63ae6dbf145f223b1ec4bb4e475d6c2364e",
+  "argv": [
+    "bash",
+    "../wind-pair.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wind-panel-sync-open.log.txt",
+  "sha256": "582cb10a21719230859329f71dc8b5077c4deaaf8921182a36512cf1d34dc23c"
+}

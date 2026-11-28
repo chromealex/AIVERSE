@@ -1,0 +1,10 @@
+{
+  "sha": "783acc420e1a7a3712d6327272164646d2da52da",
+  "argv": [
+    "python3",
+    "../release-studio-only.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-release-editor-selection.log.txt",
+  "sha256": "6bcf28edd668b2ad26378b266a9b5a7f1906ea2fd06c20f81851500a73069cd5"
+}

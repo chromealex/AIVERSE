@@ -1,0 +1,10 @@
+{
+  "sha": "7fd043cf2de5c0a89166f629fc1a83cc51105c45",
+  "argv": [
+    "bash",
+    "/tmp/scoped-geometry-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-static-geometry-map-files.log.txt",
+  "sha256": "1cc545c24e95a995a66cf3164471b1a8962f9f7b9bb13bf96a6b316f736579a5"
+}

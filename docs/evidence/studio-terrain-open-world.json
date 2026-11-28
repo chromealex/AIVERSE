@@ -1,0 +1,10 @@
+{
+  "sha": "502e618d8db9944c3ba13d6ec3d998386adddcbb",
+  "argv": [
+    "bash",
+    "/tmp/sparse-html-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-terrain-open-world.log.txt",
+  "sha256": "ae5307c2bff5f7fd84cca3809af681dadaf4a580f048a519bf185383438e26e8"
+}

@@ -130,7 +130,7 @@ void importContent(GameMaker::Ctx& c) {
         const std::string dirRel = f.rel.parent_path().generic_string();
         const auto ws = words(f.rel.generic_string());
         if (f.kind == Kind::Model || ((f.kind == Kind::ModelPart || f.kind == Kind::Image) && modelDirs.count(dirRel))) {
-            std::string to = copyInto(c, f.path, "models", f.rel.generic_string());
+            std::string to = copyInto(c, f.path, "content/models", f.rel.generic_string());
             if (to.empty()) continue;
             if (f.kind == Kind::Model) {
                 c.models.push_back(to);
@@ -154,7 +154,7 @@ void importContent(GameMaker::Ctx& c) {
             continue;
         }
         if (f.kind == Kind::Image) {
-            std::string to = copyInto(c, f.path, "art", (f.rel.parent_path() / asciiName(f.path)).generic_string());
+            std::string to = copyInto(c, f.path, "content/art", (f.rel.parent_path() / asciiName(f.path)).generic_string());
             if (to.empty()) continue;
             c.images.push_back(to);
             branding::Image img;
@@ -187,13 +187,13 @@ void importContent(GameMaker::Ctx& c) {
         }
         if (f.kind == Kind::Audio) {
             const bool music = f.size > 1200 * 1024 || hasWord(ws, {"music", "theme", "ost", "soundtrack", "track", "song", "loop", "музык", "тем", "саундтрек"});
-            std::string to = copyInto(c, f.path, music ? "audio/music" : "audio/sfx", asciiName(f.path));
+            std::string to = copyInto(c, f.path, music ? "content/audio/music" : "content/audio/sfx", asciiName(f.path));
             if (to.empty()) continue;
             (music ? c.music : c.sounds).push_back(to);
             continue;
         }
         if (f.kind == Kind::Font) {
-            std::string to = copyInto(c, f.path, "fonts", asciiName(f.path));
+            std::string to = copyInto(c, f.path, "content/fonts", asciiName(f.path));
             if (to.empty()) continue;
             c.fonts.push_back(to);
             if (!fontDone && f.path.extension() != ".otf") {   // the first TrueType font becomes the title font of the screens

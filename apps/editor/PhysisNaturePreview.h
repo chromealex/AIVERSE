@@ -69,6 +69,7 @@ public:
     PhysisNaturePreviewSettings settings;
 
     bool usingLive() const { return usingLive_; }
+    bool hasAuthoredGrid() const { return hasAuthoredGrid_; }
     bool hasPreviewWorld() const { return bool(world_); }
     // Private preview World for read-only diagnostics (heatmap overlay).
     const World* previewWorld() const { return settings.enabled && !usingLive_ ? world_.get() : nullptr; }
@@ -77,11 +78,14 @@ public:
     std::size_t flames() const { return fxHost_.activeFlames(); }
     std::size_t smoke() const { return fxHost_.activeSmoke(); }
     std::size_t voices() const { return audioHost_.voices(); }
+    unsigned grassBladeLimit() const { return grass_.quality().maxBladesPerPatch; }
+    float masterVolume() const { return audio_ ? audio_->masterVolume() : 0.f; }
     std::size_t grassPatches() const { return grass_.residentPatches(); }
     float burningArea() const { return frame_ ? frame_->burningArea : 0; }
     float cellMeters() const { return frame_ ? frame_->cellSize : 0; }
     const world::NaturePresentationFrame* frame() const { return frame_.get(); }
 
+    void invalidateFrame() { frameDirty_ = true; }
     void requestReset() { resetRequested_ = true; }
     // Authored NEREID water (AuthoredWaterQuery::fromDoc): grass and fuel stay
     // out of it. A changed revision rebuilds the preview World and grass.
@@ -147,16 +151,7 @@ public:
         lastTime_ = timeSeconds;
 
         const World* source = prepareSource(ps, doc, live, heightAt);
-        if (!usingLive_ && settings.playing && world_) {
-            accumulator_ += dt * std::clamp(settings.speed, 0.f, 8.f) *
-                            std::clamp(settings.ticksPerSecond, 1.f, 60.f);
-            int steps = 0;
-            while (accumulator_ >= 1.f && steps < 8) {
-                stepPreview();
-                accumulator_ -= 1.f; ++steps; frameDirty_ = true;
-            }
-            if (steps == 8) accumulator_ = 0;
-        }
+        if (settings.playing) advanceElapsed(dt);
         if (!source) return;
 
         // ---- presentation frame (rebuilt per tick or when the camera moved)
@@ -240,6 +235,16 @@ public:
         return world_.get();
     }
 
+    void advanceElapsed(float seconds) {
+        if (usingLive_ || !world_ || !std::isfinite(seconds)) return;
+        const float dt = std::clamp(seconds, 0.f, 0.25f);
+        accumulator_ += dt * std::clamp(settings.speed, 0.f, 8.f) *
+                        std::clamp(settings.ticksPerSecond, 1.f, 60.f);
+        const int steps = std::min(8, int(accumulator_));
+        advance(steps);
+        accumulator_ = steps == 8 ? 0.f : accumulator_ - float(steps);
+    }
+
     // Advance the private preview by N committed ticks (agents/tests).
     int advance(int ticks) {
         if (usingLive_ || !world_) return 0;
@@ -291,6 +296,7 @@ private:
         std::optional<physis::InstallOptions> options;
         try { options = physis::optionsFromMap(map); }
         catch (const std::exception& e) { status_ = std::string("map PHYSIS: ") + e.what(); }
+        hasAuthoredGrid_ = options.has_value();
         physis::Settings grid;
         grid.seed = options ? options->climate.seed : 1;
         grid.baseTemperature = options ? options->climate.baseTemperature : Fixed::fromInt(24);
@@ -489,6 +495,7 @@ private:
     bool usingLive_ = false, resetRequested_ = false, frameDirty_ = true;
     bool fxReady_ = false, active_ = false, retireSet_ = false, hasStorms_ = false;
     double lastTime_ = -1;
+    bool hasAuthoredGrid_ = false;
     float accumulator_ = 0, frameX_ = 0, frameZ_ = 0;
     terraweave::GrassPatchRenderer grass_;
     std::vector<terraweave::GrassPatch> patches_;

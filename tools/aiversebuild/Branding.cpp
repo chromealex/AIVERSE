@@ -1,4 +1,5 @@
 #include "tools/aiversebuild/Branding.h"
+#include "ShellPath.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -77,7 +78,7 @@ std::vector<std::string> brandMac(const BrandingContext& c, const fs::path& gen,
 #if defined(__APPLE__)
     // Apple's own packer when present (identical content; also validates the iconset)
     if (std::system("command -v iconutil >/dev/null 2>&1") == 0) {
-        std::string cmd = "iconutil -c icns '" + (gen / "AppIcon.iconset").string() + "' -o '" + (gen / "AppIcon.icns").string() + "'";
+        const std::string cmd = "iconutil -c icns " + quote(gen / "AppIcon.iconset") + " -o " + quote(gen / "AppIcon.icns");
         if (std::system(cmd.c_str()) != 0) info("предупреждение: iconutil не справился — оставлен AppIcon.icns, записанный aiversebuild");
     }
 #endif

@@ -1,0 +1,10 @@
+{
+  "sha": "b7406df0366e348d38d0a4748579061043c6816b",
+  "argv": [
+    "bash",
+    "/tmp/physis-pick.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-nature-picked-cell.log.txt",
+  "sha256": "2d99ba7d36102012cdf5a7d4e13f7a1cf693fdf405c5efaa5f0ad4f028a83a50"
+}

@@ -1,0 +1,20 @@
+
+
+
+
+
+
+
+Pick first object
+
+
+2026-11-26 00:16:22.993 AiverseStudioHTML5[69832:81823651] [studio-web] JS: CROSS main CLICK_A
+2026-11-26 00:16:23.775 AiverseStudioHTML5[69832:81823651] ROAD QA A 332 183 0
+ at {358.49764747191011, 227.12194293478262}
+2026-11-26 00:16:23.779 AiverseStudioHTML5[69832:81823651] [studio-web] JS: CROSS main DOM pointerup SECTION true true false
+2026-11-26 00:16:23.978 AiverseStudioHTML5[69832:81823651] [studio-web] JS: CROSS main CLICK_DRAG
+2026-11-26 00:16:24.774 AiverseStudioHTML5[69832:81823651] ROAD QA DRAG 353 202 0
+ at {398.75674157303371, 255.75039628623188}
+2026-11-26 00:16:24.778 AiverseStudioHTML5[69832:81823651] [studio-web] JS: CROSS main DOM pointerup SECTION true true false
+2026-11-26 00:16:24.778 AiverseStudioHTML5[69832:81823651] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 00:16:25.382 AiverseStudioHTML5[69832:81823651] [studio-web] JS: CROSS main FAIL Error: Drag created a road @aiverse-studio://shell/index.html:95:113

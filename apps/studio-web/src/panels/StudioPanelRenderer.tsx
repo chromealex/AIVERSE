@@ -1,21 +1,29 @@
+import { useLuaMenu } from './useLuaMenu';
+import RoadsPanel from './RoadsPanel';
+import AnimationAssetsPanel from './AnimationAssetsPanel';
+import BrandingPanel from './BrandingPanel';
+import type { StudioScriptMessage } from '../types';
 // AI-friendly rendering surface: keep App.tsx as the application shell.
 // For a new editor panel, register a typed panel ID in nestedDock.ts,
 // then insert one render case below. All data mutations still use Studio Bridge.
-import type { ReactNode } from 'react';
+import { useState, type ReactNode, type MouseEvent } from 'react';
 import {
   Activity,
-  Focus, RotateCcw
+  Focus, RotateCcw, MoreHorizontal
 } from 'lucide-react';
 import type { StudioEntity, StudioInspector, StudioSnapshot } from '../types';
 import { invoke } from '../bridge';
 import type { StudioPanel } from '../nestedDock';
 import ViewportPlaceholder from '../components/ViewportPlaceholder';
+import MovementRoadTool from '../components/MovementRoadTool';
 import SceneToolbar from '../components/SceneToolbar';
 import RulesPanel from './RulesPanel';
 import AssetsPanel from '../components/AssetsPanel';
 import LightingPanel from './LightingPanel';
+import LightBakePanel from './LightBakePanel';
 import MaterialsPanel from './MaterialsPanel';
 import ShaderGraphPanel from './ShaderGraphPanel';
+import AnimationGraphPanel from './AnimationGraphPanel';
 import FacialRigPanel from './FacialRigPanel';
 import { studioSceneMode } from './sceneState';
 import HierarchyPanel from './HierarchyPanel';
@@ -27,9 +35,15 @@ import ProjectPanel from './generated/ProjectPanel';
 import RuntimePanel from './generated/RuntimePanel';
 import BuildPanel from './BuildPanel';
 import ConsolePanel from './ConsolePanel';
+import StaticGeometryPanel from './StaticGeometryPanel';
+import LensCameraPanel from './LensCameraPanel';
 import ToolPanel from './ToolPanel';
+import OverlayPlacement from './OverlayPlacement';
 import SpectraDataInterfacesPanel from './SpectraDataInterfacesPanel';
 import SpectraLibraryPanel from './SpectraLibraryPanel';
+import SpectraGpuFiles from './SpectraGpuFiles';
+import EffectsPanel from './EffectsPanel';
+import ProjectImportPanel from './ProjectImportPanel';
 import AgentPanel from './AgentPanel';
 import AnimationTimeline from './AnimationTimeline';
 import PostFxPanel from './PostFxPanel';
@@ -39,7 +53,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { FrameCapturePanel, SnapshotDiffPanel, StatsPanel, TextureResourcesPanel } from './InsightPanels';
 import { AuditPanel, FogPanel, InputPanel, ScriptsPanel } from './ProjectToolPanels';
 import HistoryPanel from './HistoryPanel';
-import { LiveHierarchy, LiveInspector, LiveSwitch } from './LivePanels';
+import { LiveHierarchy, LiveInspector, PreviewInspector, LiveSwitch } from './LivePanels';
 import { useLivePlay } from './livePlay';
 
 import NereidFlowPanel from './generated/NereidFlowPanel';
@@ -60,6 +74,7 @@ import CatalogPanel from './generated/CatalogPanel';
 import FeatureReadinessPanel from './FeatureReadinessPanel';
 
 import ProjectDataPanel from './generated/ProjectDataPanel';
+export type InspectorRecord = {kind:"block";key:string;index?:number} | {kind:"player";slot:number} | {kind:"wave"|"trigger";index:number} | {kind:"area"|"region"|"body";key:string};
 
 export interface StudioPanelContext {
   snapshot: StudioSnapshot | null;
@@ -73,6 +88,8 @@ export interface StudioPanelContext {
   rows: Array<{node: StudioEntity; depth: number}>;
   selected: StudioEntity | undefined;
   inspector: StudioInspector | null;
+  projectRecord: {group:import("../types").ProjectRuleGroup;key:string}|null;
+  inspectorRecord: InspectorRecord|null;
   inspectorPinned: boolean;
   toggleInspectorPin: () => void;
   select: (id: string | null, mode?: 'replace' | 'add' | 'toggle') => Promise<void>;
@@ -83,6 +100,15 @@ export interface StudioPanelContext {
   /** Apply a snapshot from an Inspector action without dropping the Inspector pin. */
   commitSnapshot: (value: StudioSnapshot) => void;
   /** A game runs in the Game panel: Hierarchy / Inspector offer the live view. */
+  graphRoute:(panel:'anim_graph'|'anim_rig')=>import('./AnimationGraphPanel').GraphOpenRoute;
+  natureRoute?:import('../types').NatureOpenRoute;
+  animationRoute:import('../types').AnimationAuthoringRoute;
+  scriptLocation:{path:string;line:number} | null;
+  openScript:(path:string,line:number)=>void;
+  consumeScriptLocation:()=>void;
+  scriptErrors?: StudioScriptMessage[];
+  liveSelection?: import('./livePlay').LiveRef | null;
+  onLiveSelection?: (state:import('../types').StudioGameState)=>void;
   playing?: boolean;
   showPanel: (panel: StudioPanel) => void;
   reportError: (message: string) => void;
@@ -90,54 +116,32 @@ export interface StudioPanelContext {
 
 function PlayHierarchy({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveHierarchy/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveHierarchy groupings={ctx.snapshot?.scene.groupings} selection={ctx.liveSelection} onSelected={ctx.onLiveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
+}
+function EditInspector({ctx}:{ctx:StudioPanelContext}) {
+  const detail=ctx.snapshot?.previewInspector;
+  return detail && !ctx.inspectorPinned ? <PreviewInspector detail={detail}/> : <InspectorPanel {...ctx}/>;
 }
 function PlayInspector({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveInspector/> : <InspectorPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveInspector selection={ctx.liveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <EditInspector ctx={ctx}/>}</LiveSwitch>;
 }
 
-export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {
-  const {snapshot,connected,openProject,selected,select}=ctx;
+function ScenePanel({ctx}: {ctx: StudioPanelContext}) {
+  const {snapshot,connected,openProject,selected}=ctx;
   const sceneMode=studioSceneMode(connected,snapshot?.project.path);
-    switch (panel) {
-      case 'hierarchy':
-        return ctx.playing ? <PlayHierarchy ctx={ctx}/> : <HierarchyPanel {...ctx}/>;
-      case 'assets':
-        return <AssetsPanel projectPath={snapshot?.project.path ?? ''}/>;
-      case 'inspector':
-        return ctx.playing ? <PlayInspector ctx={ctx}/> : <InspectorPanel {...ctx}/>;
-      case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
-      case 'effects': case 'lightbake': case 'models': case 'overlays': case 'branding':
-      case 'fields': case 'physis': case 'actor': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
-      case 'anim_assets': case 'anim_graph': case 'anim_rig': case 'model_anim': case 'project_import':
-        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
-      case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
-        onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
-      case 'fog': return <FogPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'scripts': return <ScriptsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'input': return <InputPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'stats': return <StatsPanel snapshot={snapshot}/>;
-      case 'attachments': return <AttachmentsPanel snapshot={snapshot}/>;
-      case 'extensions': return <ExtensionsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} showPanel={ctx.showPanel}/>;
-      case 'frame_capture': return <FrameCapturePanel snapshot={snapshot}/>;
-      case 'texture_resources': return <TextureResourcesPanel snapshot={snapshot}/>;
-      case 'snapshot_diff': return <SnapshotDiffPanel snapshot={snapshot}/>;
-      case 'agent': return <AgentPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'asset_audit': return <AuditPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'history':
-        return <HistoryPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'build':
-        return <BuildPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'rules':
-        return <RulesPanel projectPath={snapshot?.project.path ?? ''} historyVersion={snapshot?.project.historyVersion} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
-      case 'scene':
-        return <>
+  const [status,setStatus]=useState('');
+  const lua=useLuaMenu(ctx.commitSnapshot,ctx.showPanel,setStatus,ctx.reportError);
+  const openActions=(event:MouseEvent)=>void lua.open(event,'scene','',[
+    {id:'focus',label:'Focus selected object',disabled:!selected,onSelect:()=>void invoke('studio.viewportInput',{kind:'focus'}).catch(e=>ctx.reportError(String(e)))},
+    {id:'reset',label:'Reset camera',onSelect:()=>void invoke('studio.viewportInput',{kind:'reset'}).catch(e=>ctx.reportError(String(e)))},
+  ],'Scene actions');
+  return <>
           <div className="viewport-toolbar">
             <div className="viewport-tools">
-              <SceneToolbar enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
+              <SceneToolbar documentScope={snapshot?.graphDocument} enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
+              {connected && sceneMode !== 'welcome' && snapshot?.scene.mapRegions && snapshot.graphDocument &&
+                <MovementRoadTool key={snapshot.graphDocument.epoch+snapshot.graphDocument.mapPath} scope={snapshot.graphDocument}/>}
               <span className="toolbar-divider"/>
               <button type="button" className="viewport-control" title="Focus selected object (F)"
                 aria-label="Focus selected Scene object" disabled={!connected || !selected}
@@ -147,27 +151,81 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
                 aria-label="Reset Scene camera" disabled={!connected}
                 onClick={()=>void invoke('studio.viewportInput',{kind:'reset'}).catch(console.warn)}>
                 <RotateCcw size={15}/></button>
+              {connected && sceneMode !== 'welcome' && <button type="button" className="viewport-control" aria-label="Scene actions" title="Scene actions (Shift + right click)" onClick={openActions}><MoreHorizontal size={15}/></button>}
             </div>
             <span className="render-badge"><Activity size={13}/>
               {sceneMode === 'welcome' ? 'Open project to render' : 'Native Renderer3D (experimental)'}
             </span>
           </div>
+          {lua.popup}
+          {status && <div role="status">{status}</div>}
           {sceneMode === 'welcome' ?
-            <ProjectHub onOpened={ctx.commitSnapshot} openOther={() => void openProject()}/> :
-            <ViewportPlaceholder title="Scene viewport" active/>}
+            <ProjectHub onOpened={(next, openAgent, warning) => { ctx.commitSnapshot(next); if (openAgent) ctx.showPanel('agent'); if (warning) ctx.reportError(warning); }} openOther={() => void openProject()}/> :
+            <ViewportPlaceholder title="Scene viewport" active onSceneMenu={openActions}/>}
         </>;
+}
+
+export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {
+  const {snapshot,select,connected}=ctx;
+    switch (panel) {
+      case 'hierarchy':
+        return ctx.playing ? <PlayHierarchy ctx={ctx}/> : <HierarchyPanel {...ctx}/>;
+      case 'assets':
+        return <AssetsPanel projectPath={snapshot?.project.path ?? ''}/>;
+      case 'inspector':
+        return ctx.playing ? <PlayInspector ctx={ctx}/> : <EditInspector ctx={ctx}/>;
+      case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'lightbake': return <LightBakePanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument}/>;
+      case 'roads': return <RoadsPanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'overlays': return <OverlayPlacement selectionKey={JSON.stringify([snapshot?.selectedIds,snapshot?.scene.entities.filter(e=>e.visible===false).map(e=>e.id),snapshot?.project.historyVersion])} key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'terrain': case 'water': case 'tiles': case 'generate':
+      case 'models':
+      case 'fields': case 'physis': case 'raid': case 'balance': case 'modeling':
+      case 'model_anim':
+        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} natureRoute={panel==='physis'?ctx.natureRoute:undefined} animationRoute={panel==='modeling'?ctx.animationRoute:undefined} openAttachments={()=>ctx.showPanel('attachments')}/>;
+      case 'fx_functions': return <SpectraGpuFiles key={snapshot?.project.path} project={snapshot?.project.path??''}
+        tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'effects': return <EffectsPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''}
+        tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'project_import': return <ProjectImportPanel commitSnapshot={ctx.commitSnapshot} showAgent={()=>ctx.showPanel('agent')}
+        tools={snapshot?.project.path && <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'branding': return <BrandingPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'anim_assets': return <AnimationAssetsPanel key={snapshot?.project.path} project={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'actor': return <LensCameraPanel actorSession={!!snapshot?.project.actorSession} openScene={()=>ctx.showPanel('scene')} key={snapshot?.project.path} project={snapshot?.project.path??''} operations={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel historyVersion={snapshot?.project.historyVersion} openAttachments={()=>ctx.showPanel('attachments')} route={ctx.graphRoute(panel)} key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
+      case 'fx_graph': return <SpectraDataInterfacesPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''}
+        onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
+      case 'fog': return <FogPanel playing={!!ctx.playing} openGame={()=>ctx.showPanel('game')} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'scripts': return <ScriptsPanel key={snapshot?.project.path} location={ctx.scriptLocation} consumeLocation={ctx.consumeScriptLocation} playing={!!ctx.playing} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'input': return <InputPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'stats': return <StatsPanel snapshot={snapshot}/>;
+      case 'attachments': return <AttachmentsPanel snapshot={snapshot}/>;
+      case 'extensions': return <ExtensionsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} showPanel={ctx.showPanel}/>;
+      case 'frame_capture': return <FrameCapturePanel key={snapshot?.project.path} snapshot={snapshot}/>;
+      case 'texture_resources': return <TextureResourcesPanel key={snapshot?.project.path} snapshot={snapshot}/>;
+      case 'snapshot_diff': return <SnapshotDiffPanel key={snapshot?.project.path} snapshot={snapshot}/>;
+      case 'agent': return <AgentPanel key={snapshot?.project.path} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'asset_audit': return <AuditPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'history':
+        return <HistoryPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'build':
+        return <BuildPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'rules':
+        return <RulesPanel openActorSettings={snapshot?.project.actorSession ? () => ctx.showPanel('actor') : undefined} key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''} historyVersion={snapshot?.project.historyVersion} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
+      case 'scene': return <ScenePanel key={snapshot?.project.path} ctx={ctx}/>;
       case 'console':
-        return <ConsolePanel logs={snapshot?.logs ?? []} select={id => select(id)}/>;
+        return <ConsolePanel openScript={ctx.openScript} key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} scriptErrors={ctx.scriptErrors} select={id => select(id)}/>;
       case 'lighting':
-        return <LightingPanel projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
+        return <LightingPanel dirty={!!snapshot?.project.dirty} saveMap={async()=>ctx.commitSnapshot(await invoke('studio.save',{}))} openScene={()=>ctx.showPanel('scene')} documentEpoch={snapshot?.graphDocument?.epoch} key={JSON.stringify([snapshot?.project.path,snapshot?.graphDocument?.epoch])} projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':
         return <MaterialsPanel documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}
           previewMaterial={snapshot?.previewMaterial} openTextureGraph={()=>ctx.showPanel('texture_graph')}/>;
       case 'texture_graph':
         return <MaterialsPanel documentEpoch={snapshot?.graphDocument?.epoch} textureOnly projectPath={snapshot?.project.path ?? ''} previewMaterial={snapshot?.previewMaterial}/>;
       case 'shader_graph':
-        return <ShaderGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}/>;
-      case 'project': return <ProjectPanel {...ctx}/>;
+        return <ShaderGraphPanel mapPath={snapshot?.graphDocument?.mapPath} key={JSON.stringify([snapshot?.project.path,snapshot?.graphDocument?.epoch])} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}/>;
+      case 'project': return <ProjectPanel key={snapshot?.project.path} {...ctx}/>;
       case 'facial_rig':
         return <FacialRigPanel projectPath={snapshot?.project.path ?? ''}/>;
       case 'runtime': return <RuntimePanel snapshot={snapshot}/>;
@@ -179,6 +237,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'building_generator': return <BuildingGeneratorPanel snapshot={snapshot} showPanel={ctx.showPanel} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
+      case 'static_geometry': return <StaticGeometryPanel key={JSON.stringify([snapshot?.project.path,snapshot?.graphDocument?.epoch])} projectPath={snapshot?.project.path ?? ''} document={snapshot?.graphDocument}/>;
       case 'feature_readiness': return <FeatureReadinessPanel connected={connected}/>;
       case 'world_explorer': return <WorldExplorerPanel snapshot={snapshot}/>;
       case 'simulation_profiler': return <SimulationProfilerPanel snapshot={snapshot}/>;
@@ -186,6 +245,6 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'project_data': return <ProjectDataPanel snapshot={snapshot}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;
-      case 'animation': return <AnimationTimeline snapshot={snapshot} showPanel={ctx.showPanel}/>;
+      case 'animation': return <AnimationTimeline key={snapshot?.project.path} route={ctx.animationRoute} snapshot={snapshot} showPanel={ctx.showPanel}/>;
     }
 }

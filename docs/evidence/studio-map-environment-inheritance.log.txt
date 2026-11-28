@@ -1,0 +1,3 @@
+2026-11-26 00:47:39.082 AiverseStudioHTML5[3907:81990920] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-26 00:47:39.082 AiverseStudioHTML5[3907:81990920] [studio-web] JS: CROSS bindingproof VERIFIED independent palette change, project inheritance, whole-block removal, undo, redo, stale map and reopen
+Verified exact map override on disk

@@ -1,0 +1,10 @@
+{
+  "sha": "4e772d86bdfdee0793e06da2202d280a3b2222cb",
+  "argv": [
+    "bash",
+    "/tmp/studio-props-accept.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-spectra-property-inspector.log.txt",
+  "sha256": "45b03d0c5ee1faf91849b32ce2f6bad0055e63d25d09bb02d2dbe0d9622586dd"
+}

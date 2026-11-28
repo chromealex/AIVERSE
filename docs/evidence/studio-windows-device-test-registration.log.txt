@@ -1,0 +1,38 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/windows-cross
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/windows-cross
+Could not find executable wine
+Looked in the following places:
+wine
+wine
+Release/wine
+Release/wine
+Debug/wine
+Debug/wine
+MinSizeRel/wine
+MinSizeRel/wine
+RelWithDebInfo/wine
+RelWithDebInfo/wine
+Deployment/wine
+Deployment/wine
+Development/wine
+Development/wine
+  Test #541: studio_win_device_overlay
+Could not find executable wine
+Looked in the following places:
+wine
+wine
+Release/wine
+Release/wine
+Debug/wine
+Debug/wine
+MinSizeRel/wine
+MinSizeRel/wine
+RelWithDebInfo/wine
+RelWithDebInfo/wine
+Deployment/wine
+Deployment/wine
+Development/wine
+Development/wine
+  Test #544: studio_session
+
+Total Tests: 2

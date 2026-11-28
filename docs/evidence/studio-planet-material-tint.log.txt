@@ -1,0 +1,4 @@
+2026-11-26 07:55:47.478 AiverseStudioHTML5[81897:83365738] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:55:47.478 AiverseStudioHTML5[81897:83365738] [studio-web] JS: CROSS main VERIFIED native material brush on two-body map: layer 3, one step, undo/redo, save/reopen
+Saved face material override on p only
+red surface samples: before 49 painted 9925 undone 49 reopened 9925

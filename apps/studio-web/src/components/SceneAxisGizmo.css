@@ -1,6 +1,8 @@
 /* Scene orientation gizmo. Layout only; colors come from --au-* tokens. */
 .scene-axis-gizmo{position:absolute;top:var(--au-space-2);right:var(--au-space-2);z-index:4;
   display:flex;flex-direction:column;align-items:center;gap:0;user-select:none;pointer-events:auto}
+/* A foreground native Scene draws and hit-tests its own orientation control. */
+html:not(.native-composite) .scene-axis-gizmo{display:none}
 .scene-axis-gizmo svg{display:block;overflow:visible}
 .scene-axis-gizmo__backdrop{fill:var(--au-overlay);fill-opacity:.55;stroke:var(--au-line);stroke-opacity:.6}
 .scene-axis-gizmo__hit{fill:transparent}

@@ -1,0 +1,11 @@
+{
+  "sha": "3112c36e4e4989c82403c61c6974da8c90077252",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_terrain_geometry$\" && bash /tmp/scene-zone-caption-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-erosion-cyrillic-captions.log.txt",
+  "sha256": "0a9d8d63d189954c9bee85a8690abac41244c20f21cfe402e88650b2a29b0e30"
+}

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/appearance-test-client.py", line 72, in <module>
+    wait_for('DETACHED_TABS [Inspector|Materials]')
+  File "/tmp/appearance-test-client.py", line 36, in wait_for
+    raise RuntimeError(message)
+RuntimeError: DETACHED_TABS [Materials|Inspector]

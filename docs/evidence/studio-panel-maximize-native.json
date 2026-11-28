@@ -1,0 +1,10 @@
+{
+  "sha": "3bed55c344f59cc290710af730363094a1757d19",
+  "argv": [
+    "bash",
+    "/tmp/studio-panel-max.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-panel-maximize-native.log.txt",
+  "sha256": "d1873699b8346c55cb13659b5d04ce08508d08495fedb1ff04ebec0a26207f80"
+}

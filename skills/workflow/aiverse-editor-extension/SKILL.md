@@ -1,21 +1,13 @@
 ---
 name: aiverse-editor-extension
-description: Extend the AIVERSE editor - add a dockable Dear ImGui window, register it for menus, layout and MCP `editor_window`, and expose game-specific grouping in the Hierarchy and the «Детали» inspector through game.json.
+description: Extend HTML5 Studio with dockable panels, project Lua widgets and world-tree grouping. Connect the UI to shared native operations and verify it in the desktop host.
 ---
 
-# Editor windows and the world tree
+# HTML5 Studio windows and the world tree
 
-Use when a feature needs editor UI. Game UI is `skills/ui/aiverse-game-screens`; MCP-only operations without a
-window still go through `apps/editor` / `tools/mcp` ops (main agent area in AGENTS.md).
+1. For project-specific widgets, inspect the Extensions panel and the project's `editor/extensions.lua`. Its `window(ctx)` supplies widgets, action handlers issue commands, and `scene_gizmos(ctx)` describes Scene shapes.
+2. For a built-in window, add the panel ID and title in `apps/studio-web/src/nestedDock.ts`, assign its Window menu group in `windowGroups.ts` beside it, and render it in `panels/StudioPanelRenderer.tsx`. Use the shared Studio controls and dock layout. Render asset previews inside their owning panel.
+3. Keep document and engine edits in their native owners. Use the typed Studio bridge in `apps/studio-web/src/types.ts` and reuse the shared editor operations for MCP. For world-tree grouping, inspect `panels/HierarchyPanel.tsx`, the scene groupings in the Studio snapshot and `docs/editor-world-tree.md`.
+4. Run `npm run build` and `npm run test:dock` in `apps/studio-web`. Open a project in the desktop HTML Studio, select the panel from the Window menu and verify its actions in docked and detached layouts. Capture the working window; verify persistence for document edits.
 
-1. A window (`docs/editor-windows.md`): a small class in `apps/editor/windows/`, registered once, with a menu
-   `group()`; the editor docks it, saves the layout and lets agents open it with `editor_windows` / `editor_window`.
-   Icons: `apps/editor/EditorIcons.h`; theme: `editor_theme`.
-2. Keep logic GPU-free in `apps/editor/core` so it is unit-tested and shared with MCP.
-3. World tree (`docs/editor-world-tree.md`): the Hierarchy lists every world object
-   (`apps/editor/windows/HierarchyWindow.cpp`, `apps/editor/EditorWorld.cpp`); a game adds grouping and row names
-   in game.json; MCP `world_entities`, `world_entity`, `editor_select`.
-4. Check: `aiverse_editor --project <dir> --play-client --device iphone-se:portrait --window game` for automated
-   runs, editor screenshots (`skills/verification/aiverse-visual-qa`).
-
-Workflow recipe over existing editor code and MCP tools; no runtime library.
+Game UI uses `skills/ui/aiverse-game-screens`. This recipe uses the existing Studio host and adds no runtime library.

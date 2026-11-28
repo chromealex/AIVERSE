@@ -1,0 +1,7 @@
+2026-11-26 05:46:11.813 AiverseStudioHTML5[582:82961924] [studio-web] JS: CROSS main DONE_1
+2026-11-26 05:46:11.813 AiverseStudioHTML5[582:82961924] [studio-web] JS: CROSS main VERIFIED start pair, gradient sampling, speed bounds and colors phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-spawn-ui-vzNDY3/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-spawn-ui-vzNDY3/Catalog.app: replacing existing signature
+2026-11-26 05:46:27.669 AiverseStudioHTML5[1045:82963343] [studio-web] JS: CROSS main DONE_2
+2026-11-26 05:46:27.669 AiverseStudioHTML5[1045:82963343] [studio-web] JS: CROSS main VERIFIED start pair, gradient sampling, speed bounds and colors phase 2
+Metal isolated preview pixels: red 783 green 735

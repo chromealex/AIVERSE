@@ -1,0 +1,10 @@
+{
+  "sha": "f8d850c0e748862f28f38575582cd8be2d705e45",
+  "argv": [
+    "bash",
+    "/tmp/physis-rings-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-storm-gravity-rings.log.txt",
+  "sha256": "fed7d72d8409c028409d6a925cf7bc91e5f14536a2c6bddfdcb8fba8557f7c1f"
+}

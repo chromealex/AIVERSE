@@ -1,0 +1,10 @@
+{
+  "sha": "d312e239bfc8ee17c1619252f3d9a39f043b1ed6",
+  "argv": [
+    "python3",
+    "../studio-discovery-check.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-mcp-discovery.log.txt",
+  "sha256": "997cceb9b6fccd9d357415eaae73c00d61fa52cb88b3c922b9b2964bdf6507da"
+}

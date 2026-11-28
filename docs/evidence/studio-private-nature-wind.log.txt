@@ -1,0 +1,2 @@
+2026-11-26 11:57:26.171 AiverseStudioHTML5[47246:84396749] [studio-web] JS: CROSS main DONE_1
+2026-11-26 11:57:26.171 AiverseStudioHTML5[47246:84396749] [studio-web] JS: CROSS main VERIFIED prevailing wind settings, native bounds, remount, reset, map bytes and measured vectors {"baseline":[15.926437,1.596039,-0.512054],"steered":[8.265976,1.596039,17.78775]}

@@ -1,0 +1,14 @@
+{
+  "sha": "76d89256c2b76aeb9750cfd7b4c57be27d4f0920",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-agent-client-76d89256c.log.txt",
+  "sha256": "a654a85fcc063a457200bdbdcfa17f07046751df8595b406fb4ee83eabe48266"
+}

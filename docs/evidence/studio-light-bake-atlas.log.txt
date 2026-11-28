@@ -1,0 +1,4 @@
+Engine generated 2 pages and 2 regions
+2026-11-26 01:33:54.896 AiverseStudioHTML5[35121:82158806] [studio-web] JS: CROSS atlasproof DONE_1
+2026-11-26 01:33:54.895 AiverseStudioHTML5[35121:82158806] [studio-web] JS: CROSS atlasproof VERIFIED zero Scene requests, two pages, both channels and stale request rejection
+Checked 36 rendered RGB samples against the original engine bake

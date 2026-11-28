@@ -1,0 +1,7 @@
+2026-11-26 05:01:08.881 AiverseStudioHTML5[74312:82827009] [studio-web] JS: CROSS main DONE_1
+2026-11-26 05:01:08.880 AiverseStudioHTML5[74312:82827009] [studio-web] JS: CROSS main VERIFIED scan invalidation, scale validation, native conversion, open exact destination /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/port-ui-ini21I/Imported harbor 1 phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/port-ui-ini21I/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/port-ui-ini21I/Catalog.app: replacing existing signature
+2026-11-26 05:01:18.599 AiverseStudioHTML5[74553:82828136] [studio-web] JS: CROSS main DONE_2
+2026-11-26 05:01:18.599 AiverseStudioHTML5[74553:82828136] [studio-web] JS: CROSS main VERIFIED scan invalidation, scale validation, native conversion, open exact destination /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/port-ui-ini21I/Imported harbor 2 phase 2
+Verified emitted manifests, maps, Godot provenance and port reports on disk

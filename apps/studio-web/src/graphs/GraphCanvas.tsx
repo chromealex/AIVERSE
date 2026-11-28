@@ -14,12 +14,12 @@ export interface GraphCanvasProps {
  view:GraphView; heat?:Readonly<Record<string,number>>; highlighted?:readonly string[]; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
  pendingOutput?:PortRef|null; onOutput?:(port:PortRef)=>void; onInput?:(port:PortRef)=>void;
  commands?:readonly GraphCommand[]; onCancel?:()=>void;
- enhancedNavigation?:boolean; typedPorts?:boolean; onAddMenu?:()=>void;
+ moveLimit?:number; enhancedNavigation?:boolean; typedPorts?:boolean; onAddMenu?:()=>void;
  onConnect?:(from:PortRef,to:PortRef)=>void; groups?:readonly {id:string;title:string;members:string[]}[];
  selection?:readonly string[]; onSelection?:(ids:string[])=>void; onMoveGroup?:(positions:Positioned[])=>void;
  onSelect:(id:string)=>void; onMove:(id:string,x:number,y:number)=>void;
 }
-export default function GraphCanvas({view,heat,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel,enhancedNavigation=false,typedPorts=false,onAddMenu,onConnect,groups=[]}:GraphCanvasProps) {
+export default function GraphCanvas({view,heat,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel,moveLimit=2000,enhancedNavigation=false,typedPorts=false,onAddMenu,onConnect,groups=[]}:GraphCanvasProps) {
  const svg=useRef<SVGSVGElement>(null);
  const scroll=useRef<HTMLDivElement>(null);
  const drag=useRef<{pointer:number;origin:Point;nodes:Positioned[]}|null>(null);
@@ -43,7 +43,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
  useLayoutEffect(()=>{const a=zoomAnchor.current,el=scroll.current;if(a&&el){el.scrollLeft=(a.left+a.x)*zoom/a.old-a.x;el.scrollTop=(a.top+a.y)*zoom/a.old-a.y;zoomAnchor.current=null;}},[zoom]);
  useEffect(()=>{
   const el=scroll.current;if(!enhancedNavigation||!el)return;
-  const wheel=(e:WheelEvent)=>{e.preventDefault();const old=zoomRef.current;const next=Math.max(.25,Math.min(2,old*Math.exp(-e.deltaY*.002)));if(next===old)return;const r=el.getBoundingClientRect();zoomAnchor.current={x:e.clientX-r.left,y:e.clientY-r.top,left:el.scrollLeft,top:el.scrollTop,old};setZoom(next);};
+  const wheel=(e:WheelEvent)=>{e.preventDefault();const old=zoomRef.current;const next=Math.max(Math.min(.25,old),Math.min(2,old*Math.exp(-e.deltaY*.002)));if(next===old)return;const r=el.getBoundingClientRect();zoomAnchor.current={x:e.clientX-r.left,y:e.clientY-r.top,left:el.scrollLeft,top:el.scrollTop,old};setZoom(next);};
   el.addEventListener('wheel',wheel,{passive:false});return()=>el.removeEventListener('wheel',wheel);
  },[enhancedNavigation]);
  const point=(event:PointerEvent<SVGElement>)=>{
@@ -64,7 +64,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
   const d=drag.current;if(!d||d.pointer!==event.pointerId)return;
   drag.current=null;setPreview([]);
   if(commit&&!disabled&&p&&(p.x!==d.origin.x||p.y!==d.origin.y)){
-   const next=moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y);
+   const next=moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y,moveLimit);
    if(onMoveGroup)onMoveGroup(next);else for(const n of next)onMove(n.id,n.x,n.y);
   }
  };
@@ -78,22 +78,44 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
  const maxHeight=Math.max(320,...view.nodes.map(n=>n.y+(geometry.nodes.find(g=>g.id===n.id)?.height??54)+36));
  const maxWidth=Math.max(520,...view.nodes.map(n=>n.x+nodeWidth+36));
  useEffect(()=>{const el=scroll.current;if(!el||!enhancedNavigation)return;const update=()=>setViewport({x:el.scrollLeft/zoom,y:el.scrollTop/zoom,w:el.clientWidth/zoom,h:el.clientHeight/zoom});update();el.addEventListener("scroll",update);const observer=new ResizeObserver(update);observer.observe(el);return()=>{el.removeEventListener("scroll",update);observer.disconnect();};},[zoom,enhancedNavigation,maxWidth,maxHeight]);
- const fit=()=>{const el=scroll.current;if(!el)return;zoomAnchor.current=null;setZoom(Math.max(.25,Math.min(2,(el.clientWidth-12)/maxWidth,(el.clientHeight-12)/maxHeight)));el.scrollLeft=0;el.scrollTop=0;};
+ const fit=()=>{
+  const el=scroll.current;
+  if(!el||el.clientWidth<=12||el.clientHeight<=12)return;
+  zoomAnchor.current=null;
+  setZoom(Math.min(2,(el.clientWidth-12)/maxWidth,(el.clientHeight-12)/maxHeight));
+  el.scrollLeft=0;
+  el.scrollTop=0;
+ };
  const portColor=(type:string)=>typedPorts?({scalar:'#e4b35b',float:'#e4b35b',color:'#78c9a0',rgb:'#78c9a0',rgba:'#78c9a0',normal:'#a5a1ff',packed:'#d995ce',vec3:'#a5a1ff',vector:'#a5a1ff'} as Record<string,string>)[type.toLowerCase()]??'var(--au-accent)':'var(--au-accent)';
  const curve=(x1:number,y1:number,x2:number,y2:number)=>`M ${x1} ${y1} C ${x1+55} ${y1}, ${x2-55} ${y2}, ${x2} ${y2}`;
- return <div className="au-graph-workspace" onContextMenu={e=>{if(!disabled&&(commands?.length||onAddMenu)){e.preventDefault();setMenu(v=>!v)}}} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))space.current=false;}} onKeyUp={e=>{if(e.code==='Space')space.current=false;}} onKeyDown={e=>{if(e.key==='Escape'){setMenu(false);onCancel?.();return;}if(disabled||e.defaultPrevented)return;const target=e.target as HTMLElement;if(target.closest('input,textarea,select,[contenteditable=true]'))return;if(enhancedNavigation&&e.code==='Space'&&e.target===svg.current){e.preventDefault();space.current=true;return;}const chord=(e.metaKey||e.ctrlKey?'mod+':'')+(e.shiftKey?'shift+':'')+e.key.toLowerCase();const command=commands?.find(c=>c.shortcut===chord&&!c.disabled);if(command){e.preventDefault();e.stopPropagation();setMenu(false);command.run();}}}>
- <div className="au-row" aria-label="Graph zoom">
-  <StudioButton size="sm" disabled={zoom<=(enhancedNavigation ? .25 : .5)} onClick={()=>setZoom(z=>Math.max(enhancedNavigation ? .25 : .5,z-.25))}>−</StudioButton>
-  <StudioButton size="sm" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
-  <StudioButton size="sm" disabled={zoom>=2} onClick={()=>setZoom(z=>Math.min(2,z+.25))}>+</StudioButton>
-  {enhancedNavigation&&<StudioButton size="sm" onClick={fit}>Fit</StudioButton>}
+ const navigateMinimap=(event:PointerEvent<SVGSVGElement>)=>{
+  const el=scroll.current, matrix=event.currentTarget.getScreenCTM();
+  if(!el||!matrix)return;
+  const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
+  el.scrollLeft=point.x*zoom-el.clientWidth/2;
+  el.scrollTop=point.y*zoom-el.clientHeight/2;
+ };
+ return <div className="au-graph-workspace" onContextMenu={e=>{if(!disabled&&(commands?.length||onAddMenu)){e.preventDefault();setMenu(v=>!v)}}} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))space.current=false;}} onKeyUp={e=>{if(e.code==='Space')space.current=false;}} onKeyDown={e=>{if(e.key==='Escape'){
+   if(wireDrag.current){wireDrag.current=null;suppressClick.current=true;e.stopPropagation();}
+   setMenu(false);onCancel?.();return;
+  }if(disabled||e.defaultPrevented)return;const target=e.target as HTMLElement;if(target.closest('input,textarea,select,[contenteditable=true]'))return;if(enhancedNavigation&&e.code==='Space'&&e.target===svg.current){e.preventDefault();space.current=true;return;}const chord=(e.metaKey||e.ctrlKey?'mod+':'')+(e.shiftKey?'shift+':'')+e.key.toLowerCase();const command=commands?.find(c=>c.shortcut===chord&&!c.disabled);if(command){e.preventDefault();e.stopPropagation();setMenu(false);command.run();}}}>
+ <div className="au-row" role="group" aria-label="Graph zoom">
+  <StudioButton size="sm" aria-label="Zoom out" title="Zoom out" disabled={zoom<=(enhancedNavigation ? .25 : .5)} onClick={()=>setZoom(z=>Math.max(enhancedNavigation ? .25 : .5,z-.25))}>−</StudioButton>
+  <StudioButton size="sm" aria-label={Math.round(zoom*100)+'% · Reset zoom to 100%'} title="Reset zoom to 100%" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
+  <StudioButton size="sm" aria-label="Zoom in" title="Zoom in" disabled={zoom>=2} onClick={()=>setZoom(z=>Math.min(2,z+.25))}>+</StudioButton>
+  <StudioButton size="sm" aria-label="Fit graph to window" title="Fit graph to window (Home on canvas)" onClick={fit}>Fit</StudioButton>
   {onAddMenu&&<StudioButton size="sm" disabled={disabled} onClick={onAddMenu}>Search nodes</StudioButton>}
   {commands?.length&&<StudioButton size="sm" aria-expanded={menu} disabled={disabled} onClick={()=>setMenu(v=>!v)}>Actions</StudioButton>}
  </div>
  {menu&&<div className="au-row au-graph-actions" aria-label="Graph actions">{commands?.map(c=><StudioButton key={c.id} size="sm" disabled={disabled||c.disabled} onClick={()=>{setMenu(false);c.run()}}>{c.label}</StudioButton>)}</div>}
  <div className={"au-graph-canvas graph-surface"+(enhancedNavigation?" au-graph-canvas--grid":"")} ref={scroll}>
   <svg ref={svg} width={maxWidth*zoom} height={maxHeight*zoom} viewBox={`0 0 ${maxWidth} ${maxHeight}`}
-   role="group" tabIndex={0} aria-label={label}
+   role="group" tabIndex={0} aria-label={label} aria-keyshortcuts="Home"
+   onKeyDown={event=>{
+    if(event.target!==event.currentTarget||event.key!=='Home'||
+       event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+    event.preventDefault();event.stopPropagation();fit();
+   }}
    onPointerDown={event=>{
     if(disabled||drag.current||box.current||pan.current)return;
     if(event.button===1||(event.button===0&&(event.altKey||(enhancedNavigation&&space.current)))){
@@ -114,7 +136,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     const p=point(event);if(!p||disabled)return;
     setCursor(p);
     const b=box.current;if(b?.pointer===event.pointerId)setRect(selectionRect(b.origin,p));
-    const d=drag.current;if(d?.pointer===event.pointerId)setPreview(moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y));
+    const d=drag.current;if(d?.pointer===event.pointerId)setPreview(moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y,moveLimit));
    }} onPointerUp={e=>end(e,true)} onPointerCancel={e=>end(e,false)} onLostPointerCapture={e=>end(e,false)}>
    {groups.map(g=>{const members=geometry.nodes.filter(n=>g.members.includes(n.id));if(!members.length)return null;const x=Math.max(0,Math.min(...members.map(n=>n.x))-12),y=Math.max(0,Math.min(...members.map(n=>n.y))-24),w=Math.max(...members.map(n=>n.x+nodeWidth))+12-x,h=Math.max(...members.map(n=>n.y+n.height))+12-y;return <g key={g.id} pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx="8" fill="var(--au-accent)" fillOpacity=".08" stroke="var(--au-accent)" strokeDasharray="5 4"/><text x={x+8} y={y+15} fill="var(--au-text-soft)" fontSize="11">{g.title}</text></g>;})}
    {geometry.wires.map(edge=><path key={edge.id} className="graph-wire" data-emphasis={ids.length ? (ids.includes(edge.from)||ids.includes(edge.to) ? 'active' : 'quiet') : undefined} d={curve(edge.x1,edge.y1,edge.x2,edge.y2)} fill="none" stroke="var(--au-accent)" strokeWidth="2" pointerEvents="none"/>)}
@@ -123,7 +145,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     const height=node.height;
     return <g key={node.id} className="au-graph-node"
     transform={`translate(${node.x} ${node.y})`} tabIndex={disabled?-1:0}
-    role="group" aria-label={node.id+' '+node.label}
+    role="group" aria-label={node.id+' '+node.label} aria-description={node.outputChannels?.length?'Shader outputs: '+node.outputChannels.join(', '):undefined}
     onKeyDown={event=>key(event,node)}
     onContextMenu={()=>{if(!ids.includes(node.id))updateSelection([node.id]);}}
     onPointerDown={event=>{
@@ -149,6 +171,13 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
       {node.values.length>0&&<text className="graph-node-value" x={node.values.length>=3?17:0} y="61">
        {node.values.map(v=>Number(v.toPrecision(3))).join('  ')}
       </text>}
+      {!!node.outputChannels?.length&&<g>
+       <title>{'Shader outputs: '+node.outputChannels.join(', ')}</title>
+       <path d={`M0 ${height-20} H108`} stroke="var(--au-line)"/>
+       <text y={height-6} fill="var(--au-accent-ink)" fontSize="10">
+        {'→ '+(node.outputChannels.length===1||node.outputChannels.join(', ').length<=17 ? node.outputChannels.join(', ') : node.outputChannels[0]+'  +'+(node.outputChannels.length-1))}
+       </text>
+      </g>}
      </svg>
     </> : <>
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
@@ -157,19 +186,24 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     {node.thumbnail&&<image href={node.thumbnail} x="35" y={height-86} width="60" height="60" preserveAspectRatio="xMidYMid meet" style={{imageRendering:"pixelated"}} pointerEvents="none"/>}
     {node.thumbnail&&<text x="65" y={height-17} textAnchor="middle" fill="var(--au-text-muted)" fontSize="8">CPU</text>}
     {geometry.ports.filter(p=>p.node===node.id).map(p=><g key={p.direction+':'+p.port}>{typedPorts&&<text x={p.direction==='input'?9:nodeWidth-9} y={p.y-node.y+3} textAnchor={p.direction==='input'?'start':'end'} fill={portColor(p.type)} fontSize="9" pointerEvents="none">{p.direction==='input'?p.port+': '+p.type:p.type}</text>}<circle key={p.direction+':'+p.port}
-     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
+     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} aria-disabled={disabled||readOnly||undefined} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
      aria-label={node.id+' '+p.direction+' '+p.port+' '+p.type}
      aria-pressed={p.direction==='output'?samePort(pendingOutput,p):undefined}
      fill={p.direction==='output'&&samePort(pendingOutput,p)?'var(--au-accent-ink)':portColor(p.type)}
      data-graph-input={p.direction==='input'?'true':undefined} data-node={p.node} data-port={p.port}
-     onPointerDown={e=>{e.stopPropagation();suppressClick.current=false;if(disabled||readOnly||!onConnect||p.direction!=='output'||e.button!==0)return;wireDrag.current={pointer:e.pointerId,from:{node:p.node,port:p.port},x:e.clientX,y:e.clientY,moved:false};onOutput?.({node:p.node,port:p.port});e.currentTarget.setPointerCapture(e.pointerId);}}
+     onPointerDown={e=>{e.stopPropagation();suppressClick.current=false;if(disabled||readOnly||!onConnect||p.direction!=='output'||e.button!==0)return;e.currentTarget.focus({preventScroll:true});wireDrag.current={pointer:e.pointerId,from:{node:p.node,port:p.port},x:e.clientX,y:e.clientY,moved:false};onOutput?.({node:p.node,port:p.port});e.currentTarget.setPointerCapture(e.pointerId);}}
      onPointerMove={e=>{const d=wireDrag.current;if(d?.pointer===e.pointerId&&Math.hypot(e.clientX-d.x,e.clientY-d.y)>4)d.moved=true;}}
-     onPointerUp={e=>{const d=wireDrag.current;if(d?.pointer!==e.pointerId)return;wireDrag.current=null;suppressClick.current=true;if(!d.moved)return;const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-graph-input="true"]');const node=el?.getAttribute('data-node'),port=el?.getAttribute('data-port');if(node&&port!==null&&port!==undefined)onConnect?.(d.from,{node,port});else onCancel?.();}}
+     onPointerUp={e=>{const d=wireDrag.current;if(d?.pointer!==e.pointerId)return;wireDrag.current=null;suppressClick.current=true;if(disabled||readOnly){onCancel?.();return;}if(!d.moved)return;const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-graph-input="true"]');const node=el?.getAttribute('data-node'),port=el?.getAttribute('data-port');if(node&&port!==null&&port!==undefined)onConnect?.(d.from,{node,port});else onCancel?.();}}
      onPointerCancel={()=>{wireDrag.current=null;onCancel?.();}}
      onClick={()=>{if(suppressClick.current){suppressClick.current=false;return;}if(!disabled&&!readOnly)(p.direction==='output'?onOutput:onInput)?.({node:p.node,port:p.port})}}
-     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();if(!disabled)(p.direction==='output'?onOutput:onInput)?.({node:p.node,port:p.port})}}}><title>{p.port+' · '+p.type}</title></circle></g>)}
+     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();if(!disabled&&!readOnly)(p.direction==='output'?onOutput:onInput)?.({node:p.node,port:p.port})}}}><title>{p.port+' · '+p.type}</title></circle></g>)}
    </g>})}
    {rect&&<rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill="var(--au-accent)" fillOpacity="0.12" stroke="var(--au-accent)" strokeDasharray="4 3" pointerEvents="none"/>}
   </svg>
- </div>{enhancedNavigation&&<svg className="au-graph-minimap" viewBox={`0 0 ${maxWidth} ${maxHeight}`} role="img" aria-label="Graph minimap" onPointerDown={e=>{const el=scroll.current,ctm=e.currentTarget.getScreenCTM();if(!el||!ctm)return;const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(ctm.inverse());el.scrollLeft=p.x*zoom-el.clientWidth/2;el.scrollTop=p.y*zoom-el.clientHeight/2;}}>{geometry.nodes.map(n=><rect key={n.id} x={n.x} y={n.y} width={nodeWidth} height={n.height} rx="4" fill={ids.includes(n.id)?'var(--au-accent)':'var(--au-text-muted)'}/>)}<rect x={viewport.x} y={viewport.y} width={Math.min(maxWidth,viewport.w)} height={Math.min(maxHeight,viewport.h)} fill="none" stroke="var(--au-accent)" strokeWidth={Math.max(2,maxWidth/120)}/></svg>}</div>;
+ </div>{enhancedNavigation&&<svg className="au-graph-minimap" viewBox={`0 0 ${maxWidth} ${maxHeight}`} role="img" aria-label="Graph minimap"
+  onPointerDown={event=>{
+   if(!event.isPrimary||event.button!==0)return;
+   event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);navigateMinimap(event);
+  }}
+  onPointerMove={event=>{if(event.currentTarget.hasPointerCapture(event.pointerId))navigateMinimap(event);}}>{geometry.nodes.map(n=><rect key={n.id} x={n.x} y={n.y} width={nodeWidth} height={n.height} rx="4" fill={ids.includes(n.id)?'var(--au-accent)':'var(--au-text-muted)'}/>)}<rect x={viewport.x} y={viewport.y} width={Math.min(maxWidth,viewport.w)} height={Math.min(maxHeight,viewport.h)} fill="none" stroke="var(--au-accent)" strokeWidth={Math.max(2,maxWidth/120)}/></svg>}</div>;
 }

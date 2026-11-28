@@ -1,0 +1,10 @@
+{
+  "sha": "b3bfedb1deeec4d4ef1477c63ff4290d6ab53b59",
+  "argv": [
+    "bash",
+    "/tmp/tech-catalog-proof.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-project-tech-faction-acceptance.log.txt",
+  "sha256": "2dd43e9fca8cc5e4e8a5c23035d18084b4806a2346e8008dccde77246514af87"
+}

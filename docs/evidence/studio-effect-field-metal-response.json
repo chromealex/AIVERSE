@@ -1,0 +1,10 @@
+{
+  "sha": "36f006a8b4cfe2d6397e6be0fddabd10e5d63c19",
+  "argv": [
+    "bash",
+    "/tmp/fx-field-motion.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-field-metal-response.log.txt",
+  "sha256": "ef54496093d65281b5775178101cf640fc7d5171596dca5b9c6447475d1f6905"
+}

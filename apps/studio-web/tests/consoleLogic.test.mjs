@@ -20,3 +20,19 @@ test('entity ids and project files become links', () => {
   assert.deepEqual(parts.filter(p => p.kind === 'file').map(p => p.path), ['maps/valley.json', 'content/trees/oak.glb']);
   assert.deepEqual(logParts('plain'), [{ kind: 'text', text: 'plain' }]);
 });
+
+test('classifies native builder diagnostics in both output languages', async () => {
+  const { buildLineLevel } = await import('../src/panels/consoleLogic.ts');
+  for (const line of ['fatal error: missing file', 'ОШИБКА: файл', '=== FAILED ===', 'AIVERSE_MISSING_TOOLCHAIN']) assert.equal(buildLineLevel(line), 'Errors');
+  for (const line of ['clang warning: flag', 'ВНИМАНИЕ', 'предупреждение']) assert.equal(buildLineLevel(line), 'Warnings');
+  assert.equal(buildLineLevel('=== OK ==='), 'Success');
+  assert.equal(buildLineLevel('0 errors'), 'Info');
+});
+
+test('Lua diagnostics link to the source line and retain adjacent punctuation', () => {
+  assert.deepEqual(logParts('scripts/actors/start.lua:23: missing'), [
+    {kind:'script', text:'scripts/actors/start.lua:23', path:'scripts/actors/start.lua', line:23},
+    {kind:'text', text:': missing'},
+  ]);
+  assert.equal(logParts('scripts/main.lua')[0].line, 1);
+});

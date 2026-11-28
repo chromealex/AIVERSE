@@ -1,0 +1,7 @@
+2026-11-26 11:26:50.037 AiverseStudioHTML5[19519:84186549] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-marquee-3gmTU3/Catalog.app/Contents/Resources/studio-web
+2026-11-26 11:26:50.296 AiverseStudioHTML5[19519:84186549] [studio-web] served index.html (6213 bytes)
+2026-11-26 11:26:50.303 AiverseStudioHTML5[19519:84186549] [studio-web] served assets/index-BxP7M58V.js (1698205 bytes)
+2026-11-26 11:26:50.336 AiverseStudioHTML5[19519:84186549] [studio-web] JS: CROSS main boot
+2026-11-26 11:26:50.345 AiverseStudioHTML5[19519:84186549] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 11:26:54.697 AiverseStudioHTML5[19519:84186549] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Viewport input unavailable

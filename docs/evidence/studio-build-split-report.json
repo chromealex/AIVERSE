@@ -1,0 +1,10 @@
+{
+  "sha": "62a584e49682d5100a94acfc7ad8aa1533dbbdf8",
+  "argv": [
+    "bash",
+    "../build-split.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-split-report.log.txt",
+  "sha256": "6f7fb0304b5371ea2be73f0fe35d2a07536a322302b6a0ca344ab25d212fc5a2"
+}

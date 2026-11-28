@@ -1,0 +1,6 @@
+2026-11-26 12:15:09.765 AiverseStudioHTML5[56301:84469494] [studio-web] JS: CROSS main DONE_1
+2026-11-26 12:15:09.765 AiverseStudioHTML5[56301:84469494] [studio-web] JS: CROSS main VERIFIED native 3D without Scene or Game; fixed tick, grass patches, particles, layers, reset: {"lit":{"tick":1,"patches":4,"particles":210,"voices":5,"grass":true,"flames":true,"sound":true},"quiet":{"tick":1,"patches":0,"particles":0,"voices":0,"grass":false,"flames":false,"sound":false},"reset":{"tick":0,"patches":4,"particles":0,"voices":0,"grass":true,"flames":false,"sound":false}}
+Traceback (most recent call last):
+  File "<stdin>", line 16, in <module>
+  File "<stdin>", line 13, in bitmap
+AssertionError

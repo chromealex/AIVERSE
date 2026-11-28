@@ -102,6 +102,14 @@ inline std::size_t studioRemapMaterialReferences(
     std::vector<std::pair<std::string, Json>> edits;
     std::size_t updated = 0;
     for (const auto& [name, material] : materials.members()) {
+        if(material.isString()){
+            const auto match=relocated.find(material.str());
+            if(match!=relocated.end()){
+                edits.emplace_back(name,Json::string(match->second));
+                ++updated;
+            }
+            continue;
+        }
         if (!material.isObject()) continue;
         Json candidate = material;
         bool changed = false;
@@ -676,6 +684,37 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
         afterBytes+=after.size();bytes+=after.size();
         result.push_back({fs::path(path),std::move(edit.before),std::move(after),std::move(edit.tailDigest),edit.tailBytes});
     }
+    const auto indexPath=root/"materials.json";
+    if(fs::is_regular_file(fs::symlink_status(indexPath))){
+        const auto index=Json::parseFile(indexPath.string());
+        std::set<std::string> visited;
+        for(const auto& [name,entry]:index["materials"].members()){
+            if(!entry.isString())continue;
+            const auto path=entry.str();
+            if(!visited.insert(path).second)continue;
+            if(!view::materialAssetPath(path)||!studioSafeModelResourceFile(root,path))
+                throw std::runtime_error("Invalid indexed material: "+name);
+            auto before=editor::readProjectFileBytes(root/path);
+            auto material=Json::parse(before);
+            if(!material.isObject())throw std::runtime_error("Invalid material: "+name);
+            bool changed=false;
+            for(const auto* key:kStudioTextureFields){
+                const auto source=material.getStr(key);
+                if(source.empty())continue;
+                const auto target=studioRelocatedReferencePath(source,moves);
+                if(target==source)continue;
+                material.set(key,Json::string(target));
+                changed=true;
+            }
+            if(!changed)continue;
+            auto after=material.dump(2)+"\n";
+            if(result.size()>=32||before.size()>StudioResourceEditBudget-bytes||
+               after.size()>StudioResourceEditBudget-bytes-before.size())
+                throw std::runtime_error("Material repair history budget exceeded");
+            bytes+=before.size()+after.size();
+            result.push_back({fs::path(path),std::move(before),std::move(after)});
+        }
+    }
     std::sort(result.begin(),result.end(),[](const auto& a,const auto& b){return a.path.generic_string()<b.path.generic_string();});
     return result;
 }
@@ -683,6 +722,11 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
 // formatting. Compare normalized typed resource resolution, all other JSON
 // fields unchanged; exact source bytes are separately verified.
 inline std::string studioCanonicalGltfRepair(const std::string& path,const std::string& bytes,const std::string& tailDigest={},uint64_t tailBytes=0){
+    if(view::materialAssetPath(path)){
+        const auto document=Json::parse(bytes);
+        if(!document.isObject()||!tailDigest.empty()||tailBytes)throw std::runtime_error("Invalid material repair");
+        return document.dump(-1);
+    }
     if(!studioRepairGltfExtension(std::filesystem::path(path))){
         const auto slots=studioTextSlots(std::filesystem::path(path),bytes);
         std::map<std::string,std::string> normalized;

@@ -1,3 +1,4 @@
+#include "engine/render/StaticGeometryReport.h"
 #include "engine/world/RegionOwnershipDiagnostics.h"
 // Agent link: the editor serves MCP tool calls forwarded by aiversemcp over localhost, implements the
 // editor-only tools (screenshots, camera, play-test, device simulator, windows), and launches the
@@ -9,6 +10,7 @@
 #include <filesystem>
 #include "Devices.h"
 #include "Editor.h"
+#include "apps/editor/core/SceneScreenshotOptions.h"
 #include "NatureGizmos.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -51,13 +53,6 @@ Json reply(const Json& id, Json result) {
     r.set("id", id);
     r.set("result", std::move(result));
     return r;
-}
-float cameraNumber(const Json& args,const char* key,float fallback) {
-    if(!args.has(key))return fallback;
-    const double value=args[key].toDouble();
-    if(!args[key].isNumber()||!std::isfinite(value)||std::abs(value)>1000000.0)
-        throw std::runtime_error(std::string("camera ")+key+" must be a finite number within +/-1000000");
-    return float(value);
 }
 } // namespace
 
@@ -105,47 +100,23 @@ void Editor::pollAgentLink() {
             if(!shots_.empty() || captureArmed_) {
                 server_.send(m.client,reply(id,Json::parse(R"({"error":"another screenshot is pending; retry after its reply"})")).dump(-1));continue;
             }
-            auto camera=sceneCam;
+            SceneScreenshotOptions options;
             const auto window=args.getStr("window",args.has("device")?"game":"all");
-            const bool clean=args.getBool("clean",window=="scene");
-            int requestedWidth=0,requestedHeight=0;
-            bool positioned=false;
             try {
                 if((args.has("window")&&!args["window"].isString()) ||
                    (window!="all" && window!="scene" && window!="game"))throw std::runtime_error("window must be all|scene|game");
-                if(args.has("clean") && args["clean"].type()!=Json::Type::Bool)throw std::runtime_error("clean must be boolean");
-                if(clean && window!="scene")throw std::runtime_error("clean capture requires window scene");
-                if(args.has("width")!=args.has("height"))throw std::runtime_error("capture width and height must be supplied together");
-                if(args.has("width")) {
-                    if(!clean)throw std::runtime_error("capture dimensions require a clean scene capture");
-                    if(!args["width"].isNumber() || !args["height"].isNumber())throw std::runtime_error("capture dimensions must be numbers");
-                    const auto width=args["width"].toDouble(),height=args["height"].toDouble();
-                    if(!std::isfinite(width) || !std::isfinite(height) || width<256 || height<256 || width>4096 || height>4096 ||
-                        width!=std::floor(width) || height!=std::floor(height) || double(width)*height>8388608)
-                        throw std::runtime_error("capture dimensions must be integer256..4096 and at most8 megapixels");
-                    requestedWidth=int(width);requestedHeight=int(height);
-                }
-                if(args.has("x")!=args.has("z"))throw std::runtime_error("camera x and z must be supplied together");
-                if(args.has("x")) {
-                    camera.target={cameraNumber(args,"x",0),cameraNumber(args,"y",0),cameraNumber(args,"z",0)};
-                    positioned=true;
-                } else if(args.has("y")) {
-                    camera.target.y=cameraNumber(args,"y",camera.target.y);positioned=true;
-                }
-                if(args.has("distance"))camera.distance=std::clamp(cameraNumber(args,"distance",camera.distance),camera.minDistance,camera.maxDistance);
-                if(args.has("pitch"))camera.pitch=std::clamp(cameraNumber(args,"pitch",0),-89.0f,89.0f)*0.0174533f;
-                if(args.has("yaw"))camera.yaw=cameraNumber(args,"yaw",0)*0.0174533f;
+                options=SceneScreenshotOptions::parse(args,window=="scene");
             } catch(const std::exception& error) {
                 Json result=Json::object();result.set("error",Json::string(error.what()));
                 server_.send(m.client,reply(id,std::move(result)).dump(-1));continue;
             }
             // Apply only after the entire request validates. Camera inspection
             // never edits entity transforms or marks the document dirty.
-            sceneCam=camera;
-            if(positioned)sceneFlying_=false;
+            sceneCam=options.camera(sceneCam);
+            if(options.x || options.y)sceneFlying_=false;
             if (args.has("device")) gameDevice = args.getStr("device");
             Json metadata=Json::object();
-            if(clean){metadata.set("clean",Json::fromBool(true));metadata.set("requested_width",Json::number(int64_t(requestedWidth)));metadata.set("requested_height",Json::number(int64_t(requestedHeight)));}
+            if(options.clean){metadata.set("clean",Json::fromBool(true));metadata.set("requested_width",Json::number(int64_t(options.width)));metadata.set("requested_height",Json::number(int64_t(options.height)));}
             shots_.push_back({m.client,id.integer(),window,std::move(metadata)});
             // Do not put a notification over the requested scene/game image.
             if(args.getStr("window","all")=="all")ws_.log("agent", "Скриншот редактора");
@@ -172,9 +143,7 @@ std::pair<int,int> Editor::sceneCaptureSize(int width,int height) const {
         const int requested=int(shot.metadata.getInt("requested_width"));
         if(requested>0)return {requested,int(shot.metadata.getInt("requested_height"))};
         // Default: current viewport resolution, bounded for readback payloads.
-        const double scale=std::min({1.0,4096.0/std::max(1,std::max(width,height)),
-            std::sqrt(8388608.0/std::max(1.0,double(width)*height))});
-        return {std::max(1,int(width*scale)),std::max(1,int(height*scale))};
+        return SceneScreenshotOptions::boundedViewportSize(width,height);
     }
     return {width,height};
 }
@@ -303,44 +272,7 @@ void Editor::registerGuiOps() {
         r.set("waterRenderer",Json::string(view_.terrainRenderer().waterRenderer()==game::TerrainLook::WaterRenderer::Nereid?"nereid":"legacy"));
         if(!view_.terrainRenderer().nereidWaterStatus().empty())r.set("nereidWaterRefused",Json::string(view_.terrainRenderer().nereidWaterStatus()));
         r.set("sunShadowModelTriangles",Json::number(int64_t(r3d_.profile().triangles[0])));
-        {   // Static geometry scene: opt-in STRATA virtual geometry counters.
-            const auto& g=view_.geometryScene().stats();auto st=Json::object();
-            st.set("enabled",Json::fromBool(view_.geometryScene().strataPortableRenderingEnabled()));
-            st.set("portableSources",Json::number(int64_t(g.strataPortableSources)));
-            st.set("portableDeclined",Json::number(int64_t(g.strataPortableDeclined)));
-            st.set("portableDraws",Json::number(int64_t(g.strataPortableDraws)));
-            st.set("portableFallbacks",Json::number(int64_t(g.strataPortableFallbacks)));
-            st.set("portableClusters",Json::number(int64_t(g.strataPortableClusters)));
-            st.set("nodes",Json::number(int64_t(g.strataNodes)));
-            st.set("failures",Json::number(int64_t(g.strataFailures)));
-            st.set("stagedSources",Json::number(int64_t(g.strataSources)));
-            st.set("skippedSources",Json::number(int64_t(g.strataSkippedSources)));
-            st.set("seamUnsafeDeclined",Json::number(int64_t(g.strataSeamUnsafeDeclined)));
-            st.set("globalBudgetDeclined",Json::number(int64_t(g.strataGlobalBudgetDeclined)));
-            st.set("instances",Json::number(int64_t(view_.geometryScene().instanceCount())));
-            st.set("sharedModels",Json::number(int64_t(g.strataPortableSharedModels)));
-            st.set("sharedReuses",Json::number(int64_t(g.strataPortableSharedReuses)));
-            st.set("autoLodSources",Json::number(int64_t(g.strataAutoLodSources)));
-            st.set("autoStrataSources",Json::number(int64_t(g.strataAutoStrataSources)));
-            {   // strata.select auto: one line per source, model and reason.
-                auto list=Json::array();
-                for(const auto& d:view_.geometryScene().strataSelectDecisions())list.push(Json::string(d));
-                st.set("select",list);
-                auto warn=Json::array();
-                for(const auto& w:view_.geometryScene().warnings())
-                    if(w.find("Strata")!=std::string::npos||w.find("STRATA")!=std::string::npos)warn.push(Json::string(w.substr(0,400)));
-                st.set("warnings",warn);
-                st.set("stageMs",Json::number(double(g.strataStageMs)));
-                st.set("cookedSources",Json::number(double(g.strataCookedSources)));
-                st.set("cookStaleSources",Json::number(double(g.strataCookStaleSources)));
-                st.set("cookWrittenSources",Json::number(double(g.strataCookWrittenSources)));
-                st.set("cookReadMs",Json::number(double(g.strataCookedLoadMs)));
-                st.set("buildMs",Json::number(double(g.strataBuildMs)));
-                st.set("compactUploads",Json::number(int64_t(g.strataCompactUploads)));
-                st.set("compactReuses",Json::number(int64_t(g.strataCompactReuses)));
-            }
-            r.set("strata",st);
-        }
+        r.set("strata",render::staticGeometryReport(view_.geometryScene()));
         // Reuse completed host-owned queries only; do not poll, wait or add
         // GPU timestamps from the agent callback. Keep viewport and whole
         // frame scopes separate and omit unsupported/absent samples.

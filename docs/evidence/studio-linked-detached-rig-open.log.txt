@@ -1,0 +1,15 @@
+2026-11-26 10:26:22.567 AiverseStudioHTML5[83698:83882347] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-float-open-Mvfrr2/Catalog.app/Contents/Resources/studio-web
+2026-11-26 10:26:22.760 AiverseStudioHTML5[83698:83882347] [studio-web] served index.html (5447 bytes)
+2026-11-26 10:26:22.767 AiverseStudioHTML5[83698:83882347] [studio-web] served assets/index-miEIS1ap.js (1689131 bytes)
+2026-11-26 10:26:22.800 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS main boot
+2026-11-26 10:26:22.808 AiverseStudioHTML5[83698:83882347] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 10:26:22.893 AiverseStudioHTML5[83698:83882347] [studio-web] served index.html (5447 bytes)
+2026-11-26 10:26:22.895 AiverseStudioHTML5[83698:83882347] [studio-web] served assets/index-miEIS1ap.js (1689131 bytes)
+2026-11-26 10:26:22.924 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS wrigopen boot
+2026-11-26 10:26:22.935 AiverseStudioHTML5[83698:83882347] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html?window=wrigopen&panels=anim_rig
+2026-11-26 10:26:31.982 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS main LINK_PORT 47321
+2026-11-26 10:26:33.652 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 10:26:33.652 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS wrigopen document.changed {"message":""}
+2026-11-26 10:26:34.027 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS wrigopen DIRTY
+2026-11-26 10:26:35.829 AiverseStudioHTML5[83698:83882347] [studio-web] JS: CROSS wrigopen FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Invalid window event

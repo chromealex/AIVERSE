@@ -1,3 +1,11 @@
+## HTML Studio migration
+
+Support full-document JSON edits validated by the native SpectraFX compiler before updating local history.
+
+Restore middle-button navigation on the HTML graph canvas.
+
+Carry saved v1 canvas arrangements into editable v2 graphs during explicit upgrade.
+
 ## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
 
 The independent SpectraFX Graph GPU preview has a one-shot **Capture

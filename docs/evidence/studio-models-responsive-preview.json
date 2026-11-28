@@ -1,0 +1,10 @@
+{
+  "sha": "4b5a947c2f80adc3460fca15db6fb7e113a622b5",
+  "argv": [
+    "bash",
+    "/tmp/studio-config-layout.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-models-responsive-preview.log.txt",
+  "sha256": "a225b6745bdb3dffe370fb84a1028a1222e0f3057bc6070f9e5e629466e32b8f"
+}

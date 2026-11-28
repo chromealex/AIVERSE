@@ -1,0 +1,10 @@
+{
+  "sha": "099450ccb6f252f2f1b70e9e86e9aace8c5a277d",
+  "argv": [
+    "bash",
+    "/tmp/select-docs.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-editor-select-docs.log.txt",
+  "sha256": "5c21ed8a9a697cc59ce56d4e1766fa448e36522f1b833c11fa9cf8dc2068ee26"
+}

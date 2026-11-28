@@ -1,5 +1,6 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include "PhysisNatureCommandSchema.h"
 #include "StudioPlayTools.h"
 #include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
@@ -272,7 +273,7 @@ std::vector<ProjectFileEdit> Project::stageDirtySave(){
     rulesDirty=false;manifestDirty=false;
     return edits;
 }
-bool Project::saveRules(std::string* err,const std::string& historyLabel) {
+bool Project::saveRules(std::string* err,const std::string& historyLabel,const ProjectFileEdit* newFile) {
     try {
         if(!savedManifestText||rulesOrigin.files.empty())
             throw std::runtime_error("Project documents must be loaded before saving rules");
@@ -292,6 +293,10 @@ bool Project::saveRules(std::string* err,const std::string& historyLabel) {
         const std::string noHistory;
         auto history=documentHistory;
         history.record(std::vector<ProjectFileEdit>(edits),historyRequiresReload?noHistory:historyLabel);
+        if (newFile) {
+            if (!newFile->createOnly) throw std::runtime_error("Expected a new project file");
+            edits.push_back(*newFile);
+        }
         applyHistoryTransaction(edits,std::move(history));
         savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
         rulesDirty=false;
@@ -487,11 +492,12 @@ std::string shellQuote(const std::string& s) {
 
 static std::string stamp(const char* fmt);
 
-void Workspace::startBuild(const std::string& target, const std::string& config, const std::string& extraArgs) {
+void Workspace::startBuild(const std::string& target, const std::string& config, const std::string& extraArgs, const std::string& outputDir) {
     if (project.dir.empty()) throw std::runtime_error("no game is open");
     if (map.dirty && !map.path.empty() && !building_) map.save(map.path, nullptr);
     const bool estimate = extraArgs.find("--estimate") != std::string::npos;   // the Build window's size estimate: one file, overwritten
-    startTool("--target " + target + " --config " + config + (extraArgs.empty() ? "" : " " + extraArgs), estimate ? "estimate" : "build-" + target, true);
+    startTool("--target " + target + " --config " + config + (extraArgs.empty() ? "" : " " + extraArgs) +
+              (outputDir.empty() ? "" : " --out " + shellQuote(outputDir)), estimate ? "estimate" : "build-" + target, true);
 }
 
 namespace {
@@ -517,10 +523,36 @@ void Workspace::appendBuildLog(const std::string& line) {
     buildLog_ += line + "\n";
 }
 
+Json Workspace::buildLogChunk(int64_t requestedFrom, int64_t expectedRun) {
+    std::lock_guard<std::mutex> lock(buildMutex_);
+    const bool running = building_.load();
+    const int runs = runCount_.load();
+    const int64_t run = int64_t(runs) + (running ? 1 : 0);
+    size_t from = size_t(std::clamp<int64_t>(requestedFrom, 0, int64_t(buildLog_.size())));
+    if (expectedRun >= 0 && expectedRun != run) from = 0;
+    const auto continuation = [&](size_t at) {
+        return (static_cast<unsigned char>(buildLog_[at]) & 0xc0) == 0x80;
+    };
+    while (from < buildLog_.size() && continuation(from)) ++from;
+    size_t end = std::min(buildLog_.size(), from + 256 * 1024);
+    while (end < buildLog_.size() && end > from && continuation(end)) --end;
+    Json out = Json::object();
+    out.set("from", Json::number(int64_t(from)));
+    out.set("next", Json::number(int64_t(end)));
+    out.set("size", Json::number(int64_t(buildLog_.size())));
+    out.set("text", Json::string(buildLog_.substr(from,end-from)));
+    out.set("run", Json::number(run));
+    out.set("runs", Json::number(int64_t(runs)));
+    out.set("running", Json::fromBool(running));
+    out.set("exitCode", Json::number(int64_t(buildRc_)));
+    out.set("label", Json::string(runLabel_));
+    out.set("logFile", Json::string(logFile_));
+    return out;
+}
+
 void Workspace::startCommand(const std::string& command, const std::string& shown, const std::string& label) {
     if (building_) throw std::runtime_error("a build is already running");
     if (buildThread_.joinable()) buildThread_.join();
-    building_ = true;
     std::string cmd = command + " 2>&1";
 #if defined(_WIN32)
     cmd = "\"" + cmd + "\"";   // cmd.exe strips the outer quotes of a command that starts with one
@@ -529,6 +561,7 @@ void Workspace::startCommand(const std::string& command, const std::string& show
     const fs::path logFile = fs::path(logsDir()) / (keep ? label + "-" + stamp("%Y%m%d-%H%M%S") + ".log" : "build-estimate.log");
     {
         std::lock_guard<std::mutex> lk(buildMutex_);
+        building_ = true;
         buildLog_ = shown + "\n";
         buildRc_ = 0;
         runLabel_ = label;
@@ -571,6 +604,7 @@ void Workspace::startCommand(const std::string& command, const std::string& show
         lf.close();
         std::error_code ec;
         if (keep) aiverse::pack::copyFileReplace(logFile, logFile.parent_path() / "build-last.log", ec);
+        std::lock_guard<std::mutex> lock(buildMutex_);
         ++runCount_;
         building_ = false;
     });
@@ -1002,15 +1036,27 @@ void Workspace::registerCoreOps() {
     auto addLinked=[this](const char* name,const char* desc,const char* sch,OpFn fn){
         registerOp({name,desc,schema(sch),std::move(fn),false,true});
     };
-    const auto noLinkedForest=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    const auto requireStudioLink=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    addLinked("view_wind","Control forest and nature in the private PHYSIS viewport.",windShowcaseSchema,requireStudioLink);
+    addLinked("physis_nature_preview","Inspect or control the PHYSIS nature preview in linked Studio.",
+        physisNatureCommandSchema,requireStudioLink);
+    for(const char* name:{"animation_runtime_status","rig_runtime_status"})
+        addLinked(name,"Read per-entity animation diagnostics from the running Studio play-test.",
+            R"({"type":"object","properties":{},"additionalProperties":false})",requireStudioLink);
+    for(const char* name:{"animation_editor_open","rig_editor_open"})
+        addLinked(name,"Open a saved or inline animation graph in the linked editor.",
+            R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"}}})",requireStudioLink);
+    for(const char* name:{"animation_editor_status","rig_editor_status"})
+        addLinked(name,"Read the linked editor draft, evaluated local pose and contact diagnostics.",
+            R"({"type":"object","properties":{},"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_forest_live","Read the completed local ECS forest snapshot for the current saved planetary map. No remote simulation, no mutation.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_scene_get","Read desired and rendered surface body and the current Scene orbit camera, with project/map/revision guards.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_scene_body_set","Select a surface body in linked Studio, or empty body for Auto. Changes only transient Scene state; wait for activeBody before camera edits.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision","body"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision","body"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_scene_camera_set","Set the current planetary Scene orbit camera in body-local metres and radians. Transient view only; no ECS or document mutation.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"},"target":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"distance":{"type":"number","minimum":2,"maximum":8192},"yaw":{"type":"number","minimum":-1000,"maximum":1000},"pitch":{"type":"number","minimum":-1.5707963,"maximum":1.5707963},"ortho":{"type":"boolean"}},"required":["expectedProject","mapPath","expectedRevision","body","target","distance","yaw","pitch","ortho"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"},"target":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"distance":{"type":"number","minimum":2,"maximum":8192},"yaw":{"type":"number","minimum":-1000,"maximum":1000},"pitch":{"type":"number","minimum":-1.5707963,"maximum":1.5707963},"ortho":{"type":"boolean"}},"required":["expectedProject","mapPath","expectedRevision","body","target","distance","yaw","pitch","ortho"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_asset_history","Read current linked Studio asset history and project identity.",
         R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{
             throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
@@ -1553,6 +1599,114 @@ void Workspace::registerCoreOps() {
             r.set("summary", str("Поле ресурса " + res));
             return r;
         });
+    add("map_area","Create, edit or remove a named map rectangle [x,z,width,height]. Renaming updates map triggers and wave routes.",
+        R"({"properties":{"action":{"enum":["create","edit","remove"]},"name":{"type":"string"},"newName":{"type":"string"},"rect":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4}},"required":["action","name"]})",
+        [this](const Json& p){
+            const auto action=p.getStr("action"),name=p.getStr("name"),next=p.getStr("newName",name);
+            if(action!="create" && action!="edit" && action!="remove")throw std::runtime_error("Unknown area action");
+            if(map.data.worldSpace || name.empty() || next.empty())throw std::runtime_error("Expected a named map area");
+            auto& extra=map.data.extra;
+            Json areas=extra["areas"];
+            if(areas.isNull())areas=Json::object();
+            if(!areas.isObject())throw std::runtime_error("The map areas block must be an object");
+            if(action=="create" ? areas.has(name) : !areas.has(name))throw std::runtime_error(action=="create"?"Area already exists":"Unknown area");
+            if(name!=next && areas.has(next))throw std::runtime_error("Area name already exists");
+            const auto& rect=p["rect"];
+            if(action!="remove" && (!rect.isArray() || rect.size()!=4 ||
+               !std::all_of(rect.items().begin(),rect.items().end(),[](const Json& n){return n.isNumber() && std::isfinite(n.toDouble());}) ||
+               rect[2].toDouble()<=0 || rect[3].toDouble()<=0))
+                throw std::runtime_error("Use four coordinates and a positive width and height");
+            if(action=="edit" && next==name && areas[name]==rect)return ok();
+            Json triggers,waves;
+            bool changedTriggers=false,changedWaves=false;
+            if(action!="create" && (action=="remove" || name!=next)){
+                const auto referenced=[&](const Json& row){return row.getStr("area")==name;};
+                bool ruleReference=false;
+                for(const auto& trigger:project.rulesJson["triggers"].items()){
+                    ruleReference|=referenced(trigger["event"]);
+                    for(const char* key:{"conditions","actions"})for(const auto& row:trigger[key].items())ruleReference|=referenced(row);
+                }
+                for(const auto& hazard:project.rulesJson["hazards"].items())ruleReference|=referenced(hazard);
+                if(ruleReference)throw std::runtime_error("Project rules reference this area. Update the rules first.");
+                auto updateRef=[&](Json* ref,bool& changed){
+                    if(!ref || !ref->isString() || ref->str()!=name)return;
+                    if(action=="remove")throw std::runtime_error("Remove this area's trigger or wave references first");
+                    *ref=Json::string(next);changed=true;
+                };
+                triggers=extra["triggers"];
+                for(auto& trigger:triggers.itemsMut()){
+                    if(auto* event=trigger.find("event"))updateRef(event->find("area"),changedTriggers);
+                    for(const char* key:{"conditions","actions"})if(auto* rows=trigger.find(key))
+                        for(auto& row:rows->itemsMut())updateRef(row.find("area"),changedTriggers);
+                }
+                waves=extra["waves"];
+                for(auto& wave:waves.itemsMut())if(auto* route=wave.find("route"))
+                    for(auto& point:route->itemsMut())updateRef(&point,changedWaves);
+            }
+            if(action=="remove" || name!=next)areas.erase(name);
+            if(action!="remove")areas.set(next,rect);
+            map.beginEdit();
+            extra.set("areas",std::move(areas));
+            if(changedTriggers)extra.set("triggers",std::move(triggers));
+            if(changedWaves)extra.set("waves",std::move(waves));
+            note({Change::Map,0,0,-1,-1,-1,"Map area: "+name});
+            return ok();
+        });
+    const auto regionLetter = [this](const Json& params) {
+        if (map.data.worldSpace || map.data.planet()) throw std::runtime_error("Regions require a flat map");
+        const auto letter = params.getStr("letter");
+        if (letter.size() != 1 || letter.front() < 'A' || letter.front() > 'Z')
+            throw std::runtime_error("Choose a region letter from A to Z");
+        return letter.front();
+    };
+    add("region_list", "List region names and exact cell counts, with a bounded coverage map for the selected letter.",
+        R"({"properties":{"letter":{"type":"string"}},"required":["letter"]})",
+        [this, regionLetter](const Json& params) {
+            const char selected = regionLetter(params);
+            const auto& d = map.data;
+            if (d.w <= 0 || d.h <= 0 || d.regions.size() != size_t(d.w) * d.h)
+                throw std::runtime_error("Region grid is unavailable");
+            const int stride = std::max(1, (std::max(d.w, d.h) + 95) / 96);
+            std::vector<std::string> coverage((d.h + stride - 1) / stride, std::string((d.w + stride - 1) / stride, '.'));
+            int counts[26]{};
+            for (int y = 0; y < d.h; ++y) {
+                for (int x = 0; x < d.w; ++x) {
+                    const char c = d.regions[d.idx(x, y)];
+                    if (c >= 'A' && c <= 'Z') ++counts[c - 'A'];
+                    if (c == selected) coverage[y / stride][x / stride] = '#';
+                }
+            }
+            Json entries = Json::array(), rows = Json::array();
+            for (char c = 'A'; c <= 'Z'; ++c) {
+                Json entry = Json::object();
+                entry.set("letter", str(std::string(1, c)));
+                const auto name = d.regionNames.find(c);
+                entry.set("name", str(name == d.regionNames.end() ? "" : name->second));
+                entry.set("cells", num(counts[c - 'A']));
+                entries.push(std::move(entry));
+            }
+            for (const auto& row : coverage) rows.push(str(row));
+            Json result = ok();
+            result.set("regions", entries); result.set("coverage", rows);
+            result.set("stride", num(stride)); result.set("width", num(d.w)); result.set("height", num(d.h));
+            return result;
+        });
+    add("region_name", "Set the display name for a region. An empty name clears the label and keeps painted cells.",
+        R"({"properties":{"letter":{"type":"string"},"name":{"type":"string"}},"required":["letter","name"]})",
+        [this, regionLetter](const Json& params) {
+            const char c = regionLetter(params);
+            if (!params["name"].isString()) throw std::runtime_error("Expected a region display name");
+            const auto name = params.getStr("name");
+            if (name.size() > 256) throw std::runtime_error("Region name exceeds 256 bytes");
+            auto& names = map.data.regionNames;
+            auto previous = names.find(c);
+            if (previous == names.end() ? name.empty() : previous->second == name) return ok();
+            map.beginEdit();
+            if (name.empty()) names.erase(c);
+            else names[c] = name;
+            note({Change::Map,0,0,-1,-1,-1,std::string("Region name: ") + c});
+            return ok();
+        });
     add("region_paint", "Paint a region (Northgard-style territory) with a letter (A-Z, '.' erases); optional display name.",
         (std::string(R"({"properties": {"letter": {"type": "string"}, "name": {"type": "string"}, )") + kShapeSchema + R"(}, "required": ["letter"]})").c_str(),
         [this](const Json& p) {
@@ -1687,22 +1841,40 @@ void Workspace::registerCoreOps() {
             r.set("summary", str(added ? "Дорога добавлена" : "Дорога удалена"));
             return r;
         });
-    add("player_set", "Change player N (1-based): name, team, faction, start [x,z] (faction start units spawn there), waves (scripted side), resources {id: amount}, "
+    add("player_set", "Change player N (1-based): name, team, faction, start [x,z] (faction start units spawn there) (on a planet: {body,face,x,y}) or null to clear it, waves (scripted side), resources {id: amount}, "
         "ai {preset: easy|normal|hard|rush|defender|economist, thinkTicks, aggression, any rules ai knob} for this slot's computer player ({} clears it).",
         R"({"properties": {"player": {"type": "integer"}, "name": {"type": "string"}, "team": {"type": "integer"}, "faction": {"type": "string"},
-            "start": {"type": "array", "items": {"type": "number"}}, "waves": {"type": "boolean"}, "resources": {"type": "object"},
+            "start": {"type": ["array","object","null"], "items": {"type": "number"}}, "waves": {"type": "boolean"}, "resources": {"type": "object"},
             "ai": {"type": "object"}}, "required": ["player"]})",
         [this](const Json& p) {
             int n = pi(p, "player");
+            if(n<1 || (n>int(map.data.players.size()) && n>16)) throw std::runtime_error("player out of range");
+            const auto& start=p["start"];
+            if(start.isObject()){
+                const int index=map.data.findBody(start.getStr("body"));
+                if(index<0 || !map.data.bodies[size_t(index)].surface()) throw std::runtime_error("Unknown starting surface");
+                const auto within=[](const Json& v,int limit){
+                    return v.isNumber() && v.toDouble()>=0 && v.toDouble()<=limit;
+                };
+                const int size=map.data.bodies[size_t(index)].faceSize;
+                if(!within(start["face"],5) || start["face"].toDouble()!=start["face"].integer() ||
+                   !within(start["x"],size) || !within(start["y"],size)) throw std::runtime_error("Invalid start on planet face");
+            }
             map.beginEdit();
             while (int(map.data.players.size()) < n && map.data.players.size() < 16)
                 map.data.players.push_back({"Player " + std::to_string(map.data.players.size() + 1), int(map.data.players.size() + 1)});
-            if (n < 1 || n > int(map.data.players.size())) throw std::runtime_error("player out of range");
             auto& pl = map.data.players[size_t(n - 1)];
             if (p.has("name")) pl.name = ps(p, "name");
             if (p.has("team")) pl.team = pi(p, "team");
             if (p.has("faction")) pl.faction = ps(p, "faction");
-            if (p.has("start")) { pl.hasStart = true; pl.startX = float(p["start"][0].toDouble()); pl.startZ = float(p["start"][1].toDouble()); }
+            if (p.has("start")) {
+                pl.hasStart=!start.isNull();
+                pl.startAt=start.isObject()?start:Json{};
+                if(pl.hasStart){
+                    pl.startX=float((start.isObject()?start["x"]:start[0]).toDouble());
+                    pl.startZ=float((start.isObject()?start["y"]:start[1]).toDouble());
+                }
+            }
             if (p.has("waves")) pl.waves = p.getBool("waves");
             if (p.has("ai")) {   // validated like the loader does (map players[i].ai)
                 game::parseAIPlayerRules(p["ai"], "players[" + std::to_string(n - 1) + "].ai");
@@ -1926,24 +2098,38 @@ void Workspace::registerCoreOps() {
 
     // ---------------------------------------------------------------- editor-only (implemented by the GUI)
     auto gui = [this](const char* name, const char* desc, const char* sch) {
-        Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true};
+        Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("Open HTML5 Studio and connect its agent link to use this tool"); }, true};
         registerOp(std::move(op));
     };
-    gui("view_screenshot", "Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
-        R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game"]}, "device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "clean":{"type":"boolean"}, "width":{"type":"integer"}, "height":{"type":"integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}})");
-    gui("view_focus", "Move the editor camera to look at x,y,z (y and distance optional).",
+    gui("view_screenshot", "HTML Studio captures its full main window by default (window: all). Game and PHYSIS capture their own visible native viewports. Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
+        R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game", "physis"]}, "device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "clean":{"type":"boolean"}, "width":{"type":"integer"}, "height":{"type":"integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}})");
+    gui("view_gizmos","Read or update Scene overlays for the local PHYSIS diagnostic heatmap, wind, fire spread, river flow, terrain slope, tree wind and erosion zones. Optional select is the map entity ID. Radius and spacing are metres. Use a non-clean Scene screenshot to capture overlays.",
+        R"({"properties":{"physisOutlines":{"type":"boolean"},"physisRadius":{"type":"integer","minimum":6,"maximum":24},"physisStride":{"type":"integer","minimum":1,"maximum":4},"physisLayer":{"type":"integer","minimum":0,"maximum":13},"physisHeatmap":{"type":"boolean"},"physisWind":{"type":"boolean"},"physisFire":{"type":"boolean"},"nereidFlow":{"type":"boolean"},"nereidAllWater":{"type":"boolean"},"terraSlope":{"type":"boolean"},"terraSlopeAtTarget":{"type":"boolean"},"terraTreeWind":{"type":"boolean"},"erosionZones":{"type":"boolean"},"radius":{"type":"number"},"spacing":{"type":"number"},"select":{"type":"string"}}})");
+    gui("view_ground","Read displayed ground heights in metres for world-space [x,z] points, in input order. Entity terrain maps sample terrain tile meshes with heightfield fallback.",
+        R"({"properties":{"points":{"type":"array","items":{"type":"array","minItems":2,"items":{"type":"number"}}}},"required":["points"]})");
+    gui("view_pick","Inspect a point in the visible Scene using normalized u,v coordinates from the top left. Returns hit, map entity index and entityId. HTML Studio also reports the picked document objectId. The current selection is preserved.",
+        R"({"properties":{"u":{"type":"number","minimum":0,"maximum":1},"v":{"type":"number","minimum":0,"maximum":1}},"required":["u","v"]})");
+    gui("view_focus", "Focus the visible Scene camera on x,y,z. On a planet, x,z are cells on the face under the center of the viewport. Height defaults to zero on planar maps. Distance is optional.",
         R"({"properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
-    gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
-        R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
-    gui("play_stop", "Stop the play-test and return to editing.", "{}");
+    addLinked("play_start","Launch the open map or client menu in the HTML Studio Game window.",
+        R"({"properties":{"speed":{"type":"number"},"human":{"type":"integer"},"device":{"type":"string"},"client":{"type":"boolean"}}})",requireStudioLink);
+    addLinked("play_stop", "Stop the Studio play-test and return to editing.", "{}",requireStudioLink);
     gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
-    gui("play_status", "Current play-test state: time, players, resources, units, result.", "{}");
+    addLinked("editor_select","Select map entities by docs with optional focus, inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})",requireStudioLink);
+    addLinked("geometry_stats","Read the last rendered Studio Scene geometry counters and completed GPU timings.","{}",requireStudioLink);
+    addLinked("editor_theme","Set Studio theme and accent.",R"({"properties":{"mode":{"type":"string","enum":["dark","light"]},"accent":{"type":"string","enum":["blue","violet","teal","orange"]}}})",requireStudioLink);
+    addLinked("editor_window","Open or close a panel, switch workspace or restore the layout.", R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})",requireStudioLink);
+    addLinked("world_regions_status","Read region ownership in the current preview or match.","{}",requireStudioLink);
+    addLinked("world_entities","List and group filtered objects in the edit or play world.",R"({"properties":{"filter":{"type":"string"},"group":{"type":"array","items":{"type":"string"}},"limit":{"type":"integer"}}})",requireStudioLink);
+    addLinked("world_entity","Inspect a world object by reference or map index.",R"({"properties":{"ref":{"type":"integer","minimum":1},"doc":{"type":"integer","minimum":0}}})",requireStudioLink);
+    addLinked("editor_windows","List HTML Studio panels and their open state.", "{}",requireStudioLink);
+    addLinked("play_status", "Current Studio play-test time, players, resources, units and result.", "{}",requireStudioLink);
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "
         "Filter by owner / type; at most 'limit' (default 200).",
         R"({"properties": {"owner": {"type": "integer"}, "type": {"type": "string"}, "limit": {"type": "integer"}}})");
     registerOp({"play_command", "Issue a player command in the running play-test, exactly like player input (the user sees it live). command: " +
         commandNames() + ". " + kCommandHelp, schema((std::string(R"({"properties": {)") + commandSchemaProps() + R"(}, "required": ["command"]})").c_str()),
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true});
+        [](const Json&) -> Json { throw std::runtime_error("Open HTML5 Studio and connect its agent link to use this tool"); }, true});
     gui("device_list", "Device presets for the simulator (phones, tablets, desktops).", "{}");
     gui("device_set", "Show the viewport in a device frame (resolution, notch/safe area, orientation) like a phone simulator. 'none' turns it off.",
         R"({"properties": {"device": {"type": "string"}, "orientation": {"type": "string", "enum": ["portrait", "landscape"]}}, "required": ["device"]})");

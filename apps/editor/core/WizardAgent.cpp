@@ -11,10 +11,15 @@
 #include "GameWizardImpl.h"
 
 #if !defined(_WIN32)
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <spawn.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+extern char** environ;
 #endif
 
 namespace fs = std::filesystem;
@@ -74,6 +79,7 @@ std::string findCli(const std::string& name) {
         bundled.insert(bundled.end(), found.rbegin(), found.rend());
     } else if (name == "codex") {
         for (const fs::path& app : {fs::path("/Applications/ChatGPT.app"), home / "Applications/ChatGPT.app", fs::path("/Applications/Codex.app")}) {
+            bundled.push_back(app / "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex");
             bundled.push_back(app / "Contents/Resources/codex-cli/bin/codex");
             bundled.push_back(app / "Contents/Resources/codex");
         }
@@ -81,7 +87,7 @@ std::string findCli(const std::string& name) {
     for (auto& b : bundled) if (exe(b)) return b.string();
     FILE* p = popen((loginShell() + " -ilc " + q("command -v " + name) + " 2>/dev/null </dev/null").c_str(), "r");
     std::string out;
-    if (p) { char buf[1024]; while (std::fgets(buf, sizeof buf, p)) out += buf; pclose(p); }
+    if (p) { char buf[1024]; while (p && std::fgets(buf, sizeof buf, p)) out += buf; pclose(p); }
     size_t nl = out.rfind('/');                                   // the last line that is a path
     if (nl != std::string::npos) {
         const size_t a = out.rfind('\n', nl) == std::string::npos ? 0 : out.rfind('\n', nl) + 1;
@@ -156,6 +162,7 @@ std::string wizardAgentTask(const WizardSpec& s, const std::string& dir, const s
 AgentRun::~AgentRun() {
     if (running_) stop();
     if (thread_.joinable()) thread_.join();
+    if (stopTimer_.joinable()) stopTimer_.join();
 }
 
 bool AgentRun::start(const std::string& clientId, const std::string& dir, const std::string& taskFile, const std::string& logFile, std::string* err,
@@ -167,6 +174,7 @@ bool AgentRun::start(const std::string& clientId, const std::string& dir, const 
 #else
     if (running_) { if (err) *err = "агент уже работает"; return false; }
     if (thread_.joinable()) thread_.join();
+    if (stopTimer_.joinable()) stopTimer_.join();
     const std::string cli = agentCliPath(clientId);
     if (cli.empty()) { if (err) *err = std::string(clientId == "codex" ? "codex" : "claude") + " не найден: установите CLI или скопируйте задание"; return false; }
     // the CLI's own folder first in PATH: npm-installed CLIs start through `env node`, which lives next to them
@@ -175,20 +183,59 @@ bool AgentRun::start(const std::string& clientId, const std::string& dir, const 
     if (clientId == "claude-code")
         inner = pathPrefix + q(cli) + " -p --output-format stream-json --verbose --allowedTools mcp__aiverse --max-turns 400 " + extraArgs + " < " + q(taskFile);
     else if (clientId == "codex")
-        inner = pathPrefix + q(cli) + " exec --full-auto - < " + q(taskFile);
+        inner = pathPrefix + q(cli) + " exec --skip-git-repo-check --sandbox read-only --ephemeral --json " + extraArgs + " - < " + q(taskFile);
     else { if (err) *err = "этот клиент нельзя запустить из редактора: скопируйте задание"; return false; }
+    const std::string cmd = "cd " + q(dir) + " && exec " + q(loginShell()) + " -lc " + q(inner);
+    char shell[] = "/bin/sh", option[] = "-c";
+    char* argv[] = {shell, option, const_cast<char*>(cmd.c_str()), nullptr};
+    int output[2];
+    if (::pipe(output) != 0) { if (err) *err = std::strerror(errno); return false; }
+    if (fcntl(output[0], F_SETFD, FD_CLOEXEC) < 0 || fcntl(output[1], F_SETFD, FD_CLOEXEC) < 0) {
+        if (err) *err = std::strerror(errno);
+        ::close(output[0]); ::close(output[1]);
+        return false;
+    }
+    posix_spawn_file_actions_t actions;
+    posix_spawnattr_t attributes;
+    int status = posix_spawn_file_actions_init(&actions);
+    const bool actionsReady = status == 0;
+    if (!status) status = posix_spawnattr_init(&attributes);
+    const bool attributesReady = status == 0;
+    if (!status) status = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
+    if (!status) status = posix_spawnattr_setpgroup(&attributes, 0);
+    if (!status) status = posix_spawn_file_actions_addclose(&actions, output[0]);
+    if (!status) status = posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO);
+    if (!status) status = posix_spawn_file_actions_adddup2(&actions, output[1], STDERR_FILENO);
+    if (!status) status = posix_spawn_file_actions_addclose(&actions, output[1]);
+    pid_t child = -1;
+    if (!status) status = ::posix_spawn(&child, shell, &actions, &attributes, argv, environ);
+    if (attributesReady) posix_spawnattr_destroy(&attributes);
+    if (actionsReady) posix_spawn_file_actions_destroy(&actions);
+    ::close(output[1]);
+    if (status) {
+        ::close(output[0]);
+        if (err) *err = std::strerror(status);
+        return false;
+    }
     client_ = clientId;
-    pidFile_ = taskFile + ".pid";
-    // sh records its pid, then becomes the login shell running the agent: stop() kills that process group
-    const std::string cmd = "cd " + q(dir) + " && sh -c " + q("echo $$ > " + q(pidFile_) + "; exec " + loginShell() + " -lc " + q(inner)) + " 2>&1";
     {
         std::lock_guard<std::mutex> lk(m_);
-        lines_.clear(); taken_ = 0; result_.clear();
+        childPid_ = child;
+        lines_.clear(); taken_ = 0; result_.clear(); session_.clear();
     }
     tools_ = 0; rc_ = 0;
     started_ = true;
     running_ = true;
-    thread_ = std::thread(&AgentRun::reader, this, cmd, logFile);
+    try {
+        thread_ = std::thread(&AgentRun::reader, this, output[0], logFile);
+    } catch (const std::system_error& error) {
+        ::close(output[0]);
+        ::kill(-child, SIGKILL);
+        while (waitpid(child, nullptr, 0) < 0 && errno == EINTR) {}
+        childPid_ = -1; running_ = false; started_ = false;
+        if (err) *err = error.what();
+        return false;
+    }
     return true;
 #endif
 }
@@ -199,16 +246,16 @@ void AgentRun::add(const std::string& line) {
     if (lines_.size() > 4000) { lines_.erase(lines_.begin(), lines_.begin() + 1000); taken_ = taken_ > 1000 ? taken_ - 1000 : 0; }
 }
 
-void AgentRun::reader(std::string cmd, std::string logFile) {
+void AgentRun::reader(int output, std::string logFile) {
 #if !defined(_WIN32)
     std::ofstream lf(logFile);
-    FILE* p = popen(cmd.c_str(), "r");
-    if (!p) { add("не удалось запустить агента"); rc_ = -1; running_ = false; return; }
+    FILE* p = fdopen(output, "r");
+    if (!p) { ::close(output); std::lock_guard<std::mutex> lock(m_); ::kill(-childPid_, SIGKILL); }
     std::string line;
     char buf[4096];
-    while (std::fgets(buf, sizeof buf, p)) {
+    while (p && std::fgets(buf, sizeof buf, p)) {
         line += buf;
-        if (line.back() != '\n' && line.size() < (1u << 20)) continue;
+        if (line.back() != '\n' && !std::feof(p) && line.size() < (1u << 20)) continue;
         lf << line; lf.flush();
         while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
         // Claude Code stream-json: assistant messages (text, tool_use), the final result
@@ -233,27 +280,66 @@ void AgentRun::reader(std::string cmd, std::string logFile) {
                     if (j.getBool("is_error")) lines_.push_back("ошибка агента: " + clip(result_, 400));
                 }
             } catch (...) { add(clip(line, 300)); }
+        } else if (client_ == "codex" && !line.empty() && line[0] == '{') {
+            try {
+                const auto event = Json::parse(line);
+                const auto type = event.getStr("type");
+                const auto& item = event["item"];
+                if (type == "item.completed" && item.getStr("type") == "agent_message") {
+                    const auto text = item.getStr("text");
+                    add(clip(text, 300));
+                    std::lock_guard<std::mutex> lock(m_);
+                    result_ = text;
+                } else if (type == "item.started" && item.getStr("type") == "mcp_tool_call") {
+                    ++tools_;
+                    add("→ " + item.getStr("tool"));
+                } else if (type == "error" || type == "turn.failed") {
+                    add("ошибка агента: " + clip(type == "error" ? event.getStr("message") : event["error"].getStr("message"), 400));
+                }
+            } catch (...) { add(clip(line, 300)); }
         } else if (!line.empty()) {
             add(clip(line, 300));
         }
         line.clear();
     }
-    int rc = pclose(p);
-    rc_ = (rc != -1 && WIFEXITED(rc)) ? WEXITSTATUS(rc) : rc;
-    std::error_code ec;
-    fs::remove(pidFile_, ec);
-    add(rc_ == 0 ? "агент закончил" : "агент остановлен (код " + std::to_string(int(rc_)) + ")");
+    if (p) fclose(p);
+    bool stopped = false;
+    // Keep the leader waitable until the stop timer and reader agree on ownership.
+    siginfo_t info{};
+    while (waitid(P_PID, childPid_, &info, WEXITED | WNOWAIT) < 0 && errno == EINTR) {}
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        stopped = stopTimer_.joinable();
+        if (stopped) ::kill(-childPid_, SIGKILL);
+        int status = 0;
+        int waited;
+        do { waited = waitpid(childPid_, &status, 0); } while (waited < 0 && errno == EINTR);
+        rc_ = waited < 0 ? -1 : WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+        childPid_ = -1;
+    }
+    finishedCv_.notify_all();
+    if (stopped) add("Stopped by user");
+    else add(rc_ == 0 ? "агент закончил" : "ошибка агента: код " + std::to_string(int(rc_)));
     running_ = false;
 #else
-    (void)cmd; (void)logFile;
+    (void)output; (void)logFile;
 #endif
 }
 
 void AgentRun::stop() {
 #if !defined(_WIN32)
-    const std::string pid = wiz::readText(pidFile_);
-    const int n = std::atoi(pid.c_str());
-    if (n > 1) { ::kill(-n, SIGTERM); ::kill(n, SIGTERM); }
+    std::lock_guard<std::mutex> lock(m_);
+    if (childPid_ <= 0 || stopTimer_.joinable()) return;
+    ::kill(-childPid_, SIGTERM);
+    try {
+        stopTimer_ = std::thread([this] {
+            std::unique_lock<std::mutex> wait(m_);
+            if (!finishedCv_.wait_for(wait, std::chrono::seconds(1), [this] { return childPid_ <= 0; }))
+                ::kill(-childPid_, SIGKILL);
+        });
+    } catch (const std::system_error&) {
+        ::kill(-childPid_, SIGKILL);
+    }
 #endif
 }
 

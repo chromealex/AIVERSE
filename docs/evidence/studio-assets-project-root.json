@@ -1,0 +1,10 @@
+{
+  "sha": "55e8405a3aaea5ad808c28fd5ee1ddc6b4f7b78f",
+  "argv": [
+    "bash",
+    "/tmp/project-dir-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-assets-project-root.log.txt",
+  "sha256": "086a47e67c841b018240686c615a51db3d5fece9d6e7aa8c0533dbbdf7609bcd"
+}

@@ -1,10 +1,12 @@
+import { MaterialRecipeFields, useMaterialRecipe } from './MaterialRecipeFields';
+import { revealProjectAsset } from '../assetNavigation';
 import { StudioDialog } from '../ui';
 import { copyText } from '../clipboard';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
-  FileAudio, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
+  FileAudio, SwatchBook, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
   Grid2X2, List, RefreshCw, Search, ChevronRight, Library, Upload, FolderPlus, X, Link2, Unlink, Trash2
 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
@@ -13,7 +15,8 @@ import type {
   StudioAssetConflictAction, StudioAssetTransferItem, StudioDependencyPage
 } from '../types';
 import AssetThumb from './AssetThumb';
-import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
+import ProjectDirectory, {absoluteChildPath} from './ProjectDirectory';
+import { assetKind, assetFolders, assetDisplayName, matchesAssetSearch, assetFileName, assetBreadcrumbs,
   childFolders, visibleAssetFiles, safeAssetPath } from '../assetTree';
 import type { AssetFolder, AssetKind } from '../assetTree';
 import './AssetsPanel.css';
@@ -37,6 +40,7 @@ function formatBytes(bytes:number):string{
 }
 function AssetIcon({kind,size=27}:{kind:AssetKind;size?:number}){
   switch(kind){
+    case 'material':return <SwatchBook size={size}/>;
     case 'image':return <FileImage size={size}/>;
     case 'model':return <Box size={size}/>;
     case 'audio':return <FileAudio size={size}/>;
@@ -131,6 +135,7 @@ function allFolders(catalog:StudioAssetList):AssetFolder[]{
 }
 /** Assets are always relative to project/content; no arbitrary JS filesystem IO. */
 export default function AssetsPanel({projectPath}:{projectPath:string}){
+  const [projectFiles,setProjectFiles]=useState(false);
   const [catalog,setCatalog]=useState<StudioAssetList>(EMPTY);
   const [folder,setFolder]=useState('');
   const [selected,setSelected]=useState<string|null>(null);
@@ -164,16 +169,27 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     }catch(e){if(request===referenceRequest.current)setMentions({...snapshot,graphError:String(e)});}
     finally{if(request===referenceRequest.current)setReferenceLoading(false);}
   };
+  const usageRequest=useRef(0);
+  const clearAssetFilters=useCallback(()=>{
+    ++usageRequest.current;
+    setSearch('');
+    setUnusedOnly(false);
+    setUnused(null);
+  },[]);
   const toggleUnused=async()=>{
+    const request=++usageRequest.current;
     if(unusedOnly){setUnusedOnly(false);return;}
-    try{const r=await invoke('studio.assetUsage',{});setUnused(new Set(r.unused??[]));setUnusedOnly(true);}
-    catch(e){setError(String(e instanceof Error?e.message:e))}
+    try{
+      const result=await invoke('studio.assetUsage',{});
+      if(request!==usageRequest.current)return;
+      setUnused(new Set(result.unused??[]));setUnusedOnly(true);
+    }catch(e){if(request===usageRequest.current)setError(String(e instanceof Error?e.message:e));}
   };
   const [mode,setMode]=useState<'grid'|'list'>('grid');
   const [menu,setMenu]=useState<{x:number;y:number;path:string;directory:boolean;background?:boolean}|null>(null);
   const [creatingMaterial,setCreatingMaterial]=useState(false);
   const [materialName,setMaterialName]=useState('');
-  const [materialPreset,setMaterialPreset]=useState<'matte'|'metal'|'glass'>('matte');
+  const materialRecipe=useMaterialRecipe();
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const [loading,setLoading]=useState(true);
@@ -212,7 +228,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
        typeof payload==='object' && 'token' in payload && 'items' in payload){
       const candidate=payload as StudioAssetTransferPlan;
       if(typeof candidate.token==='string' && Array.isArray(candidate.items)){
-        setError('');setMessage('');setPlan(candidate);
+        setProjectFiles(false);setError('');setMessage('');setPlan(candidate);
       }
     }
     if(event==='assets.importError' && payload &&
@@ -224,18 +240,30 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     window.addEventListener('studio:assets-changed',reload);
     return ()=>window.removeEventListener('studio:assets-changed',reload);
   },[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
+  useEffect(()=>{setProjectFiles(false);setFolder('');setSelected(null);setPinnedAssetGuid(null);clearAssetFilters();setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath,clearAssetFilters]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
-    const reveal=(event:Event)=>{
-      const path=(event as CustomEvent<{path?:unknown}>).detail?.path;
-      if(typeof path!=='string'||!path)return;
+    if(!projectPath)return;
+    const key='studio.assetToReveal:'+projectPath;
+    const selectPath=(path:unknown)=>{
+      if(typeof path!=='string'||!safeAssetPath(path))return;
+      if(localStorage.getItem(key)===path)localStorage.removeItem(key);
       const cut=path.lastIndexOf('/');
-      setSearch('');setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
+      setProjectFiles(false);clearAssetFilters();setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
     };
+    const reveal=(event:Event)=>{
+      const request=(event as CustomEvent<{project?:string;path?:unknown}>).detail;
+      if(!request?.project || request.project===projectPath)selectPath(request?.path ?? localStorage.getItem(key));
+    };
+    const onStorage=(event:StorageEvent)=>{if(event.key===key)selectPath(event.newValue);};
+    selectPath(localStorage.getItem(key));
     window.addEventListener('studio:reveal-asset',reveal);
-    return ()=>window.removeEventListener('studio:reveal-asset',reveal);
-  },[]);
+    window.addEventListener('storage',onStorage);
+    return ()=>{
+      window.removeEventListener('studio:reveal-asset',reveal);
+      window.removeEventListener('storage',onStorage);
+    };
+  },[projectPath,clearAssetFilters]);
   useEffect(()=>{
     let cancelled=false;
     setLoading(true);setError('');
@@ -252,9 +280,10 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const shownFolders=useMemo(()=>search.trim()?[]:childFolders(folders,folder),[folders,folder,search]);
   const shownFiles=useMemo(()=>{
     // "Unused" lists matching files of the whole project, wherever the folder is.
-    if(unusedOnly&&unused)return catalog.files.filter(f=>unused.has(f.path)&&(!search||f.path.toLowerCase().includes(search.toLowerCase())));
+    if(unusedOnly&&unused)return catalog.files.filter(f=>unused.has(f.path)&&(!search||matchesAssetSearch(f.path,search.trim().toLowerCase())));
     return visibleAssetFiles(catalog.files,folder,search);
   },[catalog.files,folder,search,unusedOnly,unused]);
+  const filtering=Boolean(search.trim()) || unusedOnly;
   const crumbs=useMemo(()=>assetBreadcrumbs(folder),[folder]);
   // Asset identities survive renames/moves; a pinned Import Settings panel
   // must follow GUID, never a stale path or a new external selection.
@@ -369,18 +398,22 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     onDrop:(event:DragEvent<HTMLElement>)=>dropInternal(event,target)
   });
 
-  const copyPath=(path:string)=>{
-    const text='content/'+path;
+  const copyPath=(path:string,absolute=false)=>{
+    const relative=path?'content/'+path:'content/';
+    const text=absolute?absoluteChildPath(projectPath,relative):relative;
     void copyText(text).then(ok=>ok?setMessage('Copied '+text):setError('Clipboard unavailable'));
   };
+  const startMaterial=()=>{setCreatingMaterial(true);setAddingFolder(false);setMaterialName('');};
   const createMaterial=async()=>{
     const name=materialName.trim();
-    if(!native||!projectPath||!name||busy)return;
+    if(!native||!projectPath||!name||busy||!materialRecipe.valid)return;
     setBusy(true);setError('');setMessage('');
     try{
-      await invoke('studio.materialCreate',{name,preset:materialPreset});
+      const library=await invoke('studio.materialCreate',{name,...materialRecipe.params});
       setCreatingMaterial(false);setMaterialName('');
-      setMessage('Created material "'+name+'" in materials.json');
+      const file=library.files?.[name];
+      if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
+      reload();setMessage(file?'Created '+file:'Material created.');
     }catch(e){setError(String(e instanceof Error?e.message:e))}
     finally{setBusy(false)}
   };
@@ -388,18 +421,27 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const backgroundItems=():StudioMenuItem[]=>[
     {id:'folder',label:'Create Folder',icon:<FolderPlus size={13}/>,disabled:!native||!projectPath||busy,onSelect:()=>setAddingFolder(true)},
     {id:'material',label:'Create Material…',icon:<Library size={13}/>,disabled:!native||!projectPath||busy,
-      onSelect:()=>{setCreatingMaterial(true);setMaterialName('')}},
+      onSelect:startMaterial},
     {id:'import',label:'Import Assets…',icon:<Upload size={13}/>,separator:true,disabled:!native||!projectPath||busy,onSelect:()=>void externalImport()},
     {id:'copy',label:'Copy Folder Path',icon:<Search size={13}/>,separator:true,onSelect:()=>copyPath(folder)},
+    {id:'copy-absolute',label:'Copy Absolute Folder Path',disabled:!native,onSelect:()=>copyPath(folder,true)},
     {id:'reload',label:'Reload',icon:<RefreshCw size={13}/>,onSelect:reload},
   ];
+  const openMaterial=(path:string)=>{
+    setSelected(path);
+    localStorage.setItem('studio.materialToOpen:'+projectPath,'content/'+path);
+    window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'materials'}));
+    window.dispatchEvent(new Event('studio:open-material'));
+  };
   const menuItems=(target:{path:string;directory:boolean}):StudioMenuItem[]=>[
+    ...(!target.directory&&target.path.endsWith('.material.json')?[{id:'edit-material',label:'Edit Material',onSelect:()=>openMaterial(target.path)}]:[]),
     target.directory
       ?{id:'open',label:'Open Folder',icon:<FolderOpen size={13}/>,onSelect:()=>goTo(target.path)}
       :{id:'settings',label:'Import Settings',icon:<Library size={13}/>,disabled:!native,onSelect:()=>setSelected(target.path)},
     {id:'delete',label:'Move to Trash…',disabled:!native||!projectPath||busy,onSelect:()=>void reviewDelete(target.path)},
     {id:'rename',label:'Rename…',disabled:!native||!projectPath||busy,onSelect:()=>{setRenameTarget(target.path);setRenameName(assetFileName(target.path));}},
     {id:'copy',label:'Copy Path',icon:<Search size={13}/>,onSelect:()=>copyPath(target.path)},
+    {id:'copy-absolute',label:'Copy Absolute Path',disabled:!native,onSelect:()=>copyPath(target.path,true)},
     {id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
       onSelect:()=>void findReferences(target.path)},
     {id:'folder',label:'New Folder Here',icon:<FolderPlus size={13}/>,separator:true,disabled:!native||!projectPath||busy,
@@ -414,10 +456,15 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     setMenu({x:event.clientX,y:event.clientY,path,directory});
   };
 
+  if(projectFiles && projectPath)return <ProjectDirectory key={projectPath} project={projectPath} onContent={()=>{goTo('');setProjectFiles(false);}}/>;
   return <section className="studio-assets" aria-label="Project Assets"
       data-content-drop-root="true" data-content-drop-target={folder}>
     <div className="studio-assets-toolbar">
       <div className="studio-assets-breadcrumb" aria-label="Asset location">
+        {native&&projectPath&&<span className="studio-assets-crumb">
+          <button type="button" aria-label="Browse project files" disabled={busy||!!plan} onClick={()=>setProjectFiles(true)}>Project</button>
+          <ChevronRight size={13} aria-hidden="true"/>
+        </span>}
         {crumbs.map((part,index)=><span className="studio-assets-crumb" key={part.path}>
           {index>0&&<ChevronRight size={13} aria-hidden="true"/>}
           <button type="button" title={part.path?'content/'+part.path:'content/ root'}
@@ -439,7 +486,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
         title="New folder in content" aria-label="Create content folder"><FolderPlus size={16}/></button>
       <button type="button" className="studio-assets-tool-action"
         disabled={!native||!projectPath||busy} onClick={()=>void externalImport()}
-        title="Import files or folders" aria-label="Import into content"><Upload size={16}/></button>
+        title="Import into the current folder" aria-label="Import into content"><Upload size={16}/></button>
       <button type="button" className="studio-assets-tool-action" disabled={!native||!projectPath||busy}
         onClick={()=>setTrashOpen(true)} title="Recover deleted assets and previous versions" aria-label="Open asset Trash"><Trash2 size={16}/></button>
       <div className="studio-assets-views" role="group" aria-label="Asset layout">
@@ -479,18 +526,17 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <button type="submit" disabled={!renameName.trim()||busy||renameName.trim()===assetFileName(renameTarget)}>Review</button>
       <button type="button" disabled={busy} onClick={()=>setRenameTarget(null)}>Cancel</button>
     </form>}
-    {creatingMaterial&&<form className="studio-assets-create-folder" onSubmit={event=>{
+    {creatingMaterial&&<form className="studio-assets-create-folder studio-assets-material-form" onSubmit={event=>{
       event.preventDefault();void createMaterial();
     }}>
-      <Library size={13}/><span>New material in materials.json</span>
+      <header><Library size={13}/>New material in content/materials</header>
+      <div className="studio-assets-material-fields"><label>Name
       <input autoFocus aria-label="New material name" value={materialName}
-        onChange={event=>setMaterialName(event.target.value)} placeholder="Material name"/>
-      <select aria-label="Material preset" value={materialPreset}
-        onChange={event=>setMaterialPreset(event.target.value as 'matte'|'metal'|'glass')}>
-        <option value="matte">Matte</option><option value="metal">Metal</option><option value="glass">Glass</option>
-      </select>
-      <button type="submit" disabled={!materialName.trim()||busy}>Create</button>
-      <button type="button" onClick={()=>setCreatingMaterial(false)}>Cancel</button>
+        onChange={event=>setMaterialName(event.target.value)} placeholder="Material name"/></label>
+      <MaterialRecipeFields recipe={materialRecipe} busy={busy}/></div>
+      <footer>
+      <button type="submit" disabled={!materialName.trim()||busy||!materialRecipe.valid}>Create</button>
+      <button type="button" onClick={()=>setCreatingMaterial(false)}>Cancel</button></footer>
     </form>}
     {message&&<div className="studio-assets-status" role="status">{message}</div>}
     {error&&<div className="studio-assets-status studio-assets-error" role="alert">{error}</div>}
@@ -523,9 +569,16 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
           shownFiles.length===0&&shownFolders.length===0?
             <div className="studio-assets-empty">
               <Folder size={26}/>
-              <strong>{projectPath?(search||folder?'No matching assets':'content/ is empty'):'Open a project'}</strong>
-              <p>{projectPath?'Import assets or drag files here from the Finder.':
-                'Assets appear here when an AIVERSE project is open.'}</p>
+              <strong>{!projectPath?'Open a project':filtering?'No matching assets':folder?'This folder is empty':'content/ is empty'}</strong>
+              {!projectPath ? <p>Assets appear here when an AIVERSE project is open.</p>
+                : filtering ? <button type="button" className="studio-assets-empty-action"
+                    onClick={clearAssetFilters}>Clear filters</button>
+                : native ? <div className="studio-assets-empty-actions">
+                    {!folder&&<button type="button" className="studio-assets-empty-action" disabled={busy||!!plan||creatingMaterial}
+                      onClick={startMaterial}>Create material…</button>}
+                    <button type="button" className="studio-assets-empty-action" disabled={busy||!!plan}
+                    onClick={()=>void externalImport()}>Import assets…</button></div>
+                : <p>Open a project in Studio to import assets.</p>}
             </div>:
             <div className={'studio-assets-items studio-assets-items--'+mode} role="list">
               {shownFolders.map(entry=>
@@ -545,12 +598,20 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
                   onDragStart={e=>dragStart(e,asset.path)}
                   className={'studio-assets-item'+(selected===asset.path?' active':'')}
                   data-kind={kind} aria-selected={selected===asset.path}
+                  onDoubleClick={()=>{if(asset.path.endsWith('.material.json'))openMaterial(asset.path);}}
+                  onKeyDown={event=>{
+                    if(event.key==='Enter' && !event.repeat && asset.path.endsWith('.material.json')){
+                      event.preventDefault();event.stopPropagation();openMaterial(asset.path);
+                    }
+                  }}
                   title={'content/'+asset.path} onClick={()=>setSelected(asset.path)}
                   onContextMenu={event=>openMenu(event,asset.path,false)}>
                   <span className="studio-assets-icon">{mode==='grid' && (kind==='model'||kind==='image')
                     ? <AssetThumb path={'content/'+asset.path} fallback={<AssetIcon kind={kind} size={24}/>}/>
                     : <AssetIcon kind={kind} size={mode==='grid'?24:14}/>}</span>
-                  <span className="studio-assets-name">{assetFileName(asset.path)}</span>
+                  <span className="studio-assets-name">{kind==='material' && mode==='grid'
+                    ? assetDisplayName(asset.path).slice(0,-'.material.json'.length) : assetDisplayName(asset.path)}</span>
+                  {kind==='material' && mode==='grid' && <small className="studio-assets-type">Material</small>}
                   <span className="studio-assets-meta">{formatBytes(asset.bytes)}</span>
                 </button>;
               })}
@@ -559,10 +620,11 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       {selectedAsset&&native&&<AssetImportSettings key={selectedAsset.guid||selectedAsset.path}
         asset={selectedAsset} refreshToken={refreshToken} locked={pinnedAssetGuid!==null}
         onToggleLock={toggleAssetPin} onClose={()=>{setSelected(null);setPinnedAssetGuid(null)}}
-        onSaved={reload} onError={setError}/>}
+        onSaved={reload} onError={setError} onOpenMaterial={openMaterial}/>}
     </div>
     <footer className="studio-assets-footer">
-      <span>{catalog.files.length} assets</span>
+      {selected?.endsWith('.material.json')&&(!native||selectedAsset?.path!==selected)&&<button onClick={()=>openMaterial(selected)}>Edit material</button>}
+      <span>{catalog.files.length} {catalog.files.length===1?'asset':'assets'}</span>
       <span className="studio-assets-current">{selected?
         'content/'+selected:search?'Search in content/':folder?'content/'+folder:'content/'}</span>
     </footer>

@@ -9,3 +9,10 @@ export function shortcutKey(event: { code?: string; key: string }): string {
   if (/^Digit[0-9]$/.test(code)) return code.slice(5);
   return event.key.toLowerCase();
 }
+
+/** Display the same primary modifier used by the desktop shortcut handlers. */
+export function menuShortcut(key: string, shift = false, platform = globalThis.navigator?.platform ?? ''): string {
+  return /Mac|iPhone|iPad|iPod/i.test(platform)
+    ? (shift ? '⇧⌘' : '⌘') + key
+    : (shift ? 'Ctrl+Shift+' : 'Ctrl+') + key;
+}

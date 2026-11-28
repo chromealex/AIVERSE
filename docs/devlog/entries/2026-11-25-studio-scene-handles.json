@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-scene-handles",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "5eeca95af",
+  "author": null,
+  "links": [],
+  "title": "Масштаб и поворот коллайдера в Scene",
+  "titleEn": "Collider scale and rotation in Scene",
+  "summary": "При виде сверху центральная ручка меняет размер коллайдера по трём осям.",
+  "summaryEn": "The center handle scales the entire collider in the top view.",
+  "body": [
+    "Выберите коллайдер и потяните за центр инструмента масштаба. Для поворота переключитесь на Rotate и потяните за кольцо."
+  ],
+  "bodyEn": [
+    "Select a collider and drag the center of the scale tool. Switch to Rotate and drag the ring to change yaw."
+  ],
+  "verified": "В macOS Studio проверены оба жеста, Undo, Redo и карта после сохранения.",
+  "verifiedEn": "Verified both drags, Undo, Redo and the complete saved map in macOS Studio.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-scene-handles/oriented-scene.png",
+      "caption": "Коллайдер после правки в Scene",
+      "captionEn": "Collider after editing in Scene"
+    }
+  ]
+}

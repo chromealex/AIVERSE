@@ -1,11 +1,128 @@
 // Shared GUI/MCP authoring; never mutates the live simulation.
 #include "Workspace.h"
+#include "PhysisDiagnosticFrame.h"
+#include "apps/editor/PhysisDiagnosticDemo.h"
+#include "engine/physis/PhysisDebugPalette.h"
 #include "apps/editor/PhysisAuthoring.h"
 #include <limits>
 #include <stdexcept>
 
 namespace aiverse::editor {
 namespace {
+struct DiagnosticDemo {
+    uint64_t projectLifetime = 0;
+    std::unique_ptr<World> world;
+};
+
+int diagnosticInteger(const Json& p, const char* key, int fallback, int low, int high) {
+    if (!p.has(key)) return fallback;
+    const Json& v = p[key];
+    const auto n = v.integer(int64_t(low) - 1);
+    if (!v.isNumber() || v.numberLiteral().find_first_of(".eE") != std::string::npos || n < low || n > high)
+        throw std::invalid_argument(std::string("Invalid diagnostic ") + key);
+    return static_cast<int>(n);
+}
+
+using namespace physis;
+DiagnosticRequest diagnosticArea(const Json& params) {
+    DiagnosticRequest req;
+    req.layer = static_cast<DiagnosticLayer>(diagnosticInteger(params,"layer",0,0,13));
+    req.width = req.height = diagnosticInteger(params,"size",32,8,64);
+    req.stride = diagnosticInteger(params,"stride",1,1,8);
+    req.originX = diagnosticInteger(params,"centerX",0,-1000000,1000000) - req.width/2;
+    req.originZ = diagnosticInteger(params,"centerZ",0,-1000000,1000000) - req.height/2;
+    return req;
+}
+
+Json readCell(const World& world, int x, int z) {
+    Json result = Json::object();
+    result.set("active",Json::fromBool(true));
+    result.set("tick",Json::number(int64_t(world.resourceConst<State>()->tick)));
+    NatureFieldSample sample;
+    const bool available = samplePhysisCell(world,x,z,sample);
+    result.set("available", Json::fromBool(available));
+    if (available) {
+        auto vector = [](Vec3 v) {
+            Json out = Json::array();
+            for (auto n : {v.x,v.y,v.z}) out.push(Json::number(n.toDouble(),6));
+            return out;
+        };
+        result.set("wind",vector(sample.windVelocity));
+        result.set("gravity",vector(sample.gravityAcceleration));
+    }
+    return result;
+}
+
+Json readFrame(const World& world, const DiagnosticRequest& req, DebugPalette palette) {
+    Json result = Json::object();
+    result.set("active",Json::fromBool(true));
+    DiagnosticRaster raster;
+    const bool ok = diagnosticNeeds3DField(req.layer)
+        ? sampleDiagnosticRasterIndexed(FieldSpatialIndex(world),req,raster)
+        : sampleDiagnosticRaster(world,req,raster);
+    if (!ok) throw std::runtime_error("PHYSIS could not sample the diagnostic area");
+    result.set("tick",Json::number(int64_t(raster.tick)));
+    result.set("width",Json::number(int64_t(raster.width)));
+    result.set("height",Json::number(int64_t(raster.height)));
+    result.set("originX",Json::number(int64_t(raster.originX)));
+    result.set("originZ",Json::number(int64_t(raster.originZ)));
+    result.set("stride",Json::number(int64_t(raster.stride)));
+    result.set("available",Json::number(int64_t(raster.sampleCount)));
+    Json colors = Json::array(), values = Json::array(), rings = Json::array();
+    for (size_t i = 0; i < raster.valid.size(); ++i) {
+        const auto c = diagnosticColor(raster,i,palette);
+        colors.push(Json::number(int64_t((c.r << 16) | (c.g << 8) | c.b)));
+        values.push(raster.valid[i] ? Json::number(Fixed::fromRaw(raster.rawValues[i]).toDouble(),6) : Json{});
+    }
+    const auto* state = world.resourceConst<State>();
+    auto ring = [&](const char* kind, Vec3 center, Fixed radius) {
+        const double metres = state->settings.cellSizeMeters;
+        Json row = Json::object();
+        row.set("kind",Json::string(kind));
+        row.set("x",Json::number((center.x.toDouble()/metres-raster.originX)/raster.stride));
+        row.set("z",Json::number((center.z.toDouble()/metres-raster.originZ)/raster.stride));
+        row.set("radius",Json::number(radius.toDouble()/(metres*raster.stride)));
+        rings.push(std::move(row));
+    };
+    world.eachExistingConst<WindZone>([&](Entity,const WindZone& z){ring("Wind",z.center,z.radiusMeters);});
+    world.eachExistingConst<StormEvent>([&](Entity,const StormEvent& s){
+        if (stormActive(s,state->tick)) ring(s.kind==StormKind::Tornado?"Tornado":"Hurricane",s.center,s.outerRadiusMeters);
+    });
+    world.eachExistingConst<GravityField>([&](Entity,const GravityField& f){if(f.enabled) ring("Gravity",f.center,f.radiusMeters);});
+    result.set("colors",std::move(colors));
+    result.set("values",std::move(values));
+    result.set("rings",std::move(rings));
+    return result;
+}
+
+Json inspectDemo(DiagnosticDemo& demo, uint64_t lifetime, const Json& params) {
+    using namespace physis;
+    const auto action = params["action"].str();
+    if (action != "reset" && action != "view" && action != "step" && action != "step60" && action != "probe")
+        throw std::invalid_argument("Expected reset, view, step, step60 or probe");
+    const auto req = diagnosticArea(params);
+    const auto palette = static_cast<DebugPalette>(diagnosticInteger(params,"palette",0,0,2));
+    if (demo.projectLifetime != lifetime) {
+        demo.world.reset();
+        demo.projectLifetime = lifetime;
+    }
+    if (action == "probe" && (!params.has("cellX") || !params.has("cellZ")))
+        throw std::invalid_argument("A probe requires cellX and cellZ");
+    if (action == "reset") demo.world = makePhysisDiagnosticDemo();
+    Json result = Json::object();
+    result.set("active",Json::fromBool(bool(demo.world)));
+    if (!demo.world) return result;
+    if (action == "probe") {
+        const int x = diagnosticInteger(params,"cellX",0,INT32_MIN,INT32_MAX);
+        const int z = diagnosticInteger(params,"cellZ",0,INT32_MIN,INT32_MAX);
+        return readCell(*demo.world,x,z);
+    }
+    const int ticks = action == "step" ? 1 : action == "step60" ? 60 : 0;
+    for (int i = 0; i < ticks; ++i)
+        advanceEnvironmentWithStormsAndDisasters(*demo.world, FloodMode::ExternalAuthority);
+    return readFrame(*demo.world,req,palette);
+}
+
 void validateConfig(const Json& config) {
     if (config.isNull()) return; // explicit removal
     std::string error;
@@ -18,6 +135,12 @@ const Json& requiredConfig(const Json& p) {
     if (!p.has("config")) throw std::invalid_argument("config is required; null explicitly removes PHYSIS");
     return p["config"];
 }
+void requireRevision(const Workspace& w,const Json& p) {
+    const auto& expected = p["expectedRevision"];
+    if (!expected.isNumber() || expected.numberLiteral().find_first_of(".eE") != std::string::npos ||
+        expected.integer(-1)<0 || uint64_t(expected.integer(-1)) != uint64_t(w.map.revision))
+        throw std::invalid_argument("PHYSIS document revision mismatch; read physis_get again");
+}
 Json snapshot(const Workspace& w) {
     Json r = Json::object();
     r.set("ok", Json::fromBool(true));
@@ -26,12 +149,101 @@ Json snapshot(const Workspace& w) {
     r.set("liveApplied", Json::fromBool(false));
     return r;
 }
+double groupNumber(const Json& value) {
+    if (!value.isNumber() || !std::isfinite(value.toDouble()))
+        throw std::invalid_argument("Expected a finite transform value");
+    return value.toDouble();
+}
+physis_authoring::FieldPivot groupPoint(const Json& value) {
+    if (!value.isArray() || value.size()!=3) throw std::invalid_argument("Expected three coordinates");
+    return {groupNumber(value[0]),groupNumber(value[1]),groupNumber(value[2])};
+}
+
+Json editZoneGroup(Workspace& w,const Json& p) {
+    using namespace physis_authoring;
+    requireRevision(w,p);
+    const Json& list=p["ids"];
+    if (!list.isArray() || list.size()==0 || list.size()>2048) throw std::invalid_argument("Select 1 to 2048 zones");
+    std::vector<std::string> ids;
+    for (const auto& item:list.items()) {
+        if (!item.isString() || item.str().empty()) throw std::invalid_argument("Invalid zone ID");
+        ids.push_back(item.str());
+    }
+    const auto before=w.map.revision;
+    const auto action=p.getStr("action");
+    const auto& config=read(w.map);
+    bool ok=false;
+    std::string error;
+    if (action=="move") {
+        const auto offset=groupPoint(p["offset"]);
+        std::set<std::string> selected(ids.begin(),ids.end());
+        std::vector<FieldPosition> positions;
+        for (const auto* key:{"windZones","storms","gravityFields"}) {
+            for (const auto& field:config[key].items()) {
+                auto id=field.getStr("id");
+                if (!selected.count(id)) continue;
+                const auto pos=groupPoint(field["center"]);
+                positions.push_back({id,pos.x+offset.x,pos.y+offset.y,pos.z+offset.z});
+            }
+        }
+        if (positions.size()!=ids.size()) throw std::invalid_argument("Unknown or duplicate selected zone");
+        ok=moveFields(w.map,positions,true,&error);
+    } else if (action=="transform") {
+        const std::map<std::string,FieldPivotMode> modes={{"active",FieldPivotMode::Active},{"mean",FieldPivotMode::Median},
+            {"bounds",FieldPivotMode::BoundsCenter},{"origin",FieldPivotMode::WorldOrigin},{"custom",FieldPivotMode::Custom}};
+        const auto mode=modes.find(p.getStr("pivot"));
+        if (mode==modes.end()) throw std::invalid_argument("Choose a transform pivot");
+        const double angle=groupNumber(p["yaw"]),scale=groupNumber(p["scale"]);
+        FieldPivot pivot,custom;
+        if (mode->second==FieldPivotMode::Custom) custom=groupPoint(p["point"]);
+        ok=computeFieldPivot(config,ids,ids.front(),mode->second,custom,pivot,&error) &&
+           transformFields(w.map,ids,pivot.x,pivot.y,pivot.z,angle,scale,&error);
+    } else if (action=="duplicate") {
+        std::vector<std::string> copies;
+        ok=duplicateFields(w.map,ids,0,0,0,copies,&error);
+        ids=std::move(copies);
+    } else if (action=="remove") {
+        ok=removeFields(w.map,ids,&error);
+        ids.clear();
+    } else throw std::invalid_argument("Unknown zone group action");
+    if (!ok) throw std::invalid_argument(error);
+    Json result=snapshot(w),selection=Json::array();
+    for (const auto& id:ids) selection.push(Json::string(id));
+    result.set("ids",std::move(selection));
+    result.set("changed",Json::fromBool(before!=w.map.revision));
+    if (before!=w.map.revision) {
+        Change change;change.kind=Change::Map;change.text="PHYSIS zone group updated";w.note(change);
+    }
+    return result;
+}
+
+}
+Json readPhysisGameFrame(const World* world, const Json& params) {
+    const auto area = diagnosticArea(params);
+    const auto palette = static_cast<DebugPalette>(diagnosticInteger(params,"palette",0,0,2));
+    if (params.has("cellX") != params.has("cellZ"))
+        throw std::invalid_argument("Supply both cell coordinates");
+    if (!world || !world->resourceConst<State>()) {
+        Json out = Json::object();
+        out.set("active",Json::fromBool(false));
+        return out;
+    }
+    auto frame = readFrame(*world,area,palette);
+    if (params.has("cellX")) {
+        const int x = diagnosticInteger(params,"cellX",0,INT32_MIN,INT32_MAX);
+        const int z = diagnosticInteger(params,"cellZ",0,INT32_MIN,INT32_MAX);
+        frame.set("cell",readCell(*world,x,z));
+    }
+    return frame;
 }
 void registerPhysisOps(Workspace& ws) {
     auto add = [&ws](const char* name, const char* description, const char* schema, Workspace::OpFn fn) {
         ws.registerOp({name, description, Json::parse(schema), std::move(fn), false});
     };
     auto* w = &ws;
+    auto demo = std::make_shared<DiagnosticDemo>();
+    add("physis_demo", "Reset, step or sample the private PHYSIS diagnostic world. Returns palette colors, measurements and volume outlines.", R"({"properties":{"action":{"type":"string","enum":["view","reset","step","step60","probe"]},"cellX":{"type":"integer"},"cellZ":{"type":"integer"},"layer":{"type":"integer","minimum":0,"maximum":13},"palette":{"type":"integer","minimum":0,"maximum":2},"stride":{"type":"integer","minimum":1,"maximum":8},"size":{"type":"integer","minimum":8,"maximum":64},"centerX":{"type":"integer","minimum":-1000000,"maximum":1000000},"centerZ":{"type":"integer","minimum":-1000000,"maximum":1000000}},"required":["action"],"additionalProperties":false})",
+        [w,demo](const Json& p){ return inspectDemo(*demo,w->projectLifetime(),p); });
     add("physis_get", "Read the open map's authored PHYSIS config and document revision. Includes a default config for new maps. Not live simulation state.",
         R"({"properties":{},"additionalProperties":false})", [w](const Json&) {
             auto r = snapshot(*w);
@@ -43,13 +255,54 @@ void registerPhysisOps(Workspace& ws) {
             validateConfig(requiredConfig(p));
             Json r=Json::object(); r.set("ok",Json::fromBool(true)); return r;
         });
+    add("physis_zone_group","Transform, translate, duplicate or delete selected map zones as one validated Undo operation.",
+        R"({"properties":{"action":{"type":"string","enum":["transform","move","duplicate","remove"]},"ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":2048},"expectedRevision":{"type":"integer","minimum":0},"offset":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"pivot":{"type":"string","enum":["mean","bounds","active","origin","custom"]},"point":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"yaw":{"type":"number"},"scale":{"type":"number"}},"required":["action","ids","expectedRevision"],"additionalProperties":false})",
+        [w](const Json& p){return editZoneGroup(*w,p);});
+    add("physis_zone", "Create, duplicate, patch or remove one authored map zone with Undo and revision checking.",
+        R"({"properties":{"action":{"type":"string","enum":["add","duplicate","edit","remove"]},"kind":{"type":"string","enum":["wind","storm","gravity"]},"id":{"type":"string"},"patch":{"type":"object"},"expectedRevision":{"type":"integer","minimum":0}},"required":["action","expectedRevision"],"additionalProperties":false})",
+        [w](const Json& p) {
+            requireRevision(*w,p);
+            const auto before=w->map.revision;
+            auto action=p.getStr("action"), id=p.getStr("id");
+            std::string error;
+            bool ok=false;
+            if (action=="add") {
+                using Kind=physis::AuthoredFieldKind;
+                const auto kind=p.getStr("kind");
+                if (kind!="wind" && kind!="storm" && kind!="gravity") throw std::invalid_argument("Choose a zone type");
+                ok=physis_authoring::addField(w->map,kind=="wind"?Kind::Wind:kind=="storm"?Kind::Storm:Kind::Gravity,0,0,0,id,&error);
+            } else if (action=="duplicate") {
+                std::vector<std::string> added;
+                ok=physis_authoring::duplicateFields(w->map,{id},0,0,0,added,&error);
+                if (ok) id=added.front();
+            } else if (action=="remove") {
+                ok=physis_authoring::removeField(w->map,id,&error);
+                id.clear();
+            } else if (action=="edit") {
+                std::string collection; size_t index=0; Json entry;
+                if (!physis_authoring::findField(physis_authoring::read(w->map),id,collection,index,&entry))
+                    throw std::invalid_argument("PHYSIS zone no longer exists");
+                const auto& patch=p["patch"];
+                if (!patch.isObject() || patch.has("id")) throw std::invalid_argument("Supply zone properties with an unchanged ID");
+                for (const auto& [key,value]:patch.members()) {
+                    if (value.isNull()) entry.erase(key);
+                    else entry.set(key,value);
+                }
+                ok=physis_authoring::replaceField(w->map,id,entry,&error);
+            } else throw std::invalid_argument("Unknown PHYSIS zone action");
+            if (!ok) throw std::invalid_argument(error);
+            auto r=snapshot(*w);
+            r.set("id",Json::string(id));
+            r.set("changed",Json::fromBool(before!=w->map.revision));
+            if (before!=w->map.revision) {
+                Change change;change.kind=Change::Map;change.text="PHYSIS zones updated";w->note(change);
+            }
+            return r;
+        });
     add("physis_set", "Atomically replace the open map's PHYSIS config with Undo/Redo. Read physis_get first and supply its revision as expectedRevision; stale edits fail. config:null removes the block. Does not save files or apply live/remote simulation changes.",
         R"({"properties":{"config":{"type":["object","null"]},"expectedRevision":{"type":"integer","minimum":0}},"required":["config","expectedRevision"],"additionalProperties":false})", [w](const Json& p) {
             const auto& config = requiredConfig(p);
-            const auto& expected = p["expectedRevision"];
-            if (!expected.isNumber() || expected.numberLiteral().find_first_of(".eE") != std::string::npos ||
-                expected.integer(-1)<0 || uint64_t(expected.integer(-1)) != uint64_t(w->map.revision))
-                throw std::invalid_argument("PHYSIS document revision mismatch; read physis_get again");
+            requireRevision(*w,p);
             validateConfig(config);
             const auto before = w->map.revision;
             std::string error;

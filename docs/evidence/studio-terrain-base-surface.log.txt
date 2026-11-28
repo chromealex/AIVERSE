@@ -1,0 +1,4 @@
+2026-11-26 07:27:33.877 AiverseStudioHTML5[68413:83291543] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:27:33.877 AiverseStudioHTML5[68413:83291543] [studio-web] JS: CROSS main VERIFIED base pick 3.40812 m and detail pick -3.25 m at same screen coordinate, restored terrain after disarm, unchanged undo and clean saved document
+disk minima/maxima in metres: detail -3.25 0.0 base 0.0 5.0
+mean Scene pixel change 19.1496333426158 after restore 0.7986865311426715

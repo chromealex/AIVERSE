@@ -1,0 +1,4 @@
+2026-11-26 12:08:18.578 AiverseStudioHTML5[52645:84441470] [studio-web] JS: CROSS main DONE_1
+2026-11-26 12:08:18.578 AiverseStudioHTML5[52645:84441470] [studio-web] JS: CROSS main VERIFIED configured and authored grid, measured humidity, pause-on-rebuild, rejection with tick retained, reset and map file isolation {"custom":{"requestedMeters":2,"humidity":0.75,"mapAvailable":true,"meters":2,"width":12,"height":8,"baseHumidity":0.75},"authored":{"requestedMeters":0,"humidity":0.75,"mapAvailable":true,"meters":10,"width":8,"height":8,"baseHumidity":0.5},"cellHumidity":[0.848145,0.598145]}
+2026-11-26 12:08:25.922 AiverseStudioHTML5[52911:84443011] [studio-web] JS: CROSS main DONE_1
+2026-11-26 12:08:25.922 AiverseStudioHTML5[52911:84443011] [studio-web] JS: CROSS main VERIFIED map with PHYSIS disabled: private grid runs, authored option absent, invalid request retains current simulation

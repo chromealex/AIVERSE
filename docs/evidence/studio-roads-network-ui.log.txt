@@ -1,0 +1,11 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+299 web tests passed
+2026-11-26 02:21:43.366 AiverseStudioHTML5[74664:82338200] [studio-web] JS: CROSS main DONE_1
+2026-11-26 02:21:43.366 AiverseStudioHTML5[74664:82338200] [studio-web] JS: CROSS main VERIFIED nodes=6 edges=5 {"id":5,"a":5,"b":6,"type":"highway_ramp","attachA":{"edge":1,"dir":1,"lanes":[1,1]},"attachB":{"edge":2,"dir":-1,"lanes":[0,0]}}
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-roads-ui-2ThNG8/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-roads-ui-2ThNG8/Catalog.app: replacing existing signature
+2026-11-26 02:21:48.219 AiverseStudioHTML5[74885:82339114] [studio-web] JS: CROSS main DONE_2
+2026-11-26 02:21:48.219 AiverseStudioHTML5[74885:82339114] [studio-web] JS: CROSS main VERIFIED nodes=6 edges=5 {"id":5,"a":5,"b":6,"type":"highway_ramp","attachA":{"edge":1,"dir":1,"lanes":[1,1]},"attachB":{"edge":2,"dir":-1,"lanes":[0,0]}}

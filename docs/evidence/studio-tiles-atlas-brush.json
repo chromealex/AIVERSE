@@ -1,0 +1,10 @@
+{
+  "sha": "49a565c3a5a46eb33021a7451970e632bbf72882",
+  "argv": [
+    "bash",
+    "/tmp/tile-exact-check.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-tiles-atlas-brush.log.txt",
+  "sha256": "e8c82263cd4ca7fd15696391283a345dd5c4f0cae2f181bf490442549dc49a2c"
+}

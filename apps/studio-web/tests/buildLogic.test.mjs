@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, runTarget } from '../src/panels/buildLogic.ts';
+import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, nativeBuildProgress, runTarget } from '../src/panels/buildLogic.ts';
+
+test('native build progress follows the most recent valid generator output', () => {
+  assert.deepEqual(nativeBuildProgress('[0/2] Re-checking directories\n[125/1770] Building Model.cpp.o\nwarning: unused'), {
+    value:125,max:1770,label:'125 / 1770',action:'Building Model.cpp.o'
+  });
+  assert.deepEqual(nativeBuildProgress('[  8%] Built target core\n[101%] invalid'), {
+    value:8,max:100,label:'8%',action:'Built target core'
+  });
+  assert.equal(nativeBuildProgress('[0/0] empty\nConfiguring done'),null);
+});
 
 test('bytes', () => {
   assert.equal(formatBytes(512), '512 B');
@@ -20,6 +30,7 @@ test('steps, errors and missing toolchains from the aiversebuild log', () => {
   assert.equal(buildPhase(false, 1, 1, 'x\n=== FAILED ===\n'), 'failed');
 });
 test('run label', () => {
+  assert.deepEqual(runTarget('native-editor'), { target: 'Studio with project modules', estimate: false });
   assert.deepEqual(runTarget('build-ios'), { target: 'ios', estimate: false });
   assert.deepEqual(runTarget('estimate'), { target: '', estimate: true });
 });

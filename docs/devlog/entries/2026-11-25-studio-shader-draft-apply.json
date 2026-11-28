@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-shader-draft-apply",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "195725b25",
+  "author": null,
+  "links": [],
+  "title": "Применение черновика шейдера",
+  "titleEn": "Apply a shader draft",
+  "summary": "Save & apply сохраняет граф и назначает его выбранной цели.",
+  "summaryEn": "Save & apply saves and assigns a shader graph.",
+  "body": [
+    "В Shader Graph откройте Apply to target и укажите цель."
+  ],
+  "bodyEn": [
+    "Open Apply to target in Shader Graph and choose a destination."
+  ],
+  "verified": "На macOS проверены материал, постэффект игры и второй эмиттер частиц.",
+  "verifiedEn": "Verified the material file, game post-effect and second particle emitter on macOS.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-shader-draft-apply/shader-apply.png",
+      "caption": "Материал sea_glass",
+      "captionEn": "The sea_glass material"
+    }
+  ]
+}

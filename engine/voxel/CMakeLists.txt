@@ -21,7 +21,7 @@ if(AIVERSE_BUILD_SERVER AND NOT EMSCRIPTEN)
     endif()
 endif()
 # Voxel projects run in the one game client (apps/client/main.cpp: game.json "module" "voxel").
-if(TARGET aiverse_client AND AIVERSE_DESKTOP)
+if(TARGET aiverse_client AND AIVERSE_DESKTOP AND NOT AIVERSE_SCENE_CLIENT)
     target_sources(aiverse_client PRIVATE ../../apps/voxel/client.cpp view/VoxelView.cpp)
     target_compile_definitions(aiverse_client PRIVATE AIVERSE_CLIENT_VOXEL=1)
     target_link_libraries(aiverse_client PRIVATE aiverse_voxelgame)

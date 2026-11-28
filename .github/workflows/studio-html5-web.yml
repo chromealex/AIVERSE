@@ -55,6 +55,13 @@ jobs:
         working-directory: apps/studio-web
         run: npm run build
 
+      - name: Open the built interface in Linux WebKitGTK
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libwebkit2gtk-4.1-dev xvfb xauth
+          c++ -std=c++20 -I. apps/studio-native/tests/StudioLinuxWebAssets.cpp -o "$RUNNER_TEMP/studio-webkit-test" $(pkg-config --cflags --libs webkit2gtk-4.1)
+          xvfb-run -a "$RUNNER_TEMP/studio-webkit-test" "$PWD/apps/studio-web/dist"
+
   boundary:
     name: ImGui boundary
     runs-on: ubuntu-latest
@@ -91,8 +98,8 @@ jobs:
         run: |
           cmake -S . -B build/studio-native-ci \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DAIVERSE_BUILD_EDITOR=ON \
-            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_EDITOR=OFF \
+            -DAIVERSE_BUILD_CLIENT=ON -DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF \
             -DAIVERSE_BUILD_TOOLS=ON \
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_STUDIO_HTML5=ON
@@ -103,7 +110,7 @@ jobs:
             --parallel 3
       # studio_metal_lighting is left out: it opens an NSWindow and needs a Metal device.
       - name: Run native contract tests
-        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting|owner_history|mcp_registry)$'
+        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(standalone_bundle|content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting|owner_history|mcp_registry)$'
 
   windows-native:
     name: Windows HTML5 + Vulkan native host (MSVC)
@@ -122,21 +129,27 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
       - name: Configure Studio (Visual Studio 2022, x64)
-        run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
+        run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=ON -DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
       - name: Build AiverseStudio.exe and the session contract
-        run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests --parallel 4
+        run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests aiverse_studio_win_device_overlay_tests --parallel 4
       - name: Studio session contract (Windows)
-        run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_(session|asset_transfers|move_journal|owner_history|mcp_registry)$"
-      - name: Check the package (exe, WebView2 loader, UI)
-        shell: bash
+        run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_(session|asset_transfers|move_journal|owner_history|mcp_registry|win_device_overlay)$"
+      - name: Launch the staged Studio distribution and open a project
+        shell: pwsh
+        timeout-minutes: 4
         run: |
-          OUT=build/studio-windows-ci/apps/studio-native/Release
-          ls -la "$OUT"
-          test -f "$OUT/AiverseStudio.exe" && test -f "$OUT/WebView2Loader.dll" && test -f "$OUT/studio-web/index.html"
+          $out = 'build/studio-windows-ci/apps/studio-native/Release'
+          $stage = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'Studio distribution')
+          foreach ($file in 'AiverseStudio.exe','AiverseGame.exe','content','aiversemcp.exe','aiversebuild.exe','WebView2Loader.dll','studio-web','engine') {
+            Copy-Item (Join-Path $out $file) $stage.FullName -Recurse
+          }
+          python -B apps/studio-native/tests/standalone_bundle.py --require-build-tool --require-windows-player $stage.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $project = Join-Path $env:RUNNER_TEMP 'Studio launch project'
+          Copy-Item demos/order-upgrade $project -Recurse
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--force-renderer-accessibility'
+          ./apps/studio-native/tests/windows_project_launch.ps1 -Package $stage.FullName -Project $project
       - uses: actions/upload-artifact@v4
         with:
           name: aiverse-studio-windows
-          path: |
-            build/studio-windows-ci/apps/studio-native/Release/AiverseStudio.exe
-            build/studio-windows-ci/apps/studio-native/Release/WebView2Loader.dll
-            build/studio-windows-ci/apps/studio-native/Release/studio-web/
+          path: ${{ runner.temp }}/Studio distribution/

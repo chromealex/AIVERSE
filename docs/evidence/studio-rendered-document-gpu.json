@@ -1,0 +1,14 @@
+{
+  "sha": "ca85051a9ed3f72d99bccb43564ad61a31b73f31",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-V",
+    "-R",
+    "^studio_(metal_lighting|terrain_geometry|session|owner_history)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-rendered-document-gpu.log.txt",
+  "sha256": "200f3b7c6f62924409d1476b57dee3021c80dbddabfc6458d78886753531fb40"
+}

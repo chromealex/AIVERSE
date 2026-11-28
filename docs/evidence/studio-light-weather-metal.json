@@ -1,0 +1,14 @@
+{
+  "sha": "2e36f611d4c2a0977ff457a1c1f02ee76e53721f",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_(metal_lighting|fps_lighting_document)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-weather-metal.log.txt",
+  "sha256": "d30ca854c08d5299e2406368d9ec43f1efd342054b8604bd4af5f66fe53b40ef"
+}

@@ -1,0 +1,10 @@
+{
+  "sha": "ebf71f4153a2c52ffc5a6f75eb42dcc0aea9842a",
+  "argv": [
+    "bash",
+    "/tmp/studio-wind-modes-ui.sh"
+  ],
+  "exit_code": 127,
+  "log": "docs/evidence/studio-scene-wind-modes.log.txt",
+  "sha256": "aab06ffe21f1849e623f0fa45d7c0448efe9d0307f883b1f1f303a9068f262c9"
+}

@@ -1,0 +1,10 @@
+{
+  "sha": "7688ceb71dd265fbf248df362944c898991350cd",
+  "argv": [
+    "bash",
+    "../status.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-world-regions-untracked.log.txt",
+  "sha256": "4c26482713373de2178fe46a9112ccc419a6ac4789a6f0ffad31025252c5be67"
+}

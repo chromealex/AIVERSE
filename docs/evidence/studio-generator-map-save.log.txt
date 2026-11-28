@@ -1,0 +1,20 @@
+2026-11-26 04:51:34.137 AiverseStudioHTML5[68627:82797171] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:91:13 Error: unchanged Generate map Generate map
+Preset
+Seed
+Random
+Players
+2
+Symmetry
+
+Use map objects as a template
+
+Keep current map size
+Preset parameters
+Generate map
+Next seed
+At match start
+Use the saved map.
+
+Use match seed
+Use fixed seed
+Map changed. Review the current values before applying.

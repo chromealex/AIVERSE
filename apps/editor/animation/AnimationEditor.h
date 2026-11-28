@@ -1,5 +1,6 @@
 #pragma once
 #include "../Editor.h"
+#include "engine/view/game/GameViewScript.h"
 #include "../EditorUtil.h"
 #include "../EditorGenreUi.h"
 #include "../core/AnimationOps.h"
@@ -56,8 +57,7 @@ public:
                           },
                           true});
         ed.ws().registerOp({rigMode_?"rig_runtime_status":"animation_runtime_status","Per-entity animation contact and climbing diagnostics from the running scene.",Json::object(),[&ed](const Json&){
-            Json result=Json::array();if(!ed.entityFx)return result;std::vector<uint64_t> keys;for(const auto& entry:ed.entityFx->animations)keys.push_back(entry.first);std::sort(keys.begin(),keys.end());
-            for(auto key:keys){if(result.size()>=256)break;const auto& entry=ed.entityFx->animations.at(key);const auto& c=entry.locomotion;Json row=Json::object();row.set("entity",Json::number(int64_t(key)));row.set("error",Json::string(entry.error));row.set("climbing",Json::fromBool(c.active));row.set("attached",Json::fromBool(c.attached));row.set("stanceFeet",Json::number(int64_t(c.supports)));row.set("steppingFeet",Json::number(int64_t(c.stepping)));row.set("footError",Json::number(double(c.footError),6));row.set("penetration",Json::number(double(c.penetration),6));Json position=Json::array(),normal=Json::array();for(float v:{c.position.x,c.position.y,c.position.z})position.push(Json::number(double(v),6));for(float v:{c.normal.x,c.normal.y,c.normal.z})normal.push(Json::number(double(v),6));row.set("bodyPosition",position);row.set("surfaceNormal",normal);result.push(row);}return result;
+            return game::animationRuntimeStatus(ed.entityFx.get());
         },true});
       ed.ws().registerOp({rigMode_ ? "rig_editor_status" : "animation_editor_status",
                           "Current preview state and evaluated pose after a rendered frame.", Json::object(),

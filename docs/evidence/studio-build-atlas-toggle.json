@@ -1,0 +1,10 @@
+{
+  "sha": "30d9c18bb0ec9af8e343f0f2d83630d006e51864",
+  "argv": [
+    "bash",
+    "../build-toggle.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-atlas-toggle.log.txt",
+  "sha256": "ef30e4188cd1613309db7222260ee0c69e74e0e538bad77519365b49fee603b1"
+}

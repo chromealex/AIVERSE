@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/tmp/strata-pixel-client.py", line 84, in <module>
+    else:raise AssertionError(response)
+AssertionError: {'content': [{'type': 'text', 'text': '{"error": "Scene has no rendered frame"}'}], 'isError': True}

@@ -1,0 +1,10 @@
+{
+  "sha": "4c018eebc7dc7e6f79f16630b648d49621fd5649",
+  "argv": [
+    "bash",
+    "../inspector-material.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-inspector-material-selection.log.txt",
+  "sha256": "d32dcc4760d047005eb2087be07137631bb50db42f83a977b1f4b7636c332298"
+}

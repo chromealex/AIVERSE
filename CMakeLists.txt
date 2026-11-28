@@ -64,20 +64,31 @@ if(AIVERSE_PLATFORM STREQUAL "macos" AND AIVERSE_BUILD_TESTS)
 endif()
 option(AIVERSE_BUILD_HEADLESS "Build headless runner" ${AIVERSE_DESKTOP})
 option(AIVERSE_BUILD_CLIENT "Build the game client" ON)
-option(AIVERSE_BUILD_EDITOR "Build the map editor" ${AIVERSE_DESKTOP})
 option(AIVERSE_BUILD_TOOLS "Build aiversebuild packager" ${AIVERSE_DESKTOP})
 option(AIVERSE_BUILD_SERVER "Build the network game server and the network bot client" ${AIVERSE_DESKTOP})
 
 # Register Objective-C++ in the ROOT directory before creating any targets.
 # CMake does not propagate a language enabled only in a child directory back
 # to parent-scoped targets; otherwise it can fail with CMAKE_OBJCXX_COMPILE_OBJECT.
-# The HTML5 Studio is the main editor on macOS and Windows: built by default once its web bundle exists
+# Desktop builds prefer HTML5 Studio when the web bundle and platform dependencies exist
 # (studio_mac.command / studio_windows.cmd build the bundle first; -DAIVERSE_BUILD_STUDIO_HTML5=OFF skips it).
+set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE PATH "Built Studio web assets")
 set(_aiverse_studio_default OFF)
-if((APPLE OR WIN32) AND NOT IOS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/studio-web/dist/index.html")
+if(AIVERSE_PLATFORM MATCHES "^(macos|windows)$" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     set(_aiverse_studio_default ON)
+elseif(AIVERSE_PLATFORM STREQUAL "linux" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html"
+       AND (NOT DEFINED AIVERSE_VULKAN OR AIVERSE_VULKAN))
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(STUDIO_GTK_DEFAULT QUIET webkit2gtk-4.1>=2.40)
+        find_package(SQLite3 QUIET)
+        if(STUDIO_GTK_DEFAULT_FOUND AND SQLite3_FOUND)
+            set(_aiverse_studio_default ON)
+        endif()
+    endif()
 endif()
-option(AIVERSE_BUILD_STUDIO_HTML5 "Build the HTML5 Studio (main editor; macOS and Windows)" ${_aiverse_studio_default})
+option(AIVERSE_BUILD_STUDIO_HTML5 "Build the HTML5 Studio desktop editor" ${_aiverse_studio_default})
+option(AIVERSE_BUILD_EDITOR "Build the legacy ImGui map editor for migration checks" OFF)
 if(APPLE AND AIVERSE_BUILD_STUDIO_HTML5)
     enable_language(OBJCXX)
 endif()
@@ -1542,7 +1553,7 @@ add_library(aiverse_game_view STATIC engine/view/game/GameView.cpp engine/view/g
     engine/view/game/GamePlanetRender.cpp engine/view/game/GamePlanetView.cpp engine/view/game/GamePlanetGroundFx.cpp engine/view/game/GamePlanetFlora.cpp)
 # visual terrain detail surface (agent-terrain): shared by the view and the editor core (sculpt, validate)
 # + the planet surface maths (GamePlanet*: float cube-sphere surface, detail grid synthesis; editor planet detail ops)
-add_library(aiverse_terrain_detail STATIC engine/view/game/GameTerrainDetail.cpp engine/view/game/GamePlanet.cpp engine/view/game/GamePlanetDetail.cpp)
+add_library(aiverse_terrain_detail STATIC engine/view/game/GameTerrainLook.cpp engine/view/game/GameTerrainDetail.cpp engine/view/game/GamePlanet.cpp engine/view/game/GamePlanetDetail.cpp)
 target_link_libraries(aiverse_terrain_detail PUBLIC aiverse_game)
 target_link_libraries(aiverse_game_view PUBLIC aiverse_game aiverse_models aiverse_imgui aiverse_roads_view)
 # Public Caverns visual host headers expose the Box3D geometry types.
@@ -1620,14 +1631,14 @@ function(aiverse_package_app target)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}/content"
                 COMMAND ${CMAKE_COMMAND} -E copy "${AIVERSE_CONTENT_PACK}" "${res_dir}/content/content.rpak"
-                COMMENT "Bundling content pack")
+                COMMENT "Bundling content pack" VERBATIM)
         elseif(AIVERSE_CLIENT_BUNDLE_CONTENT)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}"
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "${res_dir}/content"
                 COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, project file
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "${res_dir}/content/engine"
-                COMMENT "Bundling content")
+                COMMENT "Bundling content" VERBATIM)
         endif()
         if(AIVERSE_PRECOMPILE_METAL AND AIVERSE_PLATFORM STREQUAL "macos" AND target STREQUAL "aiverse_client")
             if(AIVERSE_CONTENT_PACK)
@@ -1768,7 +1779,7 @@ endif()
 # Light baker (agent-lightbake): offline CPU path tracer (BVH, threads) for lightmaps + light probes,
 # automatic lightmap UVs (xatlas, MIT), bake folder writer. Host only: editor, MCP, tests.
 # ---------------------------------------------------------------------------
-if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_STUDIO_HTML5)
     find_package(Threads REQUIRED)
     add_library(aiverse_xatlas STATIC third_party/xatlas/xatlas.cpp)
     target_include_directories(aiverse_xatlas PUBLIC third_party/xatlas)
@@ -1776,7 +1787,7 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
         target_compile_options(aiverse_xatlas PRIVATE -w)
     endif()
     add_library(aiverse_bake STATIC engine/bake/Bvh.cpp engine/bake/Baker.cpp engine/bake/BakerProbes.cpp
-        engine/bake/BakeScene.cpp engine/bake/LightmapUnwrap.cpp engine/bake/LightmapWrite.cpp engine/bake/Denoise.cpp)
+        engine/bake/BakeScene.cpp engine/bake/CapturedBake.cpp engine/bake/LightmapUnwrap.cpp engine/bake/LightmapWrite.cpp engine/bake/Denoise.cpp)
     target_link_libraries(aiverse_bake PUBLIC aiverse_models aiverse_xatlas Threads::Threads)
     target_include_directories(aiverse_bake PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
@@ -1787,7 +1798,7 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME bake_tests COMMAND aiverse_bake_tests)
 endif()
 
-if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_STUDIO_HTML5)
     # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
     add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/StudioPlayTools.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
@@ -1822,6 +1833,12 @@ if(AIVERSE_BUILD_EDITOR)
     file(GLOB AIVERSE_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
     add_executable(aiverse_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp apps/editor/EditorWorld.cpp apps/editor/DetailsPanel.cpp
                    ${AIVERSE_EDITOR_WINDOWS} $<TARGET_OBJECTS:aiverse_runtime>)
+    set(type_blocks_file "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/core/type-blocks.json")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${type_blocks_file}")
+    file(READ "${type_blocks_file}" type_blocks_json)
+    file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/aiverse_type_blocks.h"
+        CONTENT [=[constexpr char kTypeBlockTemplatesJson[] = R"aiverse(@type_blocks_json@)aiverse";]=] @ONLY)
+    target_include_directories(aiverse_editor PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
     target_link_libraries(aiverse_editor PRIVATE aiverse_runtime aiverse_game_view aiverse_editor_core)
     target_link_libraries(aiverse_editor PRIVATE aiverse_game_fx AIVERSE::InputFlow)
     target_compile_definitions(aiverse_editor PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -1881,6 +1898,9 @@ if(AIVERSE_BUILD_TOOLS)
     if(TARGET aiverse_editor)
         add_dependencies(aiverse_editor aiversebuild)
     endif()
+endif()
+
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_STUDIO_HTML5)
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
     add_executable(aiversemcp tools/mcp/main.cpp)
     target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
@@ -2329,7 +2349,7 @@ if(AIVERSE_BUILD_TESTS)
     endif()
 endif()
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/FxOps.cpp apps/editor/core/FxTemplates.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/FxOps.cpp apps/editor/core/FxTemplates.cpp apps/editor/core/SpectraGpuFileOps.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_game_fx)
 endif()
 if(TARGET aiverse_editor)
@@ -2371,7 +2391,7 @@ if(TARGET aiverse_client AND AIVERSE_PLATFORM STREQUAL "ios" AND AIVERSE_GEN_DIR
     set_property(TARGET aiverse_client APPEND PROPERTY RESOURCE "${AIVERSE_GEN_DIR}/LaunchScreen.storyboard")
     set(AIVERSE_IOS_LAUNCH_STORYBOARD "<key>UILaunchStoryboardName</key><string>LaunchScreen</string>")
 endif()
-if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS OR TARGET aiverse_editor_core)
     add_library(aiverse_branding STATIC tools/branding/BrandImage.cpp tools/branding/Icons.cpp tools/branding/Splash.cpp)
     target_include_directories(aiverse_branding PRIVATE third_party/stb_image_write)
     target_link_libraries(aiverse_branding PUBLIC aiverse_splash)
@@ -2648,7 +2668,11 @@ foreach(t ${AIVERSE_GAME_CLIENT_TARGETS})
     endif()
 endforeach()
 # Editor: play the project as in the game client, hosted in the Game window or in AiverseGame (apps/editor/EditorClientPlay.cpp)
-if(TARGET aiverse_editor OR AIVERSE_BUILD_STUDIO_HTML5)
+set(_aiverse_test_hosted_view OFF)
+if(AIVERSE_BUILD_TESTS AND (AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFORM STREQUAL "macos"))
+    set(_aiverse_test_hosted_view ON)
+endif()
+if(TARGET aiverse_editor OR AIVERSE_BUILD_STUDIO_HTML5 OR _aiverse_test_hosted_view)
     # Shared game runtime host; editor shells own controls and native surfaces.
     # Existing in-game overlay rendering remains inside GameClient, not Studio UI.
     add_library(aiverse_hosted_client STATIC apps/client/HostedClient.cpp ${AIVERSE_CLIENT_CORE_SOURCES})
@@ -2664,7 +2688,7 @@ if(TARGET aiverse_editor)
     target_sources(aiverse_editor PRIVATE apps/editor/EditorClientPlay.cpp)
     target_link_libraries(aiverse_editor PRIVATE aiverse_hosted_client)
 endif()
-if(AIVERSE_BUILD_TESTS AND (AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFORM STREQUAL "macos"))
+if(_aiverse_test_hosted_view)
     add_executable(aiverse_hosted_view_tests tests/hosted_view.cpp $<TARGET_OBJECTS:aiverse_runtime>)
     target_link_libraries(aiverse_hosted_view_tests PRIVATE aiverse_runtime)
     if(TARGET aiverse_hosted_client)
@@ -5245,6 +5269,10 @@ if(TARGET aiverse_editor_core)
 endif()
 
 if(AIVERSE_BUILD_TESTS AND TARGET aiversemcp AND Python3_EXECUTABLE)
+    add_test(NAME studio_animation_preview COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/animation/preview_session.py
+        $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(studio_animation_preview PROPERTIES TIMEOUT 60 LABELS "EDITOR")
     add_test(NAME lens_mcp_stdio COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/lens_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
@@ -5523,13 +5551,45 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_renderbench)
 endif()
 
 # ---------------------------------------------------------------------------
-# Experimental HTML5 Studio host. Production editor still uses its existing UI.
+# Desktop HTML5 Studio host.
 # ---------------------------------------------------------------------------
 if(AIVERSE_BUILD_STUDIO_HTML5)
-    if((APPLE OR WIN32) AND TARGET aiverse_editor_core)
+    if((APPLE AND NOT IOS) OR WIN32 OR AIVERSE_PLATFORM STREQUAL "linux")
         add_subdirectory(apps/studio-native)
     else()
-        message(WARNING "AIVERSE Studio HTML5 requires macOS or Windows and aiverse_editor_core (AIVERSE_BUILD_TOOLS or AIVERSE_BUILD_EDITOR)")
+        message(WARNING "AIVERSE Studio HTML5 requires macOS, Windows or Linux")
+    endif()
+endif()
+
+# Verification scripts build the editor shipped for the configured target platform.
+if(TARGET aiverse_studio)
+    add_custom_target(aiverse_desktop_editor DEPENDS aiverse_studio)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "linux" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(STUDIO_WEBKITGTK QUIET IMPORTED_TARGET webkit2gtk-4.1>=2.40)
+    endif()
+    if(TARGET PkgConfig::STUDIO_WEBKITGTK)
+        add_executable(aiverse_studio_linux_web_assets_tests apps/studio-native/tests/StudioLinuxWebAssets.cpp)
+        target_include_directories(aiverse_studio_linux_web_assets_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+        target_link_libraries(aiverse_studio_linux_web_assets_tests PRIVATE PkgConfig::STUDIO_WEBKITGTK)
+        add_test(NAME studio_linux_web_assets COMMAND aiverse_studio_linux_web_assets_tests "${AIVERSE_STUDIO_WEB_DIST}")
+        set_tests_properties(studio_linux_web_assets PROPERTIES LABELS "EDITOR;HTML" SKIP_RETURN_CODE 77 TIMEOUT 45)
+    endif()
+endif()
+
+# Exercise Studio's private renderer even on Linux builds without a desktop shell.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_gfx_vulkan AND AIVERSE_PLATFORM MATCHES "^(linux|windows|macos)$")
+    add_executable(aiverse_studio_vulkan_panel_tests apps/studio-native/tests/StudioBuildingPreviewTests.cpp)
+    target_compile_definitions(aiverse_studio_vulkan_panel_tests PRIVATE AIVERSE_TEST_PANEL_VULKAN=1)
+    target_include_directories(aiverse_studio_vulkan_panel_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_vulkan_panel_tests PRIVATE aiverse_runtime aiverse_gfx_vulkan AIVERSE::libraries)
+    add_test(NAME studio_vulkan_panel COMMAND aiverse_studio_vulkan_panel_tests "${PROJECT_SOURCE_DIR}")
+    set_tests_properties(studio_vulkan_panel PROPERTIES LABELS "EDITOR;GPU;Vulkan" SKIP_RETURN_CODE 77 TIMEOUT 120)
+    if(TARGET aiverse_studio_verification)
+        add_dependencies(aiverse_studio_verification aiverse_studio_vulkan_panel_tests)
     endif()
 endif()
 

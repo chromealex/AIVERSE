@@ -1,0 +1,10 @@
+{
+  "sha": "334eb2d8d2922c43122dc79bc076c00e8efe3d55",
+  "argv": [
+    "python3",
+    "../studio-cmake-defaults.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-cmake-defaults.log.txt",
+  "sha256": "dc26ae3f10506ba1ab3d6f5f20a6ce7c01e13fe0fa44776640df6739238994c2"
+}

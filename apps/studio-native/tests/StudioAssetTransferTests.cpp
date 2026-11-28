@@ -1510,7 +1510,10 @@ int main(){
             const auto source=p/"content"/"A"/"Paint.png",dest=p/"content"/"B"/"Paint.png";
             const auto model=p/"content"/"A"/"Model.gltf",materials=p/"materials.json";
             const std::string originalModel=R"({"asset":{"version":"2.0"},"images":[{"uri":"Paint.png"}]})";
-            const std::string originalMaterials=R"({"materials":{"Paint":{"texture":"content/A/Paint.png"}},"extra":"preserved"})";
+            const std::string originalMaterials=R"({"materials":{"Paint":{"texture":"content/A/Paint.png"},"Glaze":"content/Glaze.material.json"},"extra":"preserved"})";
+            const auto glaze=p/"content"/"Glaze.material.json";
+            const std::string glazeBytes=R"({"normalMap":"content/A/Paint.png","roughness":0.7})";
+            write(glaze,glazeBytes);
             write(source,"pixels");write(model,originalModel);write(materials,originalMaterials);
             StudioAssetCatalog index(p);index.rebuild();
             const auto guid=index.byPath("A/Paint.png")->guid;
@@ -1519,7 +1522,7 @@ int main(){
             StudioBatchAssetPlan staged;
             std::optional<editor::ProjectHistory::MovePlan> recorded;
             const auto result=transfer.apply(transfer.token(),{},{},&recorded,true,&staged);
-            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedMaterialReferences")==1&&result.getInt("repairedResourceDocuments")==1);
+            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedMaterialReferences")==2&&result.getInt("repairedResourceDocuments")==2);
             AIVERSE_TEST_CHECK(fs::exists(source)&&!fs::exists(dest)&&read(materials)==originalMaterials&&read(model)==originalModel);
             auto next=history;next.recordMove(editor::ProjectHistory::MovePlan(*recorded),"Move paint with references");
             const auto checkpoint=p/".aiverse-cache"/"asset-history.json";
@@ -1538,10 +1541,12 @@ int main(){
             AIVERSE_TEST_CHECK(Json::parseFile(model.string())["images"][0].getStr("uri")=="../B/Paint.png");
             index.rebuild(false);AIVERSE_TEST_CHECK(index.byPath("B/Paint.png")->guid==guid);
             auto previous=next;previous.advance(false);
+            AIVERSE_TEST_CHECK(Json::parse(read(glaze)).getStr("normalMap")=="content/B/Paint.png");
             auto undo=studioPlanAssetMoveChain(p,{*recorded},false);
             undo.documents.push_back({materials,*recorded->materialsAfter,*recorded->materialsBefore});
             studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources,&next,&previous);
             AIVERSE_TEST_CHECK(fs::exists(source)&&read(materials)==originalMaterials&&read(model)==originalModel);
+            AIVERSE_TEST_CHECK(read(glaze)==glazeBytes);
             AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==0);
             // Rename uses the same staged path and updates both owners.
             auto rename=StudioTransferPlan::rename(p,"A/Paint.png","Tint.png");

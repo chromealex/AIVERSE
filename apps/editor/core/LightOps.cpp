@@ -58,6 +58,19 @@ void applyLightParams(Json& l, const Json& p) {
     if (p.has("x") || p.has("z")) l.erase("pos");
 }
 
+void patchMapLighting(Json& document, const Json& patch) {
+    if (patch.getBool("remove")) {
+        document.erase("lighting");
+        return;
+    }
+    Json block = document["lighting"].isObject() ? document["lighting"] : Json::object();
+    for (const auto& [key,value] : patch.members()) {
+        if (key == "preset" && value.isString() && value.str().empty()) block.erase(key);
+        else if (key != "remove") block.set(key,value);
+    }
+    document.set("lighting",std::move(block));
+}
+
 void registerLightOps(Workspace& ws) {
     registerSceneEntityOps(ws);
     auto add = [&ws](const char* name, const char* desc, const std::string& schema, Workspace::OpFn fn, bool gui = false) {
@@ -113,19 +126,14 @@ void registerLightOps(Workspace& ws) {
     add("lighting_set", "Set the map's 'lighting' block (overrides game.json 'lighting', which set_manifest edits): time 0..1 "
         "(0 midnight, 0.25 dawn, 0.5 noon, 0.75 dusk), dayLength = game seconds per day (0 = time stays), nightLevel 0..1, "
         "clouds 0..1, cloudStrength, cloudScale, wind [x,z] cells/s, storm 0..1 (overcast + lightning), preset desert | snow | volcanic | "
-        "overcast | cave (cave = underground: permanent night, only lights). Omitted fields are kept; remove=true deletes the block.",
+        "overcast | cave (cave = underground: permanent night, only lights). Omitted fields are kept; an empty preset inherits the project palette; remove=true deletes the block.",
         R"({"properties": {"time": {"type": "number"}, "dayLength": {"type": "number"}, "nightLevel": {"type": "number"}, "clouds": {"type": "number"},
             "cloudStrength": {"type": "number"}, "cloudScale": {"type": "number"}, "wind": {"type": "array", "items": {"type": "number"}},
-            "storm": {"type": "number"}, "preset": {"type": "string", "enum": ["desert", "snow", "volcanic", "overcast", "cave"]},
+            "storm": {"type": "number"}, "preset": {"type": "string", "enum": ["", "desert", "snow", "volcanic", "overcast", "cave"]},
             "remove": {"type": "boolean"}}})", [w](const Json& p) {
             Json& extra = w->map.data.extra;
             w->map.beginEdit();
-            if (p.getBool("remove")) extra.erase("lighting");
-            else {
-                Json b = extra["lighting"].isObject() ? extra["lighting"] : Json::object();
-                for (auto& [k, v] : p.members()) if (k != "remove") b.set(k, v);
-                extra.set("lighting", b);
-            }
+            patchMapLighting(extra,p);
             w->map.touched();
             Json r = okJson();
             r.set("lighting", extra["lighting"]);
@@ -134,7 +142,7 @@ void registerLightOps(Workspace& ws) {
     add("view_lighting", "Editor preview of time of day / clouds / storm (does not change the map): time 0..1, clouds 0..1, "
         "storm 0..1; off=true returns to the map's own lighting. Combine with view_screenshot to check night scenes.",
         R"({"properties": {"time": {"type": "number"}, "clouds": {"type": "number"}, "storm": {"type": "number"}, "off": {"type": "boolean"}}})",
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true);
+        [](const Json&) -> Json { throw std::runtime_error("Open HTML5 Studio and connect its agent link to use this tool"); }, true);
 }
 
 } // namespace aiverse::editor

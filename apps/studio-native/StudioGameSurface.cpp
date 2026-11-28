@@ -19,9 +19,16 @@
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
+#include "engine/actor/ActorModule.h"
+#include "engine/render/StaticGeometryReport.h"
+#include "engine/render/GlobalGeometryPool.h"
+#include "engine/game/Script.h"
+#include "engine/view/game/GameViewScript.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/SimulationLod.h"
 #include "apps/studio-native/StudioRuntimeEdit.h"
+#include "apps/editor/core/PhysisDiagnosticFrame.h"
+#include "engine/world/PhysisNaturePresentation.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -46,12 +53,16 @@ void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& as
         return;
     }
     actor_.reset();
-    host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map);
+    host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map,plan.localSeat);
     if (plan.camera) { const auto& c=*plan.camera; host_->setStartCamera(c[0],c[1],c[2],c[3],c[4]); }
 }
 void StudioGameSurface::stop() { actor_.reset();matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset(); host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
 void StudioGameSurface::setDevice(const StudioGameDevice& profile) {
     (void)profile.profile();suspend();profile_=profile;
+}
+void StudioGameSurface::setSimulationSpeed(double speed) {
+    if (!(speed >= 0.25 && speed <= 16)) throw std::runtime_error("Game speed must be between 0.25 and 16");
+    if (actor_ || !host_->setSpeed(speed)) throw std::runtime_error("Speed requires a local match");
 }
 void StudioGameSurface::control(const std::string& action) {
     if (action=="restart") {
@@ -115,9 +126,20 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         host_->frame(std::clamp(dt,0.0,0.1),{}, {},w,h,logical.first,logical.second,profile_.profile().touch,profile_.insets());
         device_->endFrame();
         const bool match=host_->inMatch();
-        if(match && !matchObserved_){++runtimeEpoch_;runtimeDebugEdited_=false;}
+        if(match && !matchObserved_){
+            if (!actor_ && launch_.startSpeed!=1) setSimulationSpeed(launch_.startSpeed);
+            ++runtimeEpoch_;runtimeDebugEdited_=false;
+            setupRefs_.clear();
+            if(auto* sim=liveSimulation()){
+                const auto entities=sim->world().entityState();
+                for(uint32_t i=0;i<entities.alive.size();++i)
+                    if(entities.alive[i])setupRefs_.push_back(editor::worldRef(Entity{i,entities.gens[i]}));
+                std::sort(setupRefs_.begin(),setupRefs_.end());
+            }
+        }
         if(!match&&matchObserved_)worldProcessDiagnostics_.reset();
         matchObserved_=match;
+        if (match) samplePlayers();
         if (host_->quitRequested()) stop();
         if (!host_->errorText().empty()) error_=host_->errorText();
     } catch (const std::exception& e) {
@@ -131,6 +153,43 @@ Simulation* StudioGameSurface::liveSimulation() const {
 bool StudioGameSurface::paused() const {return actor_?actor_->paused():host_->paused();}
 bool StudioGameSurface::canControl() const {return actor_ || host_->canControl();}
 bool StudioGameSurface::canStep() const {return actor_?actor_->paused():host_->canStep();}
+std::shared_ptr<const world::NaturePresentationFrame> StudioGameSurface::natureFrame(float x,float z,float radius) {
+    const auto* sim=canControl()?liveSimulation():nullptr;
+    if(!sim||sim->tick()==0)return {};
+    if(natureCache_.epoch==runtimeEpoch_&&natureCache_.tick==sim->tick()&&
+       natureCache_.x==x&&natureCache_.z==z&&natureCache_.radius==radius){
+        if(auto cached=natureCache_.frame.lock())return cached;
+    }
+    world::NaturePresentationPolicy policy;
+    policy.centerX=x;policy.centerZ=z;policy.radiusMeters=radius;policy.maxRegionCells=404;
+    policy.maxFlames=0;policy.maxClusters=0;
+    auto sample=world::buildNaturePresentation(sim->world(),policy);
+    if(!sample.valid)return {};
+    auto frame=std::make_shared<const world::NaturePresentationFrame>(std::move(sample));
+    natureCache_={runtimeEpoch_,uint64_t(sim->tick()),x,z,radius,frame};
+    return frame;
+}
+Json StudioGameSurface::physisFieldEdit(const editor::Workspace& ws,const Json& request,bool apply) {
+    // Field edits intentionally accept authored changes since launch, on the same map only.
+    auto* sim=canControl() && launchedMapCurrent() && launch_.project==ws.project.dir &&
+        launch_.sourceMap==ws.map.path ? liveSimulation():nullptr;
+    const auto map=apply?ws.map.toJson():Json{};
+    return physisFields_.inspectOrApply(sim,runtimeEpoch_,ws.map.revision,request,apply?&map:nullptr);
+}
+const World* StudioGameSurface::localPhysisWorld() const {
+    const auto* sim=canControl()?liveSimulation():nullptr;
+    return sim && sim->tick()>0 && sim->world().resourceConst<physis::State>()?&sim->world():nullptr;
+}
+std::optional<uint64_t> StudioGameSurface::physisTick() const {
+    const auto* world=localPhysisWorld();
+    const auto* state=world?world->resourceConst<physis::State>():nullptr;
+    if (!state) return {};
+    return state->tick;
+}
+Json StudioGameSurface::physisFrame(const Json& params) const {
+    const auto* sim = canControl() ? liveSimulation() : nullptr;
+    return editor::readPhysisGameFrame(sim && sim->tick()>0 ? &sim->world() : nullptr,params);
+}
 Json StudioGameSurface::planetForestState(const std::string& focusBody,const std::optional<StudioForestCameraFocus>& camera){
     Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
     if(sim&&sim->tick()>0)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
@@ -152,6 +211,17 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
+Json StudioGameSurface::staticGeometryReport(const editor::Workspace& ws) const {
+    if(launch_.project!=ws.project.dir)return {};
+    if(actor_){
+        if(launch_.sourceMap!=ws.map.path)return {};
+        const auto* scene=actor_->staticGeometry();
+        return scene ? render::staticGeometryReport(*scene) : Json{};
+    }
+    if(ws.map.data.worldSpace || ws.map.data.planet())return {};
+    return host_->staticGeometryReport();
+}
+
 bool StudioGameSurface::planetMatch() const {
     auto* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
@@ -406,8 +476,70 @@ Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
     out.set("totalMs",Json::number(totalMs,6));out.set("systemsMs",Json::number(systemsMs,6));
     return out;
 }
-Json StudioGameSurface::entities(int offset,int limit,const std::string& query) {
-    return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query);
+Json StudioGameSurface::entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group) {
+    return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query,group,setupRefs_);
+}
+std::optional<render::float3> StudioGameSurface::selectedEntityPosition() const {
+    auto* sim=liveSimulation();
+    if(!sim)return {};
+    const auto ref=inspector_.selectedRef(sim,std::to_string(runtimeEpoch_));
+    if(ref.empty())return {};
+    const auto entity=editor::worldEntity(std::stoull(ref));
+    const auto position=actor::ActorHost::regionPositionReader()(sim->world(),entity);
+    if(!position)return {};
+    return render::float3{float(position->x.toDouble()),float(position->y.toDouble()),float(position->z.toDouble())};
+}
+size_t StudioGameSurface::selectEntities(const Json& docs,const Json& refs,const std::string& epoch) {
+    auto* sim=liveSimulation();
+    auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
+    if(!mod)throw std::runtime_error("No inspectable game is running");
+    std::vector<std::string> selection;
+    for(const auto& value:docs.items()){
+        const double index=value.toDouble(-1);
+        if(!value.isNumber() || !(index>=0 && index<mod->mapPlaced().size() && std::floor(index)==index))
+            throw std::runtime_error("Unknown live map entity index");
+        selection.push_back(std::to_string(editor::worldRef(mod->mapPlaced()[size_t(index)])));
+    }
+    for(const auto& value:refs.items()){
+        if(value.isString())selection.push_back(value.str());
+        else if(value.isNumber() && value.toDouble()>0 && value.toDouble()<=9007199254740991.0 && std::floor(value.toDouble())==value.toDouble())
+            selection.push_back(std::to_string(value.integer()));
+        else throw std::runtime_error("Expected an exact world reference");
+    }
+    return inspector_.selectMany(sim,std::to_string(runtimeEpoch_),epoch,selection);
+}
+void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref,const std::string& mode) {
+    auto* sim = liveSimulation();
+    const auto currentEpoch = std::to_string(runtimeEpoch_);
+    if (mode == "replace") {
+        inspector_.select(sim,currentEpoch,epoch,ref);
+        return;
+    }
+    if (mode != "add" && mode != "toggle") throw std::runtime_error("Invalid selection mode");
+    auto refs = inspector_.selectedRefs(sim,currentEpoch);
+    const auto found = std::find(refs.begin(),refs.end(),ref);
+    if (found == refs.end()) refs.push_back(ref);
+    else if (mode == "toggle") refs.erase(found);
+    inspector_.selectMany(sim,currentEpoch,epoch,refs);
+}
+Json StudioGameSurface::queryWorld(const editor::Workspace& ws,const Json& params,bool list) {
+    auto* sim=liveSimulation();
+    auto* module=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
+    if(!module)throw std::runtime_error("No inspectable game is running");
+    std::vector<uint64_t> links;
+    for(auto e:module->mapPlaced())links.push_back(e.valid()?editor::worldRef(e):0);
+    editor::WorldModel world;
+    const auto config=studioHierarchyConfig(ws.project.manifest);
+    editor::readWorld(*sim,*module,config,links,setupRefs_,&ws.map.data,world,{false});
+    if(list){
+        if(auto* scripts=module->scripts()){
+            std::string blob;
+            for(auto& row:world.rows)
+                if(scripts->peekData(*sim,row.e,blob))editor::setWorldRowData(config,blob,row);
+        }
+        return editor::listWorldRows(world,module->rules(),&ws.map.data,params,"play");
+    }
+    return editor::inspectWorldRow(*sim,*module,world,ws.project.rulesJson,&ws.map.data,params);
 }
 Json StudioGameSurface::inspect(const std::string& epoch,const std::string& ref) {
     auto* sim=liveSimulation();
@@ -439,20 +571,178 @@ Json StudioGameSurface::editRuntime(const Json& params){
     runtimeDebugEdited_=true;
     Json out=Json::object();out.set("field",changed);out.set("runtimeDebugEdited",Json::fromBool(true));return out;
 }
-Json StudioGameSurface::state() const {
+Json StudioGameSurface::animationRuntimeStatus() const {
+    const auto* scripts=host_ && !actor_ && host_->inMatch()?host_->viewScripts():nullptr;
+    return game::animationRuntimeStatus(scripts?scripts->entityFx().get():nullptr);
+}
+
+Json StudioGameSurface::scriptLog(bool errorsOnly) const {
+    Json rows = Json::array();
+    auto* sim = liveSimulation();
+    if (!sim) return rows;
+    const auto* game = dynamic_cast<const game::GameCore*>(&sim->module());
+    const auto* scripts = game ? game->scripts() : nullptr;
+    const auto* view = actor_ ? nullptr : host_->viewScripts();
+    struct Message { const game::ScriptLogEntry* entry; const char* source; };
+    std::vector<Message> messages;
+    const auto collect = [&](const auto* vm, const char* source) {
+        if (!vm) return;
+        for (const auto& entry : vm->log())
+            if (!errorsOnly || entry.error) messages.push_back({&entry,source});
+    };
+    if (!errorsOnly || (scripts && scripts->errorCount())) collect(scripts,"simulation");
+    collect(view,"view");
+    std::stable_sort(messages.begin(),messages.end(),[](const Message& a,const Message& b) {
+        return a.entry->tick < b.entry->tick;
+    });
+    for (const auto& [entry,source] : messages) {
+        Json row = Json::object();
+        row.set("tick", Json::number(int64_t(entry->tick)));
+        row.set("text", Json::string(entry->text));
+        row.set("error", Json::fromBool(entry->error));
+        row.set("source", Json::string(source));
+        rows.push(std::move(row));
+    }
+    return rows;
+}
+static Json playerCounts(Simulation& sim, const auto& rules, const game::GameState& state, bool history) {
+    std::array<int,256> units{},structures{};
+    sim.world().each<game::Unit,Owner>([&](Entity,game::Unit& unit,Owner& owner){
+        (rules.types[unit.type].structure?structures:units)[owner.player]++;
+    });
+    Json players=Json::array();
+    for (const auto& player:sim.players()) {
+        Json row=Json::object(),resources=Json::object();
+        if (history) row.set("slot",Json::number(int64_t(player.slot)));
+        row.set("name",Json::string(player.name));
+        row.set("alive",Json::fromBool(player.alive));
+        row.set("units",Json::number(int64_t(units[player.slot])));
+        row.set("structures",Json::number(int64_t(structures[player.slot])));
+        for (size_t i=0;i<rules.resources.size();++i)
+            resources.set(rules.resources[i].id,history ? Json::number(state.players[player.slot].stock[i].toDouble(),6) : Json::number(state.players[player.slot].stock[i].toInt()));
+        row.set("resources",std::move(resources));
+        players.push(std::move(row));
+    }
+    return players;
+}
+
+void StudioGameSurface::samplePlayers() {
+    if (playerSampleEpoch_ != runtimeEpoch_) {
+        playerSamples_.clear();
+        playerSampleEpoch_ = runtimeEpoch_;
+    }
+    auto* sim = liveSimulation();
+    if (!sim || !canControl()) return;
+    const uint64_t tick = sim->tick();
+    if (!playerSamples_.empty() && tick < playerSamples_.back().tick) playerSamples_.clear();
+    if (!playerSamples_.empty() && tick - playerSamples_.back().tick < sim->tickRate()) return;
+    const auto* module = dynamic_cast<const game::GameCore*>(&sim->module());
+    const auto* state = sim->world().resourceConst<game::GameState>();
+    if (!module || !state) return;
+    playerSamples_.push_back({tick, playerCounts(*sim,module->rules(),*state,true)});
+    if (playerSamples_.size() > 3600) playerSamples_.pop_front();
+}
+
+Json StudioGameSurface::playerHistory(int64_t afterTick, const std::string& epoch) const {
+    Json out = Json::object(), samples = Json::array();
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+    const auto* sim = liveSimulation();
+    if (sim && canControl() && playerSampleEpoch_ == runtimeEpoch_) {
+        if (!actor_) out.set("assetResidency", host_->assetResidencyReport());
+        const auto pool = render::geometryPoolStats(*device_);
+        Json geometry = Json::object();
+        geometry.set("allocatedBytes", Json::number(int64_t(pool.allocatedBytes)));
+        geometry.set("occupiedBytes", Json::number(int64_t(pool.occupiedBytes)));
+        geometry.set("pages", Json::number(int64_t(pool.pages)));
+        geometry.set("models", Json::number(int64_t(pool.liveModels)));
+        out.set("geometryPool", std::move(geometry));
+        out.set("tickRate",Json::number(int64_t(sim->tickRate())));
+        out.set("units",Json::number(int64_t(sim->world().countExisting<game::Unit>())));
+        out.set("projectiles",Json::number(int64_t(sim->world().countExisting<game::Projectile>())));
+        if (epoch != std::to_string(runtimeEpoch_)) afterTick = -1;
+        if (afterTick < 0) {
+            if (const auto* module = dynamic_cast<const game::GameCore*>(&sim->module())) {
+                Json labels = Json::object();
+                for (const auto& resource : module->rules().resources)
+                    labels.set(resource.id, Json::string(resource.name));
+                out.set("resourceNames",std::move(labels));
+            }
+        }
+        for (const auto& sample : playerSamples_) {
+            if (int64_t(sample.tick) <= afterTick) continue;
+            Json row = Json::object();
+            row.set("tick",Json::number(int64_t(sample.tick)));
+            row.set("players",sample.players);
+            samples.push(std::move(row));
+        }
+    }
+    out.set("samples",std::move(samples));
+    return out;
+}
+
+Json StudioGameSurface::playStatus() const {
+    Json out=Json::object();
+    auto* sim=liveSimulation();
+    const bool client=(actor_ || host_->active()) && !launch_.map.has_value();
+    out.set("playing",Json::fromBool(!client && sim));
+    if (client) {
+        out.set("client",Json::fromBool(true));
+        out.set("loading",Json::fromBool(host_->loading()));
+        out.set("inMatch",Json::fromBool(sim!=nullptr));
+    }
+    if (!sim) return out;
+    out.set("seconds",Json::number(double(sim->tick())/sim->tickRate(),1));
+    out.set("result",Json::number(int64_t(sim->result())));
+    const auto* module=dynamic_cast<const game::GameCore*>(&sim->module());
+    if (client || !module) return out;
+    const auto& rules=module->rules();
+    const auto* state=sim->world().resourceConst<game::GameState>();
+    if (!state) return out;
+    out.set("players",playerCounts(*sim,rules,*state,false));
+    if (auto* scripts=module->scripts()) {
+        Json errors=Json::array();
+        for (const auto& entry:scripts->log()) if (entry.error)
+            errors.push(Json::string("t="+std::to_string(entry.tick)+" "+entry.text));
+        out.set("scriptErrors",std::move(errors));
+    }
+    return out;
+}
+Json StudioGameSurface::state(bool includeScriptErrors) const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(actor_ || host_->active()));
     out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
     out.set("paused",Json::fromBool(paused()));
     out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
     out.set("canControl",Json::fromBool(canControl()));
+    if (!actor_ && host_->canControl()) out.set("simulationSpeed",Json::number(host_->simulationSpeed()));
     out.set("canStep",Json::fromBool(canStep()));
     out.set("loading",Json::fromBool(!actor_ && host_->loading()));
     out.set("progress",Json::number(actor_?1.0:double(host_->progress())));
     out.set("inMatch",Json::fromBool(liveSimulation()!=nullptr));
     out.set("error",Json::string(error_));
     auto* sim=liveSimulation();
+    if (sim && launch_.localSeat) {
+        if (const auto* player=*launch_.localSeat ? sim->player(*launch_.localSeat) : nullptr)
+            out.set("roleLabel",Json::string(player->name));
+        else out.set("roleLabel",Json::string("Bots vs bots"));
+    }
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
+    const auto selected=inspector_.selectedRefs(sim,std::to_string(runtimeEpoch_));
+    if(!selected.empty()){
+        out.set("selectedLiveRef",Json::string(selected.front()));
+        Json refs=Json::array();
+        Json names=Json::object();
+        for(const auto& ref:selected){
+            refs.push(Json::string(ref));
+            if(selected.size()>1){
+                const auto name=editor::runtimeEntityName(sim->world(),editor::worldEntity(std::stoull(ref)));
+                if(!name.empty())names.set(ref,Json::string(name));
+            }
+        }
+        if(names.size())out.set("selectedLiveNames",std::move(names));
+        out.set("selectedLiveRefs",std::move(refs));
+    }
+    if (includeScriptErrors) out.set("scriptErrors", scriptLog(true));
     return out;
 }
 }

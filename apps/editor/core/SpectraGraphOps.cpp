@@ -7,6 +7,7 @@
 #include "PackageTool.h"
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
+#include "engine/fx/SpectraModuleSchema.h"
 #include "engine/fx/SpectraSdfBaker.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include <algorithm>
@@ -69,6 +70,32 @@ std::string readFile(const fs::path& path) {
     if (result.size() > size_t(maxBytes)) throw std::runtime_error("SpectraFX graph file exceeds 1 MiB");
     return result;
 }
+bool layoutPoint(const Json& point) {
+    return point.isArray() && point.size()==2 && std::all_of(point.items().begin(),point.items().end(),
+        [](const Json& value){return value.isNumber() && std::abs(value.toDouble())<=100000;});
+}
+
+void importLegacyLayout(Json& graph,const fs::path& path) {
+    std::error_code ec;
+    if(!fs::is_regular_file(fs::symlink_status(path,ec)) || fs::file_size(path,ec)>1024*1024 || ec) return;
+    Json layout;
+    try {layout=Json::parse(readFile(path));}
+    catch(const std::exception&) {return;}
+    if(layout.getInt("version")!=1 || !layout["nodes"].isObject() || !graph["nodes"].isArray()) return;
+    const auto& pan=layout["pan"];
+    const bool hasPan=layoutPoint(pan);
+    Json nodes=graph["nodes"];
+    for(auto& node:nodes.itemsMut()) {
+        const auto& xy=layout["nodes"][node.getStr("id")];
+        if(!layoutPoint(xy) || node.has("position")) continue;
+        Json position=Json::array();
+        for(size_t axis=0;axis<2;++axis)
+            position.push(Json::number(xy[axis].toDouble()+(hasPan?pan[axis].toDouble():0),3));
+        node.set("position",std::move(position));
+    }
+    graph.set("nodes",std::move(nodes));
+}
+
 void writeFile(const fs::path& path, const std::string& text) {
     if (text.size() > 1024 * 1024) throw std::runtime_error("SpectraFX graph file exceeds 1 MiB");
     std::error_code ec;
@@ -985,8 +1012,21 @@ void registerSpectraGraphOps(Workspace& ws) {
             item.set("type",Json::string(info.type));
             item.set("group",Json::string(info.group));
             item.set("v2Only",Json::fromBool(info.v2Only));
+            item.set("outputKind",strGraph(spectra::authoring::isOutput(info.type)?"none":spectra::authoring::isData(info.type)?"value":"execution"));
             item.set("properties",Json::parse(info.initialProperties));
             item.set("ports",graphStrings(spectra::authoring::inputPorts(info.type)));
+            Json fields=Json::array();
+            for(const auto& spec:spectra::fieldsForNode(info.type)){
+                static constexpr const char* kinds[]={"number","integer","boolean","string","choice","vector3","color"};
+                Json field=Json::object();
+                field.set("key",strGraph(spec.key));field.set("label",strGraph(spec.label));
+                field.set("kind",strGraph(kinds[static_cast<size_t>(spec.kind)]));
+                field.set("initial",Json::parse(spec.initial));
+                field.set("min",Json::number(spec.minimum));field.set("max",Json::number(spec.maximum));
+                field.set("choices",strGraph(spec.choices));
+                fields.push(std::move(field));
+            }
+            item.set("fields",std::move(fields));
             entries.push(std::move(item));
         }
         Json response=Json::object();
@@ -1023,7 +1063,15 @@ void registerSpectraGraphOps(Workspace& ws) {
         else if(action=="newVolume"||action=="addVolume")ok=spectra::volume::appendPreset(graph,p.getStr("preset","fire"),error);
         else if(action=="upgrade") {
             if(graph.getInt("version")!=1)ok=false;
-            else graph.set("version",Json::number(int64_t(2)));
+            else {
+                if(p.has("name") && !p.getBool("draft")) {
+                    const auto name=requireGraphName(p);
+                    if(graph.dump()!=Json::parse(readFile(graphFile(ws,name))).dump())
+                        throw std::runtime_error("Published graph changed. Reopen it before upgrading.");
+                    importLegacyLayout(graph,graphDir(ws)/(name+".layout.json"));
+                }
+                graph.set("version",Json::number(int64_t(2)));
+            }
         } else if(action=="add")
             ok=spectra::authoring::addNode(graph,p.getStr("type"),added,error);
         else if(action=="connect") {
@@ -1114,6 +1162,11 @@ void registerSpectraGraphOps(Workspace& ws) {
             props.set("staticSdf",fx::staticSdfToJson(sdf));
             // Other modules, terrain policy, and sphere stay as authored.
             n->set("properties",std::move(props));
+        } else if(action=="setTypedField" || action=="removeTypedField") {
+            auto* n=spectra::authoring::node(graph,p.getStr("node"));
+            const auto key=p.getStr("property");
+            ok=n && (action=="removeTypedField"?spectra::removeTypedField(*n,key,error):
+                                                 spectra::applyTypedField(*n,key,p["value"],error));
         } else if(action=="setProperty") {
             Json* n=spectra::authoring::node(graph,p.getStr("node"));
             if(!n || !p.has("value"))ok=false;

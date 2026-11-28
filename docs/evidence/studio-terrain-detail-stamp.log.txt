@@ -1,0 +1,15 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/2 Test #585: studio_terrain_geometry ..........   Passed    1.54 sec
+    Start 589: studio_session
+2/2 Test #589: studio_session ...................   Passed   12.91 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+EDITOR    =  14.45 sec*proc (2 tests)
+
+Total Test time (real) =  14.47 sec
+2026-11-26 07:02:05.023 AiverseStudioHTML5[52249:83211663] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:02:05.022 AiverseStudioHTML5[52249:83211663] [studio-web] JS: CROSS main VERIFIED AppKit terrain stamp, dunes, 90 degree rotation, 0.8 hardness, seed 17, strength 5, one undo step, redo and exact saved map detail on reopen

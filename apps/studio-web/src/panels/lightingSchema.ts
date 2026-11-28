@@ -2,16 +2,18 @@
 import type { FieldDescriptor } from '../propertyLogic';
 export type LightingScalarKey = 'time' | 'dayLength' | 'nightLevel' | 'clouds' | 'storm';
 export interface LightEntry {
-  entityId?: string;
+  entityId?: string; color?: number[]; halo?: number | boolean;
+  pattern?: string; rate?: number; flicker?: number;
+  angle?: number; pitch?: number; yaw?: number; sweep?: number; sweepSpeed?: number;
   x?: number; z?: number; height?: number; radius?: number; intensity?: number;
   name?: string; type?: string; nightOnly?: boolean; electric?: boolean; bake?: string;
 }
 export interface LightingState {
-  lighting: Partial<Record<LightingScalarKey, number>> | null;
+  lighting: (Partial<Record<LightingScalarKey, number>> & {preset?:string}) | null;
   lights: LightEntry[];
 }
 export const LIGHTING_KEYS: readonly LightingScalarKey[] = ['time', 'dayLength', 'nightLevel', 'clouds', 'storm'];
-export const LIGHT_EDITABLE_KEYS = ['name','type','x','z','height','radius','intensity','nightOnly','electric','bake'] as const;
+export const LIGHT_EDITABLE_KEYS = ['name','type','x','z','height','radius','intensity','halo','flicker','pattern','rate','angle','pitch','yaw','sweep','sweepSpeed','nightOnly','electric','bake'] as const;
 export type LightEditableKey = typeof LIGHT_EDITABLE_KEYS[number];
 
 export function lightingProperties(state: LightingState): FieldDescriptor[] {
@@ -25,18 +27,43 @@ export function lightingProperties(state: LightingState): FieldDescriptor[] {
     { key: 'storm', label: 'Storm', type: 'number', value: values.storm ?? 0, min: 0, max: 1, step: .01 }
   ];
 }
+export function lightColor(light:LightEntry):number[] {
+  if (light.color && light.color.length>=3) return light.color;
+  return light.type==='spot' || light.angle!==undefined ? [.95,.97,1] : [1,.62,.32];
+}
 export function lightProperties(light: LightEntry): FieldDescriptor[] {
-  return [
+  const spot = light.type === 'spot' || light.angle !== undefined;
+  const pattern = light.pattern ?? 'steady';
+  const fields: FieldDescriptor[] = [
     {key:'name',label:'Name',type:'text',value:light.name ?? ''},
-    {key:'type',label:'Type',type:'text',value:light.type ?? 'point',options:[{label:'Point',value:'point'},{label:'Spot',value:'spot'}]},
+    {key:'type',label:'Type',type:'text',value:light.type ?? (spot ? 'spot' : 'point'),options:[{label:'Point',value:'point'},{label:'Spot',value:'spot'}]},
     {key:'x',label:'Position X',type:'number',value:light.x ?? 0,min:-1000000,max:1000000,step:.1},
     {key:'z',label:'Position Z',type:'number',value:light.z ?? 0,min:-1000000,max:1000000,step:.1},
-    {key:'height',label:'Height',type:'number',value:light.height ?? 1,min:-1000,max:10000,step:.1},
-    {key:'radius',label:'Radius',type:'number',value:light.radius ?? 4,min:.001,max:100000,step:.1},
-    {key:'intensity',label:'Intensity',type:'number',value:light.intensity ?? 1.5,min:0,max:10000,step:.1},
-    {key:'nightOnly',label:'Night only',type:'boolean',value:light.nightOnly ?? false},
-    {key:'electric',label:'Electric',type:'boolean',value:light.electric ?? false},
-    {key:'bake',label:'Bake mode',type:'text',value:light.bake ?? 'realtime',options:[
-      {label:'Realtime',value:'realtime'},{label:'Mixed',value:'mixed'},{label:'Baked',value:'baked'}]}
+    {key:'height',label:'Height',type:'number',value:light.height ?? (spot ? 1.5 : 1),min:-1000,max:10000,step:.1},
+    {key:'radius',label:'Radius',type:'number',value:light.radius ?? (spot ? 9 : 4),min:.001,max:100000,step:.1},
+    {key:'intensity',label:'Intensity',type:'number',value:light.intensity ?? (spot ? 2.2 : 1.5),min:0,max:10000,step:.1},
+    {key:'halo',label:'Halo size',type:'number',value:typeof light.halo==='number' ? light.halo :
+      light.halo===false ? 0 : (light.radius ?? (spot ? 9 : 4))*(spot ? .05 : .2),min:0,max:5,step:.02},
+    {key:'flicker',label:'Flicker',type:'number',value:light.flicker ?? 0,min:0,max:1,step:.01},
+    {key:'pattern',label:'Pattern',type:'text',value:pattern,options:[
+      {label:'Steady',value:'steady'},{label:'Pulse',value:'pulse'},
+      {label:'Strobe',value:'strobe'},{label:'Beacon',value:'beacon'}]}
   ];
+  if (pattern !== 'steady') fields.push(
+    {key:'rate',label:'Frequency (Hz)',type:'number',value:light.rate ?? (pattern==='strobe' ? 1.5 : pattern==='beacon' ? .5 : .6),min:.01,max:30,step:.01});
+  if (spot) {
+    fields.push(
+      {key:'angle',label:'Cone angle (°)',type:'number',value:light.angle ?? 40,min:2,max:170,step:.5},
+      {key:'pitch',label:'Downward tilt (°)',type:'number',value:light.pitch ?? 35,min:-10,max:90,step:.5},
+      {key:'yaw',label:'Direction (°)',type:'number',value:light.yaw ?? 0,min:-360,max:360,step:1},
+      {key:'sweep',label:'Sweep amplitude (°)',type:'number',value:light.sweep ?? 0,min:0,max:180,step:.5});
+    if ((light.sweep ?? 0)>0) fields.push(
+      {key:'sweepSpeed',label:'Sweep speed (°/s)',type:'number',value:light.sweepSpeed ?? 25,min:1,max:180,step:.5});
+  }
+  fields.push(
+    {key:'nightOnly',label:'Night only',type:'boolean',value:light.nightOnly ?? false},
+    {key:'electric',label:'Electric',type:'boolean',value:light.electric ?? spot},
+    {key:'bake',label:'Bake mode',type:'text',value:light.bake ?? 'realtime',options:[
+      {label:'Realtime',value:'realtime'},{label:'Mixed',value:'mixed'},{label:'Baked',value:'baked'}]});
+  return fields;
 }

@@ -1,0 +1,7 @@
+failed world read {"error": "No such object in the world tree"}
+Traceback (most recent call last):
+  File "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/undo-read-client.py", line 51, in <module>
+    wait_for('DONE_1')
+  File "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/undo-read-client.py", line 36, in wait_for
+    raise RuntimeError(message)
+RuntimeError: DONE_1

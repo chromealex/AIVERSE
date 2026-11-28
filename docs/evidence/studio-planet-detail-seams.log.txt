@@ -1,0 +1,15 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/2 Test #585: studio_terrain_geometry ..........   Passed    1.57 sec
+    Start 589: studio_session
+2/2 Test #589: studio_session ...................   Passed    9.41 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+EDITOR    =  10.98 sec*proc (2 tests)
+
+Total Test time (real) =  11.01 sec
+2026-11-26 07:45:30.157 AiverseStudioHTML5[79353:83348301] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:45:30.156 AiverseStudioHTML5[79353:83348301] [studio-web] JS: CROSS main VERIFIED macOS same screen point: subcell elevation 1.821901 m, base 0 m; body corners all zero, grid scale 8, unchanged history and clean document

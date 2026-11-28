@@ -1,0 +1,10 @@
+{
+  "sha": "840d061c0ac07d4e7840ac7b246c944d3f743428",
+  "argv": [
+    "bash",
+    "../build-unexclude.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-remove-file-rule.log.txt",
+  "sha256": "28992fa09c71043236ad883964b8ed1b3b905ea2041b6df698cf03fa12c93abc"
+}

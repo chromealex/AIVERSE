@@ -1,0 +1,5 @@
+2026-11-27 00:45:41.753 AiverseStudioHTML5[2625:86418589] [studio-web] JS: CROSS main DONE_1
+2026-11-27 00:45:41.753 AiverseStudioHTML5[2625:86418589] [studio-web] JS: CROSS main VERIFIED hosted PHYSIS read-only Scene layer toggles, paused frame and stop, PHYSIS available cells 64
+Restored Scene changed sample count 0
+base wind changed Scene samples 551
+wind fire changed Scene samples 1314

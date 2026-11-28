@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import InputKeyCapture from './InputKeyCapture';
+import { changeInputAction } from './inputActionReferences';
+import InputTriggers from './InputTriggers';
+import InputModifiers from './InputModifiers';
+import type { StudioScriptMessage } from '../types';
+import { useCallback, useEffect, useMemo, useRef, useLayoutEffect, useState, type KeyboardEvent } from 'react';
 import { AlertTriangle, CheckCircle2, FilePlus2, Play, Plus, RefreshCw, RotateCcw, Save, ScanSearch, Trash2 } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioInputAsset, StudioInputInfo, StudioSnapshot } from '../types';
@@ -14,9 +19,18 @@ const refreshSnapshot = (ctx: Ctx) => void invoke('studio.snapshot', {}).then(ct
 /* ---------------- Fog of war (rules.json fogOfWar through rules_merge) ---------------- */
 function rgbHex(c: unknown, def: string): string {
   if (!Array.isArray(c) || c.length < 3) return def;
-  return '#' + c.slice(0, 3).map(v => { const n = Number(v); return Math.round(Math.min(255, Math.max(0, n <= 1 && n > 0 && !Number.isInteger(n) ? n * 255 : n))).toString(16).padStart(2, '0'); }).join('');
+  const channels = c.slice(0, 3).map(v => {
+    const n = Number(v);
+    const byte = n <= 1 ? n * 255 : n;
+    return Math.round(Math.min(255, Math.max(0, byte))).toString(16).padStart(2, '0');
+  });
+  return '#' + channels.join('');
 }
-const hexRgb = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const hexRgb = (h: string) => [1, 3, 5].map(i => {
+  const byte = parseInt(h.slice(i, i + 2), 16);
+  // VisibilityField treats 1 as full intensity. Encode byte 1 in normalized form.
+  return byte === 1 ? 1 / 255 : byte;
+});
 
 function Slider({ label, value, min, max, step = .01, onCommit }: { label: string; value: number; min: number; max: number; step?: number; onCommit: (v: number) => void }) {
   const [v, setV] = useState(value);
@@ -31,13 +45,21 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
     <button key={id} type="button" role="radio" aria-checked={value === id} className={value === id ? 'is-on' : ''} onClick={() => onChange(id)}>{label}</button>)}</div>;
 }
 
-export function FogPanel(ctx: Ctx) {
+export function FogPanel(ctx: Ctx & { playing: boolean; openGame: () => void }) {
+  const [starting, setStarting] = useState(false);
+  const [hasFogSettings, setHasFogSettings] = useState(false);
   const [fog, setFog] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const path = ctx.snapshot?.project.path ?? '';
   const read = useCallback(async () => {
     // Whole rules (no path): a game without a fogOfWar block is not an error.
-    try { const v = (await op('rules_get')).value; setFog(v && typeof v.fogOfWar === 'object' ? v.fogOfWar : {}); setError(''); }
+    try {
+      const rules = (await op('rules_get')).value;
+      const settings = rules?.fogOfWar;
+      setHasFogSettings(settings !== undefined);
+      setFog(settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {});
+      setError('');
+    }
     catch (e) { setError(message(e)); }
   }, []);
   useEffect(() => { if (path) void read(); }, [path, ctx.snapshot, read]);
@@ -45,9 +67,18 @@ export function FogPanel(ctx: Ctx) {
     try { await op('rules_merge', { path: 'fogOfWar', value: { [key]: value } }); await read(); refreshSnapshot(ctx); }
     catch (e) { setError(message(e)); }
   };
+  const previewInGame = async () => {
+    setStarting(true);
+    try {
+      const game = await invoke('studio.gameState', {});
+      if (!game.active && !game.loading) await invoke('studio.gameStart', { entry: 'map' });
+      ctx.openGame();
+    } catch (e) { setError(message(e)); }
+    finally { setStarting(false); }
+  };
   if (!path) return <div className="tool__empty">Open a project to edit its fog of war.</div>;
   const mode = fog.mode === 'off' ? 'none' : (fog.mode ?? 'full');
-  const grid = fog.grid && typeof fog.grid === 'object' ? fog.grid : null;
+  const grid = fog.grid && typeof fog.grid === 'object' ? fog.grid : fog.grid === true ? { show: 'fog', alpha: .12 } : null;
   const gridShow = !grid || Number(grid.alpha ?? .12) <= 0 ? 'none' : grid.show === 'always' ? 'all' : (grid.show ?? 'fog');
   const num = (k: string, d: number) => typeof fog[k] === 'number' ? fog[k] : d;
   return <div className="ptp">
@@ -74,15 +105,18 @@ export function FogPanel(ctx: Ctx) {
       <Slider label="Layer height" value={num('height', 1.3)} min={0} max={4} onCommit={v => void set('height', +v.toFixed(2))}/>
       <h4>Cell grid</h4>
       <Segmented value={gridShow} options={[['none', 'None'], ['fog', 'In fog'], ['all', 'Everywhere']]}
-        onChange={v => void set('grid', { ...(grid ?? {}), show: v, alpha: v === 'none' ? 0 : (Number(grid?.alpha) > 0 ? grid!.alpha : .15) })}/>
+        onChange={v => void set('grid', { ...(grid ?? {}), show: v, alpha: grid && Number(grid.alpha ?? .12) > 0 ? (grid.alpha ?? .12) : .15 })}/>
       {gridShow !== 'none' && <>
-        <Slider label="Line brightness" value={Number(grid?.alpha ?? .15)} min={0} max={1} onCommit={v => void set('grid', { ...grid, alpha: +v.toFixed(2) })}/>
+        <Slider label="Line brightness" value={Number(grid?.alpha ?? .12)} min={0} max={1} onCommit={v => void set('grid', { ...grid, alpha: +v.toFixed(2) })}/>
         <label className="ptp__row"><span>Line color</span><input type="color" value={rgbHex(grid?.color, '#ffffff')} onChange={e => void set('grid', { ...grid, color: hexRgb(e.target.value) })}/></label>
       </>}
       <div className="ptp__actions">
-        <button type="button" className="au-button au-button--sm" onClick={() => void op('rules_delete', { path: 'fogOfWar' }).then(read).then(() => refreshSnapshot(ctx)).catch(e => setError(message(e)))}>
+        <button type="button" className="au-button au-button--sm" disabled={!hasFogSettings} onClick={() => void op('rules_delete', { path: 'fogOfWar' }).then(read).then(() => refreshSnapshot(ctx)).catch(e => setError(message(e)))}>
           <RotateCcw size={13}/>Reset to defaults</button>
-        <span className="ptp__hint">rules.json → fogOfWar · Play the game to see it</span>
+        <button type="button" className="au-button au-button--sm" disabled={starting}
+          onClick={ctx.playing ? ctx.openGame : () => void previewInGame()}>
+          <Play size={13}/>{ctx.playing ? 'Show game' : 'Play map'}</button>
+        <span className="ptp__hint">rules.json → fogOfWar</span>
       </div>
     </div>
   </div>;
@@ -90,10 +124,49 @@ export function FogPanel(ctx: Ctx) {
 
 /* ---------------- Scripts (Lua) ---------------- */
 interface ScriptFile { path: string; role: string }
-export function ScriptsPanel(ctx: Ctx) {
+function ScriptPlayLog({playing}:{playing:boolean}) {
+  const [rows,setRows] = useState<StudioScriptMessage[]>([]);
+  const [errorsOnly,setErrorsOnly] = useState(false);
+  const [failure,setFailure] = useState('');
+  useEffect(() => {
+    let live = true, timer = 0;
+    setRows([]); setFailure('');
+    if (!playing) return;
+    async function refresh() {
+      try {
+        const next = await invoke('studio.gameScriptLog',{});
+        if (live) {setRows(next);setFailure('');}
+      } catch (e) { if (live) setFailure(message(e)); }
+      if (live) timer = window.setTimeout(refresh,750);
+    }
+    void refresh();
+    return () => {live=false;window.clearTimeout(timer);};
+  },[playing]);
+  const list = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  useEffect(() => { if(follow.current && list.current) list.current.scrollTop=list.current.scrollHeight; },[rows,errorsOnly]);
+  const errors = rows.filter(row=>row.error);
+  const shown = errorsOnly ? errors : rows;
+  return <>
+    <div className="ptp__edhead"><b>Play-test log</b>
+      {playing && !failure && rows.length>0 && <span className="scripts-page__error-count" data-errors={errors.length>0}>
+        {errors.length} {errors.length===1?'error':'errors'}
+      </span>}<label><input type="checkbox" checked={errorsOnly}
+      onChange={e=>setErrorsOnly(e.target.checked)}/> Errors only</label></div>
+    <div ref={list} className="console__list transcript-lines" aria-label="Lua play-test log"
+      onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.clientHeight-el.scrollTop<24;}}>
+      {shown.map((row,i)=><div key={i} className="transcript-line" data-level={row.error?'Errors':'Info'}>
+        <span title="Simulation tick">{row.tick}</span><code><small className="scripts-page__source">{row.source==='view'?'View':'Simulation'}</small>{row.text}</code></div>)}
+      {(!shown.length || failure) && <p className="ptp__hint">{failure || (!playing ? 'Play the map to see its Lua messages.' : errorsOnly ? 'No Lua errors.' : 'Waiting for Lua messages…')}</p>}
+    </div>
+  </>;
+}
+export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null;consumeLocation:()=>void;playing:boolean}) {
   const path = ctx.snapshot?.project.path ?? '';
   const [files, setFiles] = useState<ScriptFile[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
+  const [filesCollapsed,setFilesCollapsed]=useState(false);
+  const [fileFilter,setFileFilter]=useState('');
   const [current, setCurrent] = useState('');
   const [text, setText] = useState('');
   const [saved, setSaved] = useState('');
@@ -107,15 +180,66 @@ export function ScriptsPanel(ctx: Ctx) {
   }, []);
   useEffect(() => { if (path) void list(); else { setFiles([]); setCurrent(''); } }, [path, list]);
   const dirty = text !== saved;
-  const open = async (p: string) => {
-    if (dirty && !window.confirm('Discard unsaved changes to ' + current + '?')) return;
-    try { const r = await op('script_read', { path: p }); setCurrent(p); setText(r.text ?? ''); setSaved(r.text ?? ''); setStatus(null); }
-    catch (e) { setStatus({ ok: false, text: message(e) }); }
+  const editor = useRef<HTMLTextAreaElement>(null);
+  const loadVersion = useRef(0);
+  const pendingRead = useRef<number|null>(null);
+  const [selection,setSelection] = useState<{line:number}|null>(null);
+  const [restart,setRestart] = useState<boolean|null>(null);
+  const [updatingRestart,setUpdatingRestart] = useState(false);
+  useEffect(() => {
+    let active=true;
+    void invoke('studio.scriptWatch',{}).then(r=>{if(active)setRestart(r.restart);})
+      .catch(e=>{if(active)setStatus({ok:false,text:message(e)});});
+    return ()=>{active=false;};
+  },[]);
+  const changeRestart = async (value:boolean) => {
+    setUpdatingRestart(true);
+    try {const r=await invoke('studio.scriptWatch',{restart:value});setRestart(r.restart);}
+    catch(e){setStatus({ok:false,text:message(e)});}
+    finally{setUpdatingRestart(false);}
   };
-  const save = async (p = current, body = text, register = false) => {
-    if (!p) return;
+  const [view,setView] = useState<'source'|'log'>('source');
+  useLayoutEffect(() => {
+    if (!selection || !editor.current) return;
+    const el = editor.current;
+    const lines = el.value.split('\n');
+    const index = Math.min(lines.length, Math.max(1,selection.line))-1;
+    const start = lines.slice(0,index).reduce((n,line)=>n+line.length+1,0);
+    el.focus();
+    el.setSelectionRange(start,start+lines[index].length);
+    el.scrollTop = Math.max(0,index*parseFloat(getComputedStyle(el).lineHeight)-el.clientHeight/2);
+  }, [selection]);
+  const open = async (p: string, line?:number) => {
+    setView('source');
+    if (p === current) {
+      pendingRead.current=null;
+      if (line) setSelection({line});
+      return;
+    }
+    if (dirty && !window.confirm('Discard unsaved changes to ' + current + '?')) return;
+    const version = ++loadVersion.current;
+    pendingRead.current=version;
+    try { const r = await op('script_read', { path: p }); if(version !== pendingRead.current)return; if(line)setSelection({line}); setCurrent(p); setText(r.text ?? ''); setSaved(r.text ?? ''); setStatus(null); }
+    catch (e) { if(version === pendingRead.current)setStatus({ ok: false, text: message(e) }); }
+    finally { if(version === pendingRead.current)pendingRead.current=null; }
+  };
+  useEffect(() => {
+    if (!ctx.location) return;
+    const {path:file,line} = ctx.location;
+    ctx.consumeLocation();
+    setFileFilter('');void open(file,line);
+  }, [ctx.location]);
+  const save = async (p = current, body = text, createFile = false) => {
+    if (!p || busy) return;
+    const version=loadVersion.current;
     setBusy(true);
-    try { await op('script_write', { path: p, text: body, ...(register ? { register: true } : {}) }); setSaved(body); setCurrent(p); setStatus({ ok: true, text: 'Saved ' + p }); await list(); refreshSnapshot(ctx); }
+    try { await op('script_write', { path: p, text: body, ...(createFile ? { register:true, createOnly:true } : {}) });
+      if (createFile) setNewPath(null);
+      if (version === loadVersion.current) {
+        if (createFile) {setFileFilter('');setText(body);setView('source');}
+        setSaved(body);setCurrent(p);setStatus({ok:true,text:'Saved '+p});
+      }
+      await list(); refreshSnapshot(ctx); }
     catch (e) { setStatus({ ok: false, text: message(e) }); }
     finally { setBusy(false); }
   };
@@ -130,9 +254,13 @@ export function ScriptsPanel(ctx: Ctx) {
     if (!p) return;
     if (!p.startsWith('scripts/')) p = 'scripts/' + p;
     if (!p.endsWith('.lua')) p += '.lua';
-    setNewPath(null);
-    await save(p, '-- ' + p + '\n', true);
-    setText('-- ' + p + '\n');
+    if (busy) return;
+    if (dirty && !window.confirm('Discard unsaved changes to ' + current + '?')) return;
+    setView('source');
+    const body = p.startsWith('scripts/view/')
+      ? 'view.on_frame(function(dt)\n  -- Update the presentation here.\nend)\n'
+      : 'function on_start()\n  game.message(0, "Game started")\nend\n\non("unit_died", function(event)\n  -- Handle the unit event here.\nend)\n';
+    await save(p,body,true);
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); void save(); return; }
@@ -145,21 +273,37 @@ export function ScriptsPanel(ctx: Ctx) {
     }
   };
   const lines = useMemo(() => text.split('\n').length, [text]);
+  const query=fileFilter.trim().toLowerCase();
+  const visibleFiles=files.filter(f=>(f.path+' '+f.role).toLowerCase().includes(query));
+  const visibleMissing=missing.filter(p=>p.toLowerCase().includes(query));
   if (!path) return <div className="tool__empty">Open a project to edit its Lua scripts.</div>;
-  return <div className="ptp ptp--split">
-    <aside className="ptp__files">
+  return <div className="ptp ptp--split scripts-page">
+    <aside className={'ptp__files'+(filesCollapsed?' scripts-files-collapsed':'')}>
       <div className="ptp__fileshead"><b>Scripts</b>
-        <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" onClick={() => setNewPath('')}><FilePlus2 size={13}/></button>
+        <button type="button" className="au-button au-button--sm scripts-files-toggle" aria-expanded={!filesCollapsed} onClick={()=>setFilesCollapsed(v=>!v)}>{filesCollapsed?'Show files':'Hide files'}</button>
+        <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" disabled={busy} aria-label="New script" onClick={() => {setFilesCollapsed(false);setNewPath(files.length ? '' : 'main.lua');}}><FilePlus2 size={13}/></button>
         <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Refresh" onClick={() => void list()}><RefreshCw size={13}/></button></div>
       {newPath !== null && <form className="ptp__new" onSubmit={e => { e.preventDefault(); void create(); }}>
-        <input autoFocus className="au-input" placeholder="scripts/name.lua" value={newPath} onChange={e => setNewPath(e.target.value)}
-          onKeyDown={e => e.key === 'Escape' && setNewPath(null)}/></form>}
-      {files.map(f => <button key={f.path} type="button" className={'ptp__file' + (f.path === current ? ' is-on' : '')} onClick={() => void open(f.path)} title={f.role}>
+        <label>Script path<input aria-label="Script path" autoFocus className="au-input" placeholder="scripts/name.lua" value={newPath} onChange={e => setNewPath(e.target.value)}
+          onKeyDown={e => e.key === 'Escape' && setNewPath(null)}/></label>
+        <small>Use view/ for a presentation script.</small>
+        <button type="submit" className="au-button au-button--sm au-button--primary" disabled={busy || !newPath.trim()}>Create script</button>
+        <button type="button" className="au-button au-button--sm" disabled={busy} onClick={()=>setNewPath(null)}>Cancel</button></form>}
+      <input type="search" className="au-input" aria-label="Filter scripts" placeholder="Filter by path or role…" value={fileFilter} onChange={e=>setFileFilter(e.currentTarget.value)}/>
+      {query && !visibleFiles.length && !visibleMissing.length && <p className="ptp__hint" role="status">No matching scripts.</p>}
+      {visibleFiles.map(f => <button key={f.path} type="button" className={'ptp__file' + (f.path === current ? ' is-on' : '')} onClick={() => void open(f.path)} title={f.role}>
         <span>{f.path.replace(/^scripts\//, '')}</span><small>{f.role.startsWith('module') ? 'module' : f.role}</small></button>)}
-      {missing.map(m => <div key={m} className="ptp__file is-missing" title="Listed in rules or the map, file not found"><AlertTriangle size={11}/><span>{m}</span></div>)}
-      {!files.length && !missing.length && <p className="ptp__hint">No scripts yet.</p>}
+      {visibleMissing.map(m => <div key={m} className="ptp__file is-missing" title="Listed in rules or the map, file not found"><AlertTriangle size={11}/><span>{m}</span></div>)}
+      {!query && !files.length && !missing.length && <p className="ptp__hint">No scripts yet.</p>}
     </aside>
     <section className="ptp__editor">
+      <nav className="console__views" aria-label="Script views">
+        <button type="button" aria-pressed={view==='source'} onClick={()=>setView('source')}>Source</button>
+        <button type="button" aria-pressed={view==='log'} onClick={()=>setView('log')}>Play-test log</button>
+        <label className="scripts-page__restart"><input type="checkbox" checked={restart===true}
+          disabled={restart===null || updatingRestart} onChange={e=>void changeRestart(e.target.checked)}/> Restart on Lua changes</label>
+      </nav>
+      {view === 'log' ? <ScriptPlayLog playing={ctx.playing}/> : <>
       <div className="ptp__edhead">
         <b>{current || 'No script open'}{dirty && ' •'}</b>
         <button type="button" className="au-button au-button--sm au-button--primary" disabled={!current || !dirty || busy} onClick={() => void save()}><Save size={13}/>Save</button>
@@ -169,7 +313,7 @@ export function ScriptsPanel(ctx: Ctx) {
       {status && <div className={'ptp__status ' + (status.ok ? 'is-ok' : 'is-error')} role={status.ok ? 'status' : 'alert'}>{status.text}</div>}
       <div className="ptp__code">
         <pre className="ptp__gutter" aria-hidden>{Array.from({ length: lines }, (_, i) => i + 1).join('\n')}</pre>
-        <textarea spellCheck={false} value={text} disabled={!current} onChange={e => setText(e.target.value)} onKeyDown={onKey}
+        <textarea aria-label="Lua source" ref={editor} spellCheck={false} value={text} disabled={!current} onChange={e => setText(e.target.value)} onKeyDown={onKey}
           onScroll={e => { const g = e.currentTarget.previousElementSibling as HTMLElement | null; if (g) g.scrollTop = e.currentTarget.scrollTop; }}/>
       </div>
       {check && <div className={'ptp__check-out ' + (check.ok ? 'is-ok' : 'is-error')}>
@@ -177,6 +321,7 @@ export function ScriptsPanel(ctx: Ctx) {
         {check.errors.map((e, i) => <div key={'e' + i} className="ptp__err">{e}</div>)}
         {check.log.slice(-40).map((l, i) => <div key={'l' + i}>{l}</div>)}
       </div>}
+    </>}
     </section>
   </div>;
 }
@@ -185,8 +330,19 @@ export function ScriptsPanel(ctx: Ctx) {
 type InputAction = StudioInputAsset['actions'][number];
 type InputContext = StudioInputAsset['contexts'][number];
 type InputMapping = InputContext['mappings'][number];
+function InputActionName({ name, rename, reject }: { name: string; rename: (value: string) => void; reject: () => void }) {
+  const [draft, setDraft] = useState(name);
+  useEffect(() => setDraft(name), [name]);
+  return <input className="au-input" aria-label="Action name" value={draft}
+    onChange={e => { setDraft(e.target.value); rename(e.target.value); }}
+    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+    onBlur={() => { if (draft !== name) { setDraft(name); reject(); } }}/>;
+}
 export function InputPanel(ctx: Ctx) {
   const path = ctx.snapshot?.project.path ?? '';
+  const [conflictReport, setConflictReport] = useState<{asset: StudioInputAsset; project: string; total: number;
+    rows: { higher: string; lower: string; shadowed: boolean }[] } | null>(null);
+  const [capturePolicy, setCapturePolicy] = useState('swap');
   const [info, setInfo] = useState<StudioInputInfo | null>(null);
   const [asset, setAsset] = useState<StudioInputAsset>({ version: 1, actions: [], contexts: [] });
   const [dirty, setDirty] = useState(false);
@@ -203,14 +359,27 @@ export function InputPanel(ctx: Ctx) {
   };
   if (!path) return <div className="tool__empty">Open a project to edit its input actions.</div>;
   const setAction = (i: number, a: Partial<InputAction>) => edit({ ...asset, actions: asset.actions.map((x, n) => n === i ? { ...x, ...a } : x) });
-  const renameAction = (i: number, name: string) => {
-    const old = asset.actions[i].name;
-    edit({ actions: asset.actions.map((x, n) => n === i ? { ...x, name } : x), version: 1,
-      contexts: asset.contexts.map(c => ({ ...c, mappings: c.mappings.map(m => m.action === old ? { ...m, action: name } : m) })) });
-  };
   const setContext = (i: number, c: Partial<InputContext>) => edit({ ...asset, contexts: asset.contexts.map((x, n) => n === i ? { ...x, ...c } : x) });
   const setMapping = (ci: number, mi: number, m: Partial<InputMapping>) =>
     setContext(ci, { mappings: asset.contexts[ci].mappings.map((x, n) => n === mi ? { ...x, ...m } : x) });
+  const bindKey = (ci: number, mi: number, code: string) => {
+    const mappings = asset.contexts[ci].mappings;
+    const conflicts = mappings.filter((m, i) => i !== mi && m.control.device === 'keyboard' && m.control.code === code);
+    if (conflicts.length && capturePolicy === 'reject') {
+      setStatus({ ok: false, text: 'That key is already used in this context.' });
+      return;
+    }
+    if (conflicts.length > 1 && capturePolicy === 'swap') {
+      setStatus({ ok: false, text: 'Cannot swap a key used by multiple bindings.' });
+      return;
+    }
+    setContext(ci, { mappings: mappings.map((m, i) => {
+      if (i === mi) return { ...m, control: { device: 'keyboard', code } };
+      if (capturePolicy === 'swap' && m === conflicts[0]) return { ...m, control: mappings[mi].control };
+      return m;
+    }) });
+    setStatus({ ok: true, text: 'Bound ' + code + ' to ' + mappings[mi].action + '.' });
+  };
   const codes = (device: string): string[] => device === 'keyboard' ? info?.keys ?? [] : device === 'gamepadButton' ? info?.padButtons ?? []
     : device === 'gamepadAxis' ? info?.padAxes ?? [] : device === 'mouseButton' ? ['left', 'right', 'middle', 'x1', 'x2']
     : device === 'mouseAxis' || device === 'mouseWheel' ? ['x', 'y'] : [];
@@ -218,22 +387,46 @@ export function InputPanel(ctx: Ctx) {
   const nextId = () => 1 + Math.max(0, ...asset.contexts.flatMap(c => c.mappings.map(m => m.id ?? 0)));
   return <div className="ptp">
     <div className="ptp__edhead">
+      {info?.presets && (['fps', 'rts'] as const).map(key =>
+        <button type="button" key={key} className="au-button au-button--sm" title="Replace the draft bindings. Save to write them to the project."
+          onClick={() => { edit(info.presets![key]); setStatus({ ok: true, text: key.toUpperCase() + ' defaults loaded into the draft.' }); }}>
+          Use {key.toUpperCase()} defaults
+        </button>)}
+      <button type="button" className="au-button au-button--sm" onClick={() => {
+        void invoke('studio.inputConflicts', { asset }).then(report => setConflictReport({ ...report, asset, project: path }))
+          .catch(e => setStatus({ ok: false, text: message(e) }));
+      }}>Check conflicts</button>
+      <label>On key conflict <select className="au-input" value={capturePolicy} onChange={e => setCapturePolicy(e.target.value)}>
+        <option value="swap">Swap keys</option><option value="reject">Reject duplicate</option><option value="allow">Allow duplicate</option>
+      </select></label>
       <b>{info?.path ?? 'input/actions.json'}{!info?.exists && ' (new)'}{dirty && ' •'}</b>
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={!dirty} onClick={() => void save()}><Save size={13}/>Save</button>
       <button type="button" className="au-button au-button--sm" disabled={!dirty} onClick={() => void load()}><RotateCcw size={13}/>Revert</button>
     </div>
     {status && <div className={'ptp__status ' + (status.ok ? 'is-ok' : 'is-error')} role={status.ok ? 'status' : 'alert'}>{status.text}</div>}
     <div className="ptp__scroll">
+      {conflictReport?.asset === asset && conflictReport.project === path && <section aria-label="Control conflicts">
+        <h4>Control conflicts ({conflictReport.total})</h4>
+        {conflictReport.total === 0 ? <p>No shared controls in active contexts.</p> :
+          <table className="ptp__table"><thead><tr><th>Earlier binding</th><th>Later binding</th><th>Result</th></tr></thead>
+            <tbody>{conflictReport.rows.map((row, i) => <tr key={i}><td>{row.higher}</td><td>{row.lower}</td>
+              <td>{row.shadowed ? 'Later binding shadowed' : 'Shared control'}</td></tr>)}</tbody></table>}
+        {conflictReport.total > conflictReport.rows.length && <p>Showing the first {conflictReport.rows.length} conflicts.</p>}
+      </section>}
       <h4>Actions <small>what the player can do</small>
         <button type="button" className="au-button au-button--ghost au-button--sm" onClick={() => edit({ ...asset, actions: [...asset.actions, { name: unique('Action', asset.actions.map(a => a.name)), type: 'bool' }] })}><Plus size={12}/>Action</button></h4>
       <table className="ptp__table ptp__table--rows"><tbody>
         {asset.actions.map((a, i) => <tr key={i}>
-          <td><input className="au-input" value={a.name} onChange={e => renameAction(i, e.target.value)}/></td>
+          <td><InputActionName name={a.name} rename={value => {
+            const next = changeInputAction(asset, i, value);
+            if (next !== asset) edit(next);
+          }} reject={() => setStatus({ ok: false, text: 'Enter a unique, nonempty action name.' })}/></td>
           <td><select className="au-input" value={a.type} onChange={e => setAction(i, { type: e.target.value as InputAction['type'] })}>
             {['bool', 'axis1D', 'axis2D', 'axis3D'].map(t => <option key={t}>{t}</option>)}</select></td>
-          <td className="ptp__meta">{(a.modifiers?.length ?? 0) + (a.triggers?.length ?? 0) ? `${a.modifiers?.length ?? 0} mod · ${a.triggers?.length ?? 0} trig` : ''}</td>
+          <td><InputModifiers items={a.modifiers} onChange={modifiers => setAction(i, { modifiers })}/></td>
+          <td><InputTriggers items={a.triggers} actions={asset.actions} onChange={triggers => setAction(i, { triggers })}/></td>
           <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete action"
-            onClick={() => edit({ ...asset, actions: asset.actions.filter((_, n) => n !== i), contexts: asset.contexts.map(c => ({ ...c, mappings: c.mappings.filter(m => m.action !== a.name) })) })}><Trash2 size={12}/></button></td>
+            onClick={() => edit(changeInputAction(asset, i, null))}><Trash2 size={12}/></button></td>
         </tr>)}
       </tbody></table>
       {!asset.actions.length && <p className="ptp__hint">No actions. Add one, then bind keys to it in a context.</p>}
@@ -256,6 +449,15 @@ export function InputPanel(ctx: Ctx) {
               ? <select className="au-input" value={String(m.control.code)} onChange={e => setMapping(ci, mi, { control: { ...m.control, code: e.target.value } })}>
                   {codes(m.control.device).map(k => <option key={k}>{k}</option>)}</select>
               : <input className="au-input ptp__narrow" type="number" value={Number(m.control.code) || 0} onChange={e => setMapping(ci, mi, { control: { ...m.control, code: Math.round(Number(e.target.value) || 0) } })}/>}</td>
+            <td>{(m.control.device === 'touch' || m.control.device === 'gamepadAxis' || m.control.device === 'gamepadButton') &&
+              <label>Device index <select className="au-input ptp__narrow" value={m.control.deviceIndex ?? 0}
+                onChange={e => setMapping(ci, mi, { control: { ...m.control, deviceIndex: Number(e.target.value) } })}>
+                {Array.from({ length: m.control.device === 'touch' ? 32 : 4 }, (_, index) =>
+                  <option key={index} value={index}>{index}</option>)}
+              </select></label>}</td>
+            <td><InputModifiers items={m.modifiers} onChange={modifiers => setMapping(ci, mi, { modifiers })}/></td>
+            <td><InputTriggers items={m.triggers} actions={asset.actions} onChange={triggers => setMapping(ci, mi, { triggers })}/></td>
+            <td><InputKeyCapture keys={info?.keys ?? []} bind={code => bindKey(ci, mi, code)}/></td>
             <td className="ptp__consume"><label className="ptp__check" title="Stop lower-priority contexts from seeing this input"><input type="checkbox" checked={m.consume ?? false} onChange={e => setMapping(ci, mi, { consume: e.target.checked })}/>Consume</label></td>
             <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete binding" onClick={() => setContext(ci, { mappings: c.mappings.filter((_, n) => n !== mi) })}><Trash2 size={12}/></button></td>
           </tr>)}

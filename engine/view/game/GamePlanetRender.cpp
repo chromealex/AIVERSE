@@ -36,16 +36,6 @@ struct SU0 { float inv[16]; float eye[4], star[4], starColor[4]; };
 struct AU0 { float model[16]; float body[4], shell[4], color[4], sun[4]; };
 void put(float* d, float3 v, float w) { d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = w; }
 
-// Kind of a planet cell from its flags (CellKind of the flat terrain; no levels / dig on planets).
-int kindOfFlags(uint8_t f) {
-    if (!(f & kCellGround) && (f & kCellWater)) return kKindLakebed;
-    if (!(f & kCellGround)) return kKindBlocked;
-    if (f & kCellRock) return kKindRock;
-    if (f & kCellRamp) return kKindRamp;
-    if (f & kCellWater) return kKindShallows;
-    if (f & kCellNoBuild) return kKindSand;
-    return kKindGrass;
-}
 } // namespace
 
 void PlanetRenderer::init(gfx::Device& dev, const TerrainLook& look, const FileReader& read, const std::string& contentBase) {
@@ -413,7 +403,7 @@ float3 PlanetRenderer::cornerColor(const PlanetBody& pb, const PlanetSurface& s,
     for (int k = 0; k < 4; ++k) {
         const int x = i - 1 + (k & 1), y = j - 1 + (k >> 1);
         if (x < 0 || y < 0 || x >= N || y >= N) continue;
-        const int kind = kindOfFlags(s.cellFlags(face, x, y));
+        const int kind = terrainCellKind(s.cellFlags(face, x, y));
         const float n = float(hashCell(face, x, y) & 255) / 255.0f;
         float3 c;
         if (look_.hasColor[kind]) c = look_.color[kind] * (0.96f + n * 0.08f);
@@ -434,7 +424,7 @@ float3 PlanetRenderer::cornerColor(const PlanetBody& pb, const PlanetSurface& s,
         const int x = std::clamp(i, 0, N - 1), y = std::clamp(j, 0, N - 1);
         uint32_t sp;
         (void)sp;
-        const int kind = kindOfFlags(s.cellFlags(face, x, y));
+        const int kind = terrainCellKind(s.cellFlags(face, x, y));
         sum = {0.4f, 0.48f, 0.3f}; cnt = 1; w[std::clamp(look_.cellLayer[kind], 0, 3)] = 1;
     }
     auto q = [&](float v) { return uint32_t(std::clamp(v / cnt, 0.0f, 1.0f) * 255.0f + 0.5f); };

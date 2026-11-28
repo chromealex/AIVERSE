@@ -1,0 +1,10 @@
+{
+  "sha": "0539bdab9b588f36a5287f6e48a1b5bf6f7ebc69",
+  "argv": [
+    "bash",
+    "/tmp/light-runtime-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-game-frame.log.txt",
+  "sha256": "0ea8707503f23537c06aa8d9b0083c20864c01cd86faba34cba547e7e4d2e276"
+}

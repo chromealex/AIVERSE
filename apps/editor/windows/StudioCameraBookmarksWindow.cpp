@@ -12,30 +12,10 @@
 #include "../EditorUtil.h"
 #include "engine/platform/Platform.h"
 
+#include "../core/LegacyCameraBookmarks.h"
+
 namespace aiverse::editor {
-namespace {
-struct SavedCamera {
-    render::float3 target{0, 0, 0};
-    float yaw = 0, pitch = 0.95f, distance = 30, fov = 0.75f;
-    bool ortho = false, valid = false;
-};
-
-std::string projectKey(const std::string& path) {
-    // Stable FNV-1a, never std::hash (which isn't stable across implementations).
-    uint64_t hash = 14695981039346656037ull;
-    for (unsigned char c : path) { hash ^= c; hash *= 1099511628211ull; }
-    constexpr char digits[] = "0123456789abcdef";
-    std::string out(16, '0');
-    for (int i = 15; i >= 0; --i) { out[size_t(i)] = digits[hash & 15u]; hash >>= 4; }
-    return out;
-}
-
-bool finite(const SavedCamera& c) {
-    return std::isfinite(c.target.x) && std::isfinite(c.target.y) && std::isfinite(c.target.z) &&
-           std::isfinite(c.yaw) && std::isfinite(c.pitch) && std::isfinite(c.distance) && std::isfinite(c.fov) &&
-           c.pitch >= 0.01f && c.pitch <= 1.57f && c.distance > 0 && c.distance < 1000000 && c.fov > 0.01f && c.fov < 3.14f;
-}
-} // namespace
+using legacy_camera::SavedCamera;
 
 class StudioCameraBookmarksWindow final : public EditorWindow {
 public:
@@ -113,20 +93,9 @@ private:
     std::string project_;
 
     std::filesystem::path path() const {
-        return std::filesystem::path(platform::userDataDir()) / ("studio_scene_cameras_" + projectKey(project_) + ".txt");
+        return legacy_camera::bookmarkFile(platform::userDataDir(), project_);
     }
-    void load() {
-        slots_ = {};
-        std::ifstream in(path());
-        std::string version;
-        if (!(in >> version) || version != "AIVERSE_CAMERA_BOOKMARKS_V1") return;
-        for (auto& s : slots_) {
-            int present = 0, ortho = 0;
-            if (!(in >> present >> s.target.x >> s.target.y >> s.target.z >> s.yaw >> s.pitch >> s.distance >> s.fov >> ortho)) { slots_ = {}; return; }
-            s.ortho = ortho != 0;
-            s.valid = present != 0 && finite(s);
-        }
-    }
+    void load() { slots_ = legacy_camera::read(path()); }
     bool save() const {
         namespace fs = std::filesystem;
         std::error_code ec;

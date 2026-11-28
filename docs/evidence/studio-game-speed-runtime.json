@@ -1,0 +1,10 @@
+{
+  "sha": "5dc041dd6c7f6344bb8ae3af68f030c3d3bb7118",
+  "argv": [
+    "bash",
+    "/tmp/game-speed-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-game-speed-runtime.log.txt",
+  "sha256": "5816cda4a34654ef5b0705cdcdb5a5275b286d6d73f28dd71fa10a3d56f79827"
+}

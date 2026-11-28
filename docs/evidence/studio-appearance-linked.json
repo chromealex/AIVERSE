@@ -1,0 +1,10 @@
+{
+  "sha": "51cfd526390c28835aca069a2747671d2780d3c6",
+  "argv": [
+    "bash",
+    "/tmp/appearance-test.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-appearance-linked.log.txt",
+  "sha256": "2473d525458e31a595ebd8956e62b630f91224a6822f48cf61ead303f749bf4b"
+}

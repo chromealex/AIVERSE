@@ -38,3 +38,29 @@
 .hier__row:hover .hier__flag,.hier__row:focus-within .hier__flag,.hier__flag.is-on{opacity:1}
 .hier__flag.is-on{color:var(--au-text-soft)}
 .hier__flag:hover{background:var(--au-hover);color:var(--au-text)}
+.hier__grouping,.hier__group{display:flex;align-items:center;gap:var(--au-space-1)}
+.hier__grouping{padding:4px 6px;color:var(--au-text-muted)}
+.hier__grouping .au-select{flex:1;min-width:0;min-height:24px;height:24px;padding-block:0;line-height:1.25}
+.hier__group{background:var(--au-panel-raised);border-bottom:1px solid var(--au-line)}
+.hier__group button{display:flex;align-items:center;min-height:25px;border:0;background:transparent;color:var(--au-text-soft);font:inherit;cursor:pointer}
+.hier__group button:nth-child(2){flex:1;min-width:0;gap:4px;text-align:start}
+.hier__group button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hier__group small{margin-inline-start:auto;color:var(--au-text-muted)}
+.hier__group button:hover,.hier__group button:focus-visible{background:var(--au-hover);color:var(--au-text)}
+.hier__disclosure{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border:0;border-radius:4px;padding:0;background:none;color:var(--au-text-muted);cursor:pointer}
+.hier__disclosure:hover{color:var(--au-text);background:var(--au-hover)}
+.hier__row[data-nested-leaf]::before,.hier-preview[data-nested-leaf]::before{content:"";flex:0 0 22px}
+.hier-preview{display:flex;align-items:flex-start;padding-right:6px;color:var(--au-text-muted)}
+.hier-preview details{flex:1;min-width:0}
+.hier-preview summary{display:flex;align-items:center;gap:6px;min-height:25px;cursor:pointer}
+.hier-preview summary::-webkit-details-marker{display:none}
+.hier-preview summary span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hier-preview summary small{margin-left:auto;color:var(--au-text-faint)}
+.hier-preview dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:0 0 8px;padding:8px;border-left:2px solid var(--au-accent);background:var(--au-field)}
+.hier-preview dd{margin:0;color:var(--au-text);overflow-wrap:anywhere}
+
+.hier-preview[data-selected]{background:var(--au-field);box-shadow:inset 2px 0 var(--au-accent);color:var(--au-text)}
+
+.hier__players { padding: var(--au-space-2); max-height: 35%; overflow: auto; }
+.hier__players summary { cursor: pointer; }
+.hier__players button { margin: var(--au-space-1); }

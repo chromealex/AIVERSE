@@ -1,0 +1,18 @@
+.bake-range{display:grid;grid-template-columns:minmax(0,1fr) 4ch;align-items:center;gap:12px}
+.bake-range output{text-align:right;font-variant-numeric:tabular-nums}
+.light-bake details summary{cursor:pointer;padding:8px 0}
+.light-bake dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(68px,1fr));gap:8px}
+.light-bake dd{margin:4px 0;font-weight:650}
+
+.bake-atlas img{display:block;width:min(100%,320px);image-rendering:pixelated;height:auto;margin:10px auto;background:#121822}
+
+.bake-job { display:grid; gap:var(--au-space-3); }
+.bake-job button { justify-self:start; }
+.bake-job p { margin:0; }
+.bake-job-progress { display:grid; grid-template-columns:1fr auto; gap:var(--au-space-2); }
+.bake-job-progress span::first-letter { text-transform:uppercase; }
+.bake-job-progress strong { font-variant-numeric:tabular-nums; }
+.bake-job-progress progress { grid-column:1/-1; width:100%; height:6px; appearance:none; border:0; border-radius:3px; overflow:hidden; background:var(--au-line); }
+.bake-job-progress progress::-webkit-progress-bar { background:var(--au-line); }
+.bake-job-progress progress::-webkit-progress-value { background:var(--au-accent); }
+.bake-job-progress progress::-moz-progress-bar { background:var(--au-accent); }

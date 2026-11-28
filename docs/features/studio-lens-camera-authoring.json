@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "id": "studio-lens-camera-authoring",
+  "owner": "Studio HTML5 / LENS",
+  "changed_paths": [
+    "apps/studio-native/StudioHost.cpp",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-web/src/panels/LensCameraPanel.css",
+    "apps/studio-web/src/panels/LensCameraPanel.tsx",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioScene.h",
+    "apps/studio-web/src/nativeOverlay.ts",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/SpectraDockViewport.tsx",
+    "docs/camera-system.md",
+    "apps/editor/core/LensOps.cpp",
+    "tests/lens_ops_test.cpp",
+    "skills/visuals/aiverse-lens/SKILL.md"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The form edits the source camera document. The native LENS codec owns its validation and fixed-point defaults.",
+      "evidence": [
+        "docs/handoff/studio-html5/studio-only-editor.md",
+        "apps/studio-web/src/panels/LensCameraPanel.tsx"
+      ]
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The LENS authoring skill documents project reads, revision checks and native validation.",
+      "evidence": [
+        "docs/handoff/studio-html5/studio-only-editor.md",
+        "skills/visuals/aiverse-lens/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Mac desktop acceptance includes Follow overrides, navigating Scene, retained drafts, selected-camera PNG, creating cameras from both Scene projections, and native physical lens readouts. Windows runtime acceptance is outstanding.",
+      "evidence": [
+        "docs/evidence/studio-lens-html5/scene-and-camera.png",
+        "docs/evidence/studio-lens-html5/camera-15deg.png",
+        "docs/evidence/studio-lens-html5/camera-28deg.png",
+        "docs/evidence/studio-lens-html5/follow-settings.png",
+        "docs/evidence/studio-lens-html5/physical-optics.png"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Two named records survived reload. Native validation rejected invalid clip planes. Revision and project guards remain active.",
+      "evidence": [
+        "docs/handoff/studio-html5/studio-only-editor.md",
+        "apps/studio-web/src/panels/LensCameraPanel.tsx"
+      ]
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Runtime verified in bundled macOS Metal Studio. Windows Vulkan runtime pending.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Native lens_ops and studio_session passed at the recorded SHA. Desktop Mac also exercised independent preview and PNG capture. Full merged-tree gate pending.",
+      "evidence": [
+        "docs/evidence/studio-lens-native-1c0544842.json",
+        "docs/evidence/studio-lens-follow-c94c7f595.json",
+        "docs/evidence/studio-lens-optics-322216da2.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The stage handoff identifies the implementation SHA, captures and remaining checks.",
+      "evidence": [
+        "docs/handoff/studio-html5/studio-only-editor.md",
+        "apps/studio-web/src/panels/LensCameraPanel.tsx"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "HTML5 authoring and the dimensions and location of PNG output are documented.",
+      "evidence": [
+        "docs/camera-system.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-lens",
+      "aiverse-lens-native"
+    ],
+    "mcp_tools": [
+      "lens_scene_get",
+      "lens_scene_set",
+      "lens_camera_set",
+      "lens_camera_delete",
+      "lens_camera_presets",
+      "lens_scene_validate"
+    ],
+    "studio_panels": [
+      "actor"
+    ],
+    "studio_methods": [
+      "studio.op",
+      "studio.lensPreview"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/studio-lens-native-1c0544842.json",
+    "docs/evidence/studio-lens-follow-c94c7f595.json",
+    "docs/evidence/studio-lens-optics-322216da2.json"
+  ]
+}

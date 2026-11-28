@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightProperties} from '../src/panels/lightingSchema.ts';
+import {LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightColor, lightProperties} from '../src/panels/lightingSchema.ts';
 import {parseFieldDraft} from '../src/propertyLogic.ts';
 
 test('lighting schema exposes exactly the native allowlisted keys',()=>{
@@ -22,7 +22,7 @@ test('project lighting values override defaults without mutating source',()=>{
   assert.deepEqual(source,{lighting:{storm:.6},lights:[]});
 });
 test('light properties match the native API key allowlist',()=>{
-  assert.deepEqual(lightProperties({}).map(x=>x.key),[...LIGHT_EDITABLE_KEYS]);
+  assert.deepEqual(lightProperties({type:"spot",pattern:"beacon",sweep:25}).map(x=>x.key),[...LIGHT_EDITABLE_KEYS]);
 });
 test('enum options reject unsupported modes',()=>{
   const fields=lightProperties({type:'spot',bake:'mixed'});
@@ -40,4 +40,27 @@ test('numeric fields reject invalid values',()=>{
   assert.deepEqual(parseFieldDraft(intensity,'0'),{ok:true,value:0});
   const radius=fields.find(f=>f.key==='radius');
   assert.equal(parseFieldDraft(radius,'0').ok,false);
+});
+
+test('legacy angle selects spot fields and pattern frequency follows the renderer',()=>{
+  const point=lightProperties({});
+  assert.ok(!point.some(field=>['angle','rate','sweepSpeed'].includes(field.key)));
+  const spot=lightProperties({angle:60,pattern:'strobe'});
+  assert.equal(spot.find(field=>field.key==='type').value,'spot');
+  assert.equal(spot.find(field=>field.key==='rate').value,1.5);
+  assert.ok(!spot.some(field=>field.key==='sweepSpeed'));
+  const fields=lightProperties({type:'spot',sweep:30,pattern:'beacon'});
+  assert.equal(fields.find(field=>field.key==='sweepSpeed').value,25);
+  assert.equal(fields.find(field=>field.key==='rate').value,.5);
+});
+
+test('point and legacy spot light defaults match the renderer, including boolean halos',()=>{
+  const halo=light=>lightProperties(light).find(field=>field.key==='halo').value;
+  assert.deepEqual(lightColor({}),[1,.62,.32]);
+  assert.deepEqual(lightColor({angle:30}),[.95,.97,1]);
+  assert.deepEqual(lightColor({color:[0,.4,1]}),[0,.4,1]);
+  assert.equal(halo({}),.8);
+  assert.equal(halo({type:'spot',radius:10,halo:true}),.5);
+  assert.equal(halo({halo:false}),0);
+  assert.equal(halo({halo:1.25}),1.25);
 });

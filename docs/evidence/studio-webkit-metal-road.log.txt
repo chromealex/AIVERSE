@@ -1,0 +1,11 @@
+2026-11-26 00:23:44.399 AiverseStudioHTML5[81871:81878220] [studio-web] JS: CROSS main DONE_1
+2026-11-26 00:23:44.399 AiverseStudioHTML5[81871:81878220] [studio-web] JS: CROSS main VERIFIED HTML pointer drag cancellation, A, Shift-B, C, Escape, undo, redo, save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/road-html-qa-DADLF7/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/road-html-qa-DADLF7/Catalog.app: replacing existing signature
+2026-11-26 00:23:49.407 AiverseStudioHTML5[82344:81880689] [studio-web] JS: CROSS main DONE_2
+2026-11-26 00:23:49.407 AiverseStudioHTML5[82344:81880689] [studio-web] JS: CROSS main VERIFIED reopened map
+Saved and reopened chain [['outpost_1', 'scout_1'], ['scout_1', 'outpost_2']]
+Composited Scene pixels: terrain 103305 movement roads and gizmos 1024
+2026-11-26 00:23:37.076 AiverseStudioHTML5[81871:81878220] [studio-web] JS: CROSS main DOM pointermove SECTION true true false 723,394
+2026-11-26 00:23:37.201 AiverseStudioHTML5[81871:81878220] [studio-web] JS: CROSS main DOM pointermove SECTION true true false 678,394
+2026-11-26 00:23:39.328 AiverseStudioHTML5[81871:81878220] [studio-web] JS: CROSS main DOM pointerup SECTION true true true 678,394

@@ -27,7 +27,7 @@ export const PANEL_WINDOW_GROUP: Record<StudioPanel, WindowGroup> = {
   animation: 'animation', anim_assets: 'animation', anim_graph: 'animation',
   anim_rig: 'animation', model_anim: 'animation', attachments: 'animation',
   facial_rig: 'character', human_creator: 'character', human_appearance: 'character',
-  assets: 'assets', models: 'assets', modeling: 'assets', asset_audit: 'assets', catalog: 'assets',
+  assets: 'assets', static_geometry: 'assets', models: 'assets', modeling: 'assets', asset_audit: 'assets', catalog: 'assets',
   rules: 'gameplay', scripts: 'gameplay', input: 'gameplay', overlays: 'gameplay',
   physis: 'gameplay', actor: 'gameplay', raid: 'gameplay', balance: 'gameplay',
   game: 'runtime', runtime: 'runtime', console: 'runtime', stats: 'runtime',

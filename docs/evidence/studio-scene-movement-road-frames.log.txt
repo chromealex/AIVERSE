@@ -1,0 +1,11 @@
+2026-11-26 00:01:34.136 AiverseStudioHTML5[58568:81770426] [studio-web] JS: CROSS main DONE_1
+2026-11-26 00:01:34.136 AiverseStudioHTML5[58568:81770426] [studio-web] JS: CROSS main VERIFIED selected in Hierarchy, connected pair, preserved selection, rejected stale remove, undo/redo/save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/scene-road-visible-qa-xntHAl/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/scene-road-visible-qa-xntHAl/Catalog.app: replacing existing signature
+2026-11-26 00:01:47.314 AiverseStudioHTML5[58793:81771829] [studio-web] JS: CROSS main DONE_2
+2026-11-26 00:01:47.314 AiverseStudioHTML5[58793:81771829] [studio-web] JS: CROSS main VERIFIED reopened, removed through Inspector and saved
+Saved endpoint IDs: ['outpost_1', 'outpost_2'] ; removal preserved entities and game settings.
+Scene amber pixels before/connected/removed: 506 519 504 exclusive: 15
+Traceback (most recent call last):
+  File "<stdin>", line 21, in <module>
+AssertionError

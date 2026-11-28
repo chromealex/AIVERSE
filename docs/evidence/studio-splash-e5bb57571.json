@@ -1,0 +1,14 @@
+{
+  "sha": "e5bb57571f931078b44efaa2624ca6111985f969",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^(studio_session|studio_standalone_bundle)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-splash-e5bb57571.log.txt",
+  "sha256": "06782dec17df32262250e01d3d1596de258e000837965d223124b33d5b54fdd8"
+}

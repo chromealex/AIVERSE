@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-movement-body",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "27f8640b5",
+  "author": null,
+  "links": [],
+  "title": "Радиус и масса подвижного объекта",
+  "titleEn": "Movement body radius and mass",
+  "summary": "В Rules видны размеры тела и масса, вычисленные движком для подвижного типа.",
+  "summaryEn": "Rules shows the effective body radius and mass for mobile types.",
+  "body": [
+    "Измените радиус в Rules → Unit types → Movement. Массу можно задать вручную или сбросить к расчёту по радиусу."
+  ],
+  "bodyEn": [
+    "Edit radius in Rules → Unit types → Movement. Enter a mass override or reset it to resume automatic calculation."
+  ],
+  "verified": "На macOS подтверждены автоматический пересчёт, сохранение ручной массы при изменении радиуса и возврат к массе 6.25 после перезапуска.",
+  "verifiedEn": "The macOS host verified recalculation, retention of an explicit override on radius edits and automatic mass 6.25 after restart.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-movement-body/movement-rules.png",
+      "caption": "Масса по радиусу объекта",
+      "captionEn": "Mass from body radius"
+    }
+  ]
+}

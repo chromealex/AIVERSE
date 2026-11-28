@@ -1,0 +1,10 @@
+{
+  "sha": "70b322bdd4d086aabf847ac66e147b5b065a5a09",
+  "argv": [
+    "bash",
+    "../estimate-path.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-estimate-project-path.log.txt",
+  "sha256": "cf5e6ef821eff0e53fbe1e6a7f25175d8c69ab81b94571713a68ff927a2c9dd6"
+}

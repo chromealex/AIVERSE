@@ -1,0 +1,14 @@
+{
+  "sha": "c7fc067d7be027109897bcef1de063817e119d5e",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "../native",
+    "-R",
+    "^studio_owner_history$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-world-reads-history.log.txt",
+  "sha256": "d7c920e6db6811154af6f867dae757c2bc67203e17e9fc9bcb00d55e0e9121ae"
+}

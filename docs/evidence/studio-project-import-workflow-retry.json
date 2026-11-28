@@ -1,0 +1,10 @@
+{
+  "sha": "e6e287eca23e5888cc90a8fcf0d5b7774c7e6c9b",
+  "argv": [
+    "bash",
+    "/tmp/port-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-project-import-workflow-retry.log.txt",
+  "sha256": "24b1881cfde90150860827c1d44fbbebf12c4b04c5f031d6374fa1968f75ec88"
+}

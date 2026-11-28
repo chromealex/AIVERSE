@@ -1,0 +1,10 @@
+{
+  "sha": "630cf195ae016552f684c215d3a43d05979a4c35",
+  "argv": [
+    "bash",
+    "../routes-debug.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-routes-debug.log.txt",
+  "sha256": "d52e28c4da8d7125afd9cfa951529b3b1c842475776eaa7e09b48a7a06db9cbb"
+}

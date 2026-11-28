@@ -65,14 +65,16 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
       method === 'studio.worldProcessAreaBatchResize')
     throw Error('EVOLVE group authoring requires the native AIVERSE host');
   if (method === 'studio.gameEntities') return {active:false,epoch:'0',tick:0,rows:[],total:0};
-  if (method === 'studio.gameInspect') throw Error('Runtime inspection requires native gameplay');
+  if (method === 'studio.gameSelectEntity' || method === 'studio.gameInspect') throw Error('Runtime inspection requires native gameplay');
   if (method === 'studio.gameDevices') return [];
   if (method === 'studio.gameState') return {device:{id:'none',landscape:true,safeArea:true,width:0,height:0,touch:false},paused:false,canControl:false,canStep:false,active:false,loading:false,progress:0,inMatch:false,tick:0,error:''};
-  if (method === 'studio.gameStart' || method === 'studio.gameStop' || method === 'studio.gameControl' || method === 'studio.gameDevice') throw Error('Play requires the native AIVERSE host');
+  if (method === 'studio.legacyCameraBookmarks') return [];
+  if (method === 'studio.networkPlay' || method === 'studio.gameStart' || method === 'studio.gameStop' || method === 'studio.gameControl' || method === 'studio.gameDevice') throw Error('Play requires the native AIVERSE host');
   if (method === 'studio.cavernsGraphInspect') throw Error('Caverns graph inspection requires native Studio');
   if (method === 'studio.project') return {maps: [], currentMap: '', canCreateMap: false, maxMapSize: 0};
   if (method === 'studio.newMap' || method === 'studio.openMap' || method === 'studio.saveAs')
     throw Error('Document operations require a native project');
+  if (method === 'studio.hierarchyGroups') return {pending:false,paths:{}};
   if (method === 'studio.entityCatalog') return {types: [], mapEntities: false};
   if (method === 'studio.entityCreate' || method === 'studio.entityDelete' || method === 'studio.entityDuplicate')
     throw Error('Entity authoring requires a native project');
@@ -88,6 +90,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.shaderGraphCatalog') return {nodes:[]};
   if (method === 'studio.shaderGraphs') return {graphs:[]};
+  if(method==='studio.shaderGraphPreview')throw new Error('Open the native Studio for GPU preview');
   if (method === 'studio.shaderGraphGet' || method === 'studio.shaderGraphValidate' ||
       method === 'studio.shaderGraphSave')
     throw Error('Shader Graph documents require a native project');
@@ -95,7 +98,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     throw Error('GPU material preview requires the native AIVERSE host');
   }
   if (method === 'studio.materialPublicationQuarantine' || method === 'studio.materialPublicationRestore' || method === 'studio.materialPublicationRetry' || method === 'studio.materialPublicationRepair' || method === 'studio.materialPublicationFinalize' || method === 'studio.materialPublicationRollbackPreview' || method === 'studio.materialPublicationRollbackEmpty') throw Error('Recovery requires a native project');
-  if (method === 'studio.materialPatch' || method === 'studio.materialCreate') {
+  if (method === 'studio.materialsToFiles' || method === 'studio.materialPatch' || method === 'studio.materialCreate') {
     throw Error('Editing materials requires the native AIVERSE host');
   }
   if(method==='studio.wind'){
@@ -155,13 +158,20 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.planetForest') return {available:false,mapPath:'',revision:'0',moduleEnabled:false,physicsRequested:false,override:false,forest:null,catalog:null,markers:[]};
   if (method === 'studio.planetSceneBody') throw new Error('Native Scene required');
+  if (method === 'studio.physisNature') {
+    if ((params as StudioParams['studio.physisNature']).action === 'view') return {active:false};
+    throw new Error('Open desktop Studio to simulate the current map.');
+  }
+  if (method === 'studio.physisRemoteFields') return {available:false,status:'Offline',message:'Open the map in desktop Studio to use a project connection.',canRefresh:false,canRetry:false,connectionVersion:'',mapRevision:'',remoteRevision:'',requestId:''};
+  if (method === 'studio.physisFieldEdit') return {available:false,status:'Offline',message:'Open the map in desktop Studio to apply fields.'};
+  if (method === 'studio.physisLive') return {active:false};
   if (method === 'studio.planetForestLive') return {active:false};
   if (method === 'studio.planetForestArm' || method === 'studio.planetForestPlant' || method === 'studio.planetForestMove') throw new Error('Scene planting requires native Studio');
   if (method === 'studio.planetForestSet') throw new Error('Open the native Studio to edit a planetary forest');
   if (method === 'studio.rules') return { acquireOrder: 'nearest', types: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resolved: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5, radius: 0.4 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resources: ['gold'], summary: [], dirty: false } as StudioResult['studio.rules'];
-  if (method === 'studio.rulesSet') throw new Error('Open the native Studio to edit rules');
+  if (method === 'studio.rulesDocument' || method === 'studio.rulesDocumentSave' || method === 'studio.rulesSet') throw new Error('Open the native Studio to edit rules');
   // The browser preview has a single window: panels stay docked.
   if (method === 'studio.windowOpen') return { opened: false } as StudioResult['studio.windowOpen'];
   if (method === 'studio.windowClose') return { closed: false } as StudioResult['studio.windowClose'];
@@ -170,15 +180,19 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method.startsWith('studio.build')) throw new Error('Builds run in the native Studio');
   if (method === 'studio.assetThumbnail') return { none: true } as StudioResult['studio.assetThumbnail'];
   if (method === 'studio.assetUsage') return { unused: [], mentions: [] } as StudioResult['studio.assetUsage'];
+  if (method === 'studio.wizardDictation') return { supported: false, phase: 'idle' };
+  if (method.startsWith('studio.wizard')) throw new Error('Open the desktop Studio to use the installed game templates');
+  if (method === 'studio.hubForget') return {};
   if (method === 'studio.hub') return { recent: [], templates: [{ id: 'empty', name: 'Empty', description: '', genre: '', maps: 1 }], defaultLocation: '~/AiverseProjects' } as StudioResult['studio.hub'];
   if (method === 'studio.hubTemplates') return { templates: [
     { id: 'pkg:skirmish', name: 'Iron and Gold', description: 'Classic base building in the style of Warcraft and Red Alert: base, army, towers.', genre: 'game', maps: 4, source: 'catalog', official: true, version: '1.0.0', size: 1400000 },
     { id: 'pkg:community-arena', name: 'Community Arena', description: 'A template from the catalog community.', genre: 'game', maps: 1, source: 'catalog', official: false, version: '0.2.0', size: 2600000 },
   ] } as StudioResult['studio.hubTemplates'];
+  if (method === 'studio.animationRuntime') return [];
   if (method === 'studio.hubOpen' || method === 'studio.hubCreate') throw new Error('Open the native Studio');
   if (method === 'studio.ops') return { panel: String((params as { panel?: string })?.panel ?? ''), ops: [] } as StudioResult['studio.ops'];
   if (method === 'studio.op' && String((params as { op?: string })?.op ?? '').startsWith('package_')) return mockPackageOp(params as StudioParams['studio.op']) as StudioResult['studio.op'];
-  if (method === 'studio.op' || method === 'studio.inputGet' || method === 'studio.inputSet' || method === 'studio.assetAudit' ||
+  if (method === 'studio.op' || method === 'studio.inputConflicts' || method === 'studio.inputGet' || method === 'studio.inputSet' || method === 'studio.assetAudit' ||
     method === 'studio.agentInfo' || method === 'studio.agentHistoryStep' || method === 'studio.agentUndoAll' || method === 'studio.agentBatchPreview' || method === 'studio.agentBatchApply' || method === 'studio.sceneBrush' || method === 'studio.splineEdit' || method === 'studio.stats' || method === 'studio.gpuStats' || method === 'studio.keepPlayChanges' || method === 'studio.extensions' || method === 'studio.extensionAction' || method === 'studio.extensionCreate' || method === 'studio.attachmentsGet' || method === 'studio.attachmentsSet' || method === 'studio.agentStart' || method === 'studio.agentStop' || method === 'studio.agentReset')
     throw new Error('Open the native Studio');
   if (method === 'studio.history') return { steps: [], position: 0 } as StudioResult['studio.history'];
@@ -200,6 +214,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.select') {
     const select = params as StudioParams['studio.select'];
+    if ('previewRef' in select) throw Error('Unknown preview reference');
     const id = select.ids?.length ? select.ids[select.ids.length - 1] : select.id ?? null;
     if (id !== null && !snapshot.scene.entities.some(entity => entity.id === id)) throw Error('Unknown entity: ' + id);
     snapshot.selectedIds = id === null ? [] : select.ids?.length ? [...select.ids] : [id];

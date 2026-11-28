@@ -1,0 +1,20 @@
+Metal ¬∑ Vulkan ¬∑ GLES
+Post FX
+√ó
+
+Game
+This map
+Enabled
+
+weak phone (Mali-T720 / Adreno 306 class, 1280x720)
+0.00 ms
+60 ‚Üí 60 fps
+mid phone (Adreno 610 / Mali-G52 class, 1920x864)
+0.00 ms
+60 ‚Üí 60 fps
+desktop / laptop GPU (2560x1440)
+0.13 ms
+60 ‚Üí 60 fps
+Map effects override the game's chain for this map only.
+Camera volumes
+Replace 

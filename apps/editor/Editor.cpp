@@ -1,6 +1,8 @@
 // Editor: lifecycle, docking layout, menus, documents, play-test and viewport rendering.
 // Window contents live in apps/editor/windows/*.cpp; the agent link in EditorAgent.cpp.
 #include "Editor.h"
+#include "core/OverlayPreviewGrid.h"
+#include "core/OverlayPreviewTerritory.h"
 #include "engine/world/TerraWeaveCavernsEditRuntime.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
@@ -1087,65 +1089,18 @@ float Editor::surfaceHeightAt(float x,float z) const {
     // Rebuild with the document and the pick cache (models, transforms):
     // rasterize every terrain-tile triangle top-down into a 0.5 m grid once.
     const uint64_t key=doc().revision*1000003ull^visualPickCacheGeneration_^(uint64_t(visualPickModelCount_)<<40);
-    constexpr float kStep=.5f;
-    if(key!=surfaceHeightCacheKey_){
-        surfaceHeightCacheKey_=key;
-        surfaceGridW_=std::clamp(int(std::ceil(float(d.w)/kStep))+1,1,8192);
-        surfaceGridH_=std::clamp(int(std::ceil(float(d.h)/kStep))+1,1,8192);
-        surfaceGrid_.assign(size_t(surfaceGridW_)*size_t(surfaceGridH_),-std::numeric_limits<float>::infinity());
+    if(!surfaceHeights_ || key!=surfaceHeightCacheKey_){
+        TerrainTileSurface next(d.w,d.h);
         for(size_t i=0;i<visualPickModelCount_;++i){
             const auto& packet=visualPickModels_[i];
-            if(packet.documentIndex>=d.entities.size())continue;
-            const auto& entity=d.entities[packet.documentIndex];
-            if(entity.type.rfind("TerraTerrain",0)!=0&&!entity.extra["components"].has("TerraTerrain"))continue;
+            if(packet.documentIndex>=d.entities.size() || !isTerrainTile(d.entities[packet.documentIndex]))continue;
             const auto lease=owner.acquireModelRead(packet.model);
-            if(!lease)continue;
-            const auto& m=*lease.get();
-            if(m.bindWorld.size()!=m.nodes.size())continue;
-            for(size_t n=0;n<m.nodes.size();++n){
-                const auto& node=m.nodes[n];
-                if(node.mesh<0||size_t(node.mesh)>=m.meshes.size())continue;
-                const mat4 xf=packet.world*(packet.nodes.size()==m.nodes.size()?packet.nodes[n]:m.bindWorld[n]);
-                for(const auto& prim:m.meshes[size_t(node.mesh)].primitives){
-                    if(prim.firstIndex>m.indices.size()||prim.indexCount>m.indices.size()-prim.firstIndex)continue;
-                    for(size_t t=0;t+2<prim.indexCount;t+=3){
-                        float3 v[3];bool ok=true;
-                        for(int k=0;k<3;++k){const uint32_t idx=m.indices[prim.firstIndex+t+size_t(k)];if(idx>=m.vertices.size()){ok=false;break;}v[k]=xf.transformPoint(m.vertices[idx].pos);}
-                        if(!ok)continue;
-                        const float area=(v[1].x-v[0].x)*(v[2].z-v[0].z)-(v[1].z-v[0].z)*(v[2].x-v[0].x);
-                        if(std::fabs(area)<1e-8f)continue;
-                        const int x0=std::max(0,int(std::floor(std::min({v[0].x,v[1].x,v[2].x})/kStep)));
-                        const int x1=std::min(surfaceGridW_-1,int(std::ceil(std::max({v[0].x,v[1].x,v[2].x})/kStep)));
-                        const int z0=std::max(0,int(std::floor(std::min({v[0].z,v[1].z,v[2].z})/kStep)));
-                        const int z1=std::min(surfaceGridH_-1,int(std::ceil(std::max({v[0].z,v[1].z,v[2].z})/kStep)));
-                        for(int gz=z0;gz<=z1;++gz)for(int gx=x0;gx<=x1;++gx){
-                            const float px=float(gx)*kStep,pz=float(gz)*kStep;
-                            const float w0=((v[1].x-px)*(v[2].z-pz)-(v[1].z-pz)*(v[2].x-px))/area;
-                            const float w1=((v[2].x-px)*(v[0].z-pz)-(v[2].z-pz)*(v[0].x-px))/area;
-                            const float w2=1.f-w0-w1;
-                            if(w0<-1e-4f||w1<-1e-4f||w2<-1e-4f)continue;
-                            float& cell=surfaceGrid_[size_t(gz)*size_t(surfaceGridW_)+size_t(gx)];
-                            cell=std::max(cell,w0*v[0].y+w1*v[1].y+w2*v[2].y);
-                        }
-                    }
-                }
-            }
+            if(lease)next.add(*lease.get(),packet.world,packet.nodes);
         }
+        surfaceHeights_=std::move(next);
+        surfaceHeightCacheKey_=key;
     }
-    if(surfaceGrid_.empty())return legacy;
-    // Bilinear over covered samples; uncovered -> the legacy surface.
-    const float fx=x/kStep,fz=z/kStep;
-    const int gx=int(std::floor(fx)),gz=int(std::floor(fz));
-    float sum=0,weight=0;
-    for(int dz=0;dz<2;++dz)for(int dx=0;dx<2;++dx){
-        const int cx=gx+dx,cz=gz+dz;
-        if(cx<0||cz<0||cx>=surfaceGridW_||cz>=surfaceGridH_)continue;
-        const float h=surfaceGrid_[size_t(cz)*size_t(surfaceGridW_)+size_t(cx)];
-        if(!std::isfinite(h))continue;
-        const float w=(dx?fx-float(gx):1.f-(fx-float(gx)))*(dz?fz-float(gz):1.f-(fz-float(gz)));
-        sum+=h*w;weight+=w;
-    }
-    return weight>1e-6f?sum/weight:legacy;
+    return surfaceHeights_->sample(x,z,legacy);
 }
 
 int Editor::pickRoad(const Viewport& vp, const Camera& cam, float sx, float sy) const {
@@ -1172,34 +1127,9 @@ void Editor::syncGrid() {
     if (grid_.w != d.w || grid_.h != d.h) grid_.init(d.w, d.h);
     grid_.corner = d.corners;
     for (int i = 0; i < d.w * d.h; ++i) {
-        grid_.flags[size_t(i)] = game::cellFlagsFromChar(d.cells[size_t(i)]);
-        // diggable rock (rules "diggable"): solid cells drawn as rock blocks, like the client does
-        const int dk = rules().findDiggable(d.cells[size_t(i)]);
-        grid_.dig[size_t(i)] = dk >= 0 ? uint8_t(dk + 1) : 0;
-        grid_.digHp[size_t(i)] = dk >= 0 ? rules().diggables[size_t(dk)].hardness : Fixed{};
-        if (dk >= 0) grid_.flags[size_t(i)] = 0;
-        grid_.height[size_t(i)] = d.heights[size_t(i)];
-        grid_.level[size_t(i)] = d.levels[size_t(i)];
-        grid_.region[size_t(i)] = d.regions[size_t(i)] == '.' ? int16_t(-1) : int16_t(d.regions[size_t(i)]);
-        int8_t fr = d.fieldRes[size_t(i)];
-        grid_.fieldRes[size_t(i)] = fr >= 0 ? int16_t(std::max(0, rules().findResource(d.fieldResources[size_t(fr)]))) : int16_t(-1);
-        grid_.fieldAmt[size_t(i)] = Fixed::fromInt(d.fieldAmt[size_t(i)]);
+        copyPreviewCell(d, rules(), size_t(i), grid_, size_t(i));
     }
-    // starting territory (rules territory.startRadius around owned structures), so the scene shows the claimed floor
-    std::fill(grid_.territory.begin(), grid_.territory.end(), uint8_t(0));
-    if (const int r = rules().territory.startRadius; rules().territory.enabled && r > 0 && !d.planet())
-        for (const auto& e : d.entities) {
-            const int ti = rules().findType(e.type);
-            if (e.owner <= 0 || e.owner > 8 || ti < 0 || !rules().types[size_t(ti)].structure) continue;
-            const game::UnitType& t = rules().types[size_t(ti)];
-            int x0, y0; game::GameCore::footprintAt(t, {Fixed::fromRatio(int64_t(std::lround(e.x * 1000)), 1000), Fixed{}, Fixed::fromRatio(int64_t(std::lround(e.z * 1000)), 1000)}, x0, y0);   // editor only: float -> fixed
-            for (int y = y0 - r; y < y0 + t.footprintH + r; ++y)
-                for (int x = x0 - r; x < x0 + t.footprintW + r; ++x) {
-                    if (!grid_.inside(x, y)) continue;
-                    const size_t i = size_t(grid_.index(x, y));
-                    if ((grid_.flags[i] & game::kCellGround) && !grid_.territory[i]) grid_.territory[i] = uint8_t(e.owner);
-                }
-        }
+    fillPreviewTerritory(d, rules(), grid_);
     view_.setTiles(d.extra["tiles"]);
     {   // planets: the world block (MapDoc bodies); sculpt / paint rebuild only what changed
         const Json world = d.planet() ? doc().worldJson() : Json();
@@ -2420,7 +2350,7 @@ void Editor::setOverlayContext(const Viewport& vp, const Camera& cam, bool play)
         const auto& t = rules().types[size_t(place)];
         const float px = oc.hasCursor ? x : cam.target.x, pz = oc.hasCursor ? z : cam.target.z;
         oc.placeType = place;
-        oc.placeAt = {(t.footprintW % 2) ? std::floor(px) + 0.5f : std::round(px), 0, (t.footprintH % 2) ? std::floor(pz) + 0.5f : std::round(pz)};
+        oc.placeAt = {snapPlacementCenter(px, t.footprintW), 0, snapPlacementCenter(pz, t.footprintH)};
         const game::MapGrid& g = play && sim_ ? simModule()->state(*sim_).grid : grid_;
         oc.placeOk = g.areaBuildable(int(std::floor(oc.placeAt.x - t.footprintW * 0.5f + 0.01f)), int(std::floor(oc.placeAt.z - t.footprintH * 0.5f + 0.01f)),
                                      t.footprintW, t.footprintH);

@@ -32,6 +32,7 @@
 .nested-tab>span[role=tab]{cursor:grab}
 @media(max-width:850px){.nested-toolbar>span{display:none}}
 /* HTML-over-Metal: do not paint an opaque parent behind the transparent scene. */
+html.native-composite .nested-workspace-root:has(.viewport-native),
 html.native-composite .nested-stack:has(.viewport-native),
 html.native-composite .nested-stack:has(.viewport-native) .nested-stack-body{
   background:transparent!important;
@@ -83,3 +84,12 @@ html.native-composite .nested-stack:has(.viewport-native) .nested-stack-body{
   color:var(--au-text-faint);cursor:pointer}
 .nested-stack-menu:hover{color:var(--au-text);background:var(--au-hover)}
 .nested-stack-menu:focus-visible{outline:2px solid var(--au-accent);outline-offset:-2px}
+
+/* Keep mounted tabs and their split ratios while one stack fills the workspace. */
+.nested-split:has(.nested-stack[data-maximized]) > .nested-child:not(:has(.nested-stack[data-maximized])),
+.nested-split:has(.nested-stack[data-maximized]) > .nested-divider {
+  display: none;
+}
+.nested-split:has(.nested-stack[data-maximized]) > .nested-child:has(.nested-stack[data-maximized]) {
+  flex: 1 1 0% !important;
+}

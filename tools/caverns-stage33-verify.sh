@@ -16,7 +16,7 @@ cmake -S "${repo}" -B "${build}" \
   -DCMAKE_BUILD_TYPE=Debug \
   -DAIVERSE_BUILD_TESTS=ON \
   -DAIVERSE_FETCH_TEMPLATES=OFF \
-  -DAIVERSE_BUILD_EDITOR=ON \
+  -DAIVERSE_BUILD_EDITOR=OFF \
   -DAIVERSE_ENABLE_PHYSICS=ON \
   "${@}" 2>&1 | tee "${report}/configure.log"
 

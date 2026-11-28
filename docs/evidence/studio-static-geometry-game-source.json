@@ -1,0 +1,10 @@
+{
+  "sha": "8babc9bb4104e38bbf7e9ec10adc2e2cf39d0075",
+  "argv": [
+    "bash",
+    "/tmp/geometry-game-source.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-static-geometry-game-source.log.txt",
+  "sha256": "92012eb99c899fcdb4e52c4a2c1b366025daa5df402d3cfa6abd841c58051888"
+}

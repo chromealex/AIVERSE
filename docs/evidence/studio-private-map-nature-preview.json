@@ -1,0 +1,10 @@
+{
+  "sha": "7f5ebdbfd6a7261faf70b42de01088298f643852",
+  "argv": [
+    "bash",
+    "/tmp/private-nature-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-map-nature-preview.log.txt",
+  "sha256": "d68f694b5f11306fa2497a50fab20ad68f1f4ba2bbdd623e24e4e31ed57c84b3"
+}

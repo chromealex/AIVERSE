@@ -7,41 +7,75 @@
 include_directories("${PROJECT_SOURCE_DIR}/third_party/box3d/include")
 set(AIVERSE_STUDIO_SOURCES StudioHost.cpp StudioScene.cpp StudioGameSurface.cpp StudioFacialGpuPreview.cpp
     StudioSession.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
-set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE PATH "Built Studio web assets")
+# GCC's Release optimizer can exceed the memory available for a single
+# translation unit in the project Studio build. Keep these large dispatch
+# and preview files buildable on an 8 GiB Linux host.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_property(SOURCE StudioHost.cpp StudioScene.cpp StudioSession.cpp APPEND PROPERTY
+        COMPILE_OPTIONS "$<$<CONFIG:Release>:-O1;--param=ggc-min-expand=20;--param=ggc-min-heapsize=32768>")
+endif()
 if(NOT EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     message(FATAL_ERROR "HTML5 bundle missing: build apps/studio-web (npm run build) or set AIVERSE_STUDIO_WEB_DIST")
 endif()
+set(STUDIO_CAPTION_FONT "${PROJECT_SOURCE_DIR}/engine/assets/fonts/ui.ttf" "${PROJECT_SOURCE_DIR}/engine/assets/fonts/LICENSE-ui.txt")
+set(STUDIO_NATURE_TEXTURES
+    "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/flame_16x4.png"
+    "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/smoke_8x8.png"
+    "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/LICENSE-fx.txt")
 if(WIN32)
+    list(APPEND AIVERSE_STUDIO_SOURCES ../editor/EditorSpeech.cpp)
     include(win/StudioWindows.cmake)
+elseif(AIVERSE_PLATFORM STREQUAL "linux")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK_STUDIO REQUIRED IMPORTED_TARGET webkit2gtk-4.1>=2.40)
+    find_package(SQLite3 REQUIRED)
+    if(NOT TARGET aiverse_gfx_vulkan)
+        message(FATAL_ERROR "Linux Studio requires AIVERSE_VULKAN=ON")
+    endif()
+    add_executable(aiverse_studio linux/Main.cpp ../editor/EditorSpeech.cpp ${AIVERSE_STUDIO_SOURCES})
+    target_include_directories(aiverse_studio PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio PRIVATE PkgConfig::GTK_STUDIO aiverse_hosted_client SQLite::SQLite3
+        aiverse_lua aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view aiverse_gfx_vulkan
+        AIVERSE::vivid_human AIVERSE::libraries)
+    target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
+    set_target_properties(aiverse_studio PROPERTIES OUTPUT_NAME AiverseStudio)
+    add_custom_target(aiverse_studio_web_assets
+        COMMAND "${CMAKE_COMMAND}" "-Dsource=${AIVERSE_STUDIO_WEB_DIST}" "-Ddestination=$<TARGET_FILE_DIR:aiverse_studio>/studio-web" -P "${CMAKE_CURRENT_SOURCE_DIR}/StageWebAssets.cmake"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversemcp>"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis" "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_CAPTION_FONT} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
+        DEPENDS aiversemcp
+        VERBATIM)
+    add_dependencies(aiverse_studio aiverse_studio_web_assets)
 else()
     find_package(SQLite3 REQUIRED)
-    add_executable(aiverse_studio MACOSX_BUNDLE mac/Main.mm mac/StudioAssetSchemeHandler.mm ${AIVERSE_STUDIO_SOURCES})
+    add_executable(aiverse_studio MACOSX_BUNDLE mac/Main.mm mac/StudioAssetSchemeHandler.mm ../editor/EditorSpeech_mac.mm ${AIVERSE_STUDIO_SOURCES})
     target_include_directories(aiverse_studio PRIVATE "${PROJECT_SOURCE_DIR}")
-    target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa" "-framework WebKit")
+    target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa" "-weak_framework ScreenCaptureKit" "-framework WebKit" "-framework AVFoundation" "-framework Speech")
     target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-    # Publish / Build panel: the packager built next to Studio.
-    if(TARGET aiversebuild)
-        add_dependencies(aiverse_studio aiversebuild)
-        target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_BUILD_TOOL="$<TARGET_FILE:aiversebuild>")
-    endif()
-    # Agent panel: the MCP server the in-editor Claude Code run talks to (forwards to this Studio's port).
-    if(TARGET aiversemcp)
-        add_dependencies(aiverse_studio aiversemcp)
-        target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_MCP_TOOL="$<TARGET_FILE:aiversemcp>")
-    endif()
-    set_source_files_properties(mac/Main.mm mac/StudioAssetSchemeHandler.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    set_source_files_properties(mac/Main.mm mac/StudioAssetSchemeHandler.mm ../editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    set(AIVERSE_STUDIO_BUNDLE_ID "com.aiverse.studio.html5" CACHE STRING "Studio application bundle identifier")
     set_target_properties(aiverse_studio PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mac/StudioInfo.plist.in"
         OUTPUT_NAME AiverseStudioHTML5
-        MACOSX_BUNDLE_GUI_IDENTIFIER com.aiverse.studio.html5)
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "${AIVERSE_STUDIO_BUNDLE_ID}")
     if(EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
         # Run even when only frontend assets changed. CMake 3.22 uses CMP0112
         # NEW, so TARGET_BUNDLE_CONTENT_DIR does not introduce a reverse dependency.
         add_custom_target(aiverse_studio_web_assets
             DEPENDS "${AIVERSE_STUDIO_WEB_DIST}/index.html"
-            COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${AIVERSE_STUDIO_WEB_DIST}"
-                "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/MacOS"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/MacOS/$<TARGET_FILE_NAME:aiversemcp>"
+            COMMAND "${CMAKE_COMMAND}" "-Dsource=${AIVERSE_STUDIO_WEB_DIST}" "-Ddestination=$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web" -P "${CMAKE_CURRENT_SOURCE_DIR}/StageWebAssets.cmake"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fonts"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_CAPTION_FONT} "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fonts"
             VERBATIM)
         add_dependencies(aiverse_studio aiverse_studio_web_assets)
     else()
@@ -49,9 +83,47 @@ else()
     endif()
 endif()
 if(TARGET aiverse_studio)
+    if(TARGET aiversebuild)
+        add_custom_target(aiverse_studio_build_tool
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversebuild>"
+                "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversebuild>"
+            DEPENDS aiversebuild
+            VERBATIM)
+        add_dependencies(aiverse_studio aiverse_studio_build_tool)
+    endif()
+    if(TARGET aiverse_client)
+        target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_GAME_CLIENT="$<TARGET_FILE:aiverse_client>")
+        add_dependencies(aiverse_studio aiverse_client)
+        if(APPLE)
+            add_custom_target(aiverse_studio_game_player
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "$<TARGET_BUNDLE_DIR:aiverse_client>"
+                    "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Helpers/AiverseGame.app"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_ENGINE_ASSETS}"
+                    "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Helpers/AiverseGame.app/Contents/Resources/content/engine"
+                DEPENDS aiverse_client
+                VERBATIM)
+            add_dependencies(aiverse_studio aiverse_studio_game_player)
+        elseif(AIVERSE_PLATFORM MATCHES "^(linux|windows)$")
+            if(WIN32)
+                set(studio_player_name AiverseGame.exe)
+            else()
+                set(studio_player_name aiverse_client)
+            endif()
+            add_custom_target(aiverse_studio_game_player
+                COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiverse_client>"
+                    "$<TARGET_FILE_DIR:aiverse_studio>/${studio_player_name}"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_ENGINE_ASSETS}"
+                    "$<TARGET_FILE_DIR:aiverse_studio>/content/engine"
+                DEPENDS aiverse_client
+                VERBATIM)
+            add_dependencies(aiverse_studio aiverse_studio_game_player)
+        endif()
+    endif()
     target_sources(aiverse_studio PRIVATE ../fps/client.cpp)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-    target_link_libraries(aiverse_studio PRIVATE aiverse_authority aiverse_render2d aiverse_roads_view AIVERSE::MotionWeave AIVERSE::View)
+    target_link_libraries(aiverse_studio PRIVATE aiverse_ui aiverse_authority aiverse_render2d aiverse_roads_view AIVERSE::MotionWeave AIVERSE::View)
 endif()
 # Portable Studio image codec contract: compile the actual private stb
 # implementation using diagnostics as errors, not a globally disabled -W
@@ -85,7 +157,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     set_tests_properties(studio_building_preview PROPERTIES LABELS "EDITOR;GPU;Metal" TIMEOUT 90)
     add_executable(aiverse_studio_metal_lighting_tests tests/StudioMetalLightingTests.mm StudioScene.cpp StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_metal_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
-    target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::libraries "-framework Cocoa")
+    target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE aiverse_ui aiverse_audio SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_metal_lighting_tests PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     add_test(NAME studio_metal_lighting COMMAND aiverse_studio_metal_lighting_tests "${CMAKE_CURRENT_BINARY_DIR}/metal-lighting-captures")
     set_tests_properties(studio_metal_lighting PROPERTIES LABELS "EDITOR;LIGHTING" TIMEOUT 90 PASS_REGULAR_EXPRESSION "Studio Metal lighting PASS" FAIL_REGULAR_EXPRESSION "Studio Metal lighting FAIL")
@@ -96,7 +168,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
         StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_spectrafx_preview_tests
         PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
-    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE
+    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE aiverse_ui aiverse_audio
         SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx
         aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_spectrafx_preview_tests
@@ -281,16 +353,37 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     add_test(NAME studio_render_thread COMMAND aiverse_studio_render_thread_tests)
     set_tests_properties(studio_render_thread PROPERTIES LABELS "EDITOR")
     add_test(NAME studio_session COMMAND aiverse_studio_session_tests)
-    set_tests_properties(studio_session PROPERTIES LABELS "EDITOR")
+    set_tests_properties(studio_session PROPERTIES LABELS "EDITOR" ENVIRONMENT "AIVERSE_AGENT_LINK_DIR=${CMAKE_CURRENT_BINARY_DIR}/session-test-agent-link")
 endif()
 
 # Keep the dependency-light history contract in the ordinary CTest inventory.
 if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_studio_wizard_dictation_tests tests/StudioWizardDictationTests.cpp)
+    target_include_directories(aiverse_studio_wizard_dictation_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_wizard_dictation_tests PRIVATE aiverse_engine)
+    add_test(NAME studio_wizard_dictation COMMAND aiverse_studio_wizard_dictation_tests)
     add_executable(aiverse_studio_owner_history_tests tests/StudioOwnerHistoryTests.cpp)
     target_include_directories(aiverse_studio_owner_history_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_studio_owner_history_tests PRIVATE aiverse_engine aiverse_pack)
     add_test(NAME studio_owner_history COMMAND aiverse_studio_owner_history_tests)
     set_tests_properties(studio_owner_history PROPERTIES LABELS "EDITOR")
+    if(Python3_Interpreter_FOUND)
+        if(APPLE)
+            set(studio_distribution "$<TARGET_BUNDLE_DIR:aiverse_studio>")
+        else()
+            set(studio_distribution "$<TARGET_FILE_DIR:aiverse_studio>")
+        endif()
+        set(studio_player_check)
+        if(TARGET aiverse_client)
+            set(studio_player_check --require-player)
+        endif()
+        add_test(NAME studio_standalone_bundle
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone_bundle.py"
+                "${studio_distribution}" ${studio_player_check})
+        set_tests_properties(studio_standalone_bundle PROPERTIES LABELS "EDITOR;MCP")
+        add_test(NAME studio_wizard_art_download
+            COMMAND "${Python3_EXECUTABLE}" -B "${PROJECT_SOURCE_DIR}/tests/wizard_art_download.py")
+    endif()
     if(TARGET aiversemcp AND Python3_Interpreter_FOUND)
         add_test(NAME studio_mcp_registry
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/mcp/audit_registry.py"
@@ -309,4 +402,10 @@ if(APPLE)
     add_executable(aiverse_vivid_assemble ../../tools/vivid-creator/assemble.cpp)
     target_include_directories(aiverse_vivid_assemble PRIVATE "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_vivid_assemble PRIVATE aiverse_vivid_human aiverse_modeling aiverse_zstd_dec)
+endif()
+
+if(AIVERSE_BUILD_TESTS)
+    get_property(studio_test_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    list(FILTER studio_test_targets INCLUDE REGEX "^aiverse_studio_.*_tests$")
+    add_custom_target(aiverse_studio_verification DEPENDS aiverse_studio aiversemcp ${studio_test_targets})
 endif()

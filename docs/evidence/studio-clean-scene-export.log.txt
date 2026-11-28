@@ -1,0 +1,8 @@
+2026-11-26 14:21:51.695 AiverseStudioHTML5[28192:84955352] [studio-web] JS: CROSS main DONE_1
+2026-11-26 14:21:51.695 AiverseStudioHTML5[28192:84955352] [studio-web] JS: CROSS main VERIFIED camera after capture {"x":12,"y":0,"z":10,"distance":24,"yaw":0.25,"pitch":0.8,"ortho":false,"fov":0.75}
+PNG and render dimensions: (1536, 864) (1536, 864) (511, 511) (830, 752) (830, 752)
+Mean absolute channel difference, camera: 29.675445675612202 editor overlays: 92.7881849874714
+2026-11-26 14:22:06.692 AiverseStudioHTML5[28602:84957577] [studio-web] JS: CROSS main DONE_1
+2026-11-26 14:22:06.692 AiverseStudioHTML5[28602:84957577] [studio-web] JS: CROSS main VERIFIED camera after capture {"x":0,"y":0,"z":0,"distance":72,"yaw":0.25,"pitch":0.8,"ortho":false,"fov":0.75}
+PNG and render dimensions: (1536, 864) (1536, 864) (511, 511) (830, 752) (830, 752)
+Mean absolute channel difference, camera: 27.227822968039455 editor overlays: 0.7252877946036242

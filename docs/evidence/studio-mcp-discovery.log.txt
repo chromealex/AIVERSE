@@ -1,0 +1,3 @@
+Sibling Debug configuration found; Studio received --listen.
+Legacy executable skipped when Studio missing.
+Explicit editor override preserved.

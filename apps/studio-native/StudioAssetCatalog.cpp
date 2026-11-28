@@ -124,6 +124,7 @@ Json studioDefaultSettings(const std::string& importer) {
 }
 StudioAssetCatalog::StudioAssetCatalog(const fs::path& project):project_(project) {
     (void)studioContentRoot(project_);
+    project_=fs::canonical(project_); // Use the same root as the document journal for metadata history.
     const fs::path cache=project_/".aiverse-cache";
     std::error_code ec;
     const auto cacheStatus=fs::symlink_status(cache,ec);

@@ -1,0 +1,2 @@
+предупреждение: icons: no master image (icons.default) — the built-in default icon is used
+иконки macOS (.iconset + .icns): 11 файл(ов)

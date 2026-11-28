@@ -24,7 +24,7 @@ if [[ ! -f "$WEB/index.html" ]]; then
   WEB="$OUT/web"
   (cd "$ROOT/apps/studio-web" && npm install --no-audit --no-fund && ./node_modules/.bin/vite build --outDir "$WEB") > "$LOGS/studio-web.log" 2>&1 || note "STUDIO WEB BUILD FAILED (logs/perf-verify/studio-web.log)"
 fi
-cmake -S "$ROOT" -B "$OUT/studio" $GEN -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON \
+cmake -S "$ROOT" -B "$OUT/studio" $GEN -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON \
   -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_STUDIO_WEB_DIST="$WEB" -DCMAKE_BUILD_TYPE=RelWithDebInfo > "$LOGS/studio-configure.log" 2>&1 \
   && cmake --build "$OUT/studio" --parallel "$JOBS" --target aiverse_studio aiverse_studio_render_thread_tests \
      aiverse_studio_metal_lighting_tests aiverse_studio_session_tests aiverse_studio_viewport_layout_tests \

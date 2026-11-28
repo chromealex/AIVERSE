@@ -298,8 +298,83 @@ float GameOverlays::groundY(const OverlayDef& d, float x, float z, float anchorG
     return lift_;
 }
 
+void GameOverlays::appendPlan(PlanPrimitive primitive) {
+    if (plan_->size() >= 65536) throw std::runtime_error("Overlay plan is too dense; select fewer overlays");
+    plan_->push_back(primitive);
+}
+
+template<class Visit> void GameOverlays::visitScreen(const GameScene& s, Visit&& visit) {
+    // entity elements object by object (bars of one object stay together, like they always did)
+    if (!screenEntityDefs_.empty())
+        for (size_t i = 0; i < s.objects.size(); ++i) {
+            const SceneObject& o = s.objects[i];
+            if (!o.visible || o.isProjectile || o.type >= rules_->types.size()) continue;
+            for (uint16_t di : screenEntityDefs_) {
+                const OverlayDef& d = set_.defs[di];
+                if (!d.enabled) continue;
+                const bool pv = previewed(d);
+                if (d.anchor == OvAnchor::Selected && !o.selected && !(pv && selected_.empty())) continue;
+                if (d.anchor == OvAnchor::Hovered && int(i) != hovered_) continue;
+                if (!matches(d.anchorFilter, o) || (!pv && !test(d.when, &o))) continue;
+                Inst in;
+                in.pos = o.pos; in.obj = int(i); in.type = o.type; in.owner = o.owner;
+                visit(d, di, in);
+            }
+        }
+    for (uint16_t di : screenOtherDefs_) {
+        const OverlayDef& d = set_.defs[di];
+        if (!d.enabled || !gather(d, di, true)) continue;
+        for (const Inst& in : insts_) visit(d, di, in);
+    }
+}
+
+std::vector<GameOverlays::PlanPrimitive> GameOverlays::groundPlan(const GameScene& scene, const MapGrid& grid, double time, Json* screen) {
+    if (dev_ || plan_) throw std::logic_error("Overlay plan requires a private CPU preview");
+    std::vector<PlanPrimitive> primitives;
+    plan_ = &primitives;
+    struct Reset {
+        std::vector<PlanPrimitive>*& target;
+        ~Reset() { target = nullptr; }
+    } reset{plan_};
+    camTarget_ = ctx_.hasCursor ? ctx_.cursor : float3{grid.w * 0.5f, 0, grid.h * 0.5f};
+    // A still frame shows a fully entered condition, including overlays with a fade-in.
+    double fade = 0;
+    for (const auto& def : set_.defs) fade = std::max(fade, double(def.style.fadeIn));
+    if (fade > 0) {
+        prepare(scene, time - fade, nullptr, grid, float(std::max(grid.w, grid.h)));
+        for (size_t index = 0; index < set_.defs.size(); ++index)
+            if (set_.defs[index].enabled) gather(set_.defs[index], index, set_.defs[index].style.space == OvSpace::Screen);
+    }
+    prepare(scene, time, nullptr, grid, float(std::max(grid.w, grid.h)));
+    // The north-up plan looks down the Y axis; billboards face its viewer.
+    camRight_ = {1, 0, 0};
+    camUp_ = {0, 0, -1};
+    if (screen) *screen = Json::array();
+    marks_.clear();
+    for (uint16_t index : worldDefs_) {
+        const auto& def = set_.defs[index];
+        if (!def.enabled || !gather(def, index, false)) continue;
+        for (const auto& instance : insts_) emit(def, index, instance, screen);
+    }
+    if (screen) {
+        visitScreen(scene, [&](const OverlayDef& def, size_t index, const Inst& in) {
+            Json item = Json::object();
+            const bool hud = def.anchor == OvAnchor::Screen;
+            drawScreenInst(def, index, in, 0, 0, nullptr, &item);
+            if (!item.has("shape")) return;
+            if (screen->size() >= 65536) throw std::runtime_error("Screen overlay plan is too dense");
+            item.set("hud", Json::fromBool(hud));
+            item.set("x", Json::number(double(hud ? in.sx : in.pos.x)));
+            item.set("z", Json::number(double(hud ? in.sy : in.pos.z)));
+            screen->push(std::move(item));
+        });
+    }
+    return primitives;
+}
+
 void GameOverlays::tri(const OverlayDef& d, float3 a, float3 b, float3 c, uint32_t col, gfx::TextureHandle tex, const float* uv) {
     if ((col >> 24) == 0) return;
+    if (plan_) { appendPlan({a, b, c, col, true}); return; }
     const bool batch = d.style.onTop || d.style.additive || tex.valid();
     if (!batch) { if (r_) r_->triangle(a, b, c, col); return; }
     if (!dev_) return;
@@ -316,6 +391,7 @@ void GameOverlays::seg(const OverlayDef& d, float3 a, float3 b, uint32_t col) {
     const bool batch = d.style.onTop || d.style.additive;
     float w = d.style.thickness;
     if (w <= 0) {
+        if (plan_) { appendPlan({a, b, {}, col, false}); return; }
         if (!batch) { if (r_) r_->line(a, b, col); return; }
         w = 0.035f;   // hairline in the batch: a thin ribbon
     }
@@ -614,7 +690,7 @@ bool GameOverlays::resolveTo(const OverlayDef& d, const Inst& in, float3& out) c
     return false;
 }
 
-void GameOverlays::emit(const OverlayDef& d, size_t di, const Inst& in) {
+void GameOverlays::emit(const OverlayDef& d, size_t di, const Inst& in, Json* icons) {
     const OvStyle& s = d.style;
     lift_ = s.lift + (in.popup >= 0 ? d.event.rise * in.age : 0.0f);
     const int pred = d.pred == OvPred::None || d.shape == OvShape::Grid || d.shape == OvShape::Cells ? -1
@@ -670,7 +746,23 @@ void GameOverlays::emit(const OverlayDef& d, size_t di, const Inst& in) {
         if (d.shape == OvShape::Arrow) arrowHead(d, p[0], p[1], col, ag);
         break;
     }
-    case OvShape::Icon: icon(d, di, in, d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f), col); break;
+    case OvShape::Icon: {
+        const float size = d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f);
+        if (!icons) { icon(d, di, in, size, col); break; }
+        if (icons->size() >= 65536) throw std::runtime_error("Overlay plan is too dense; select fewer overlays");
+        Json item = Json::object();
+        item.set("shape", Json::string("icon"));
+        item.set("image", Json::string(d.image));
+        item.set("color", Json::number(int64_t(col)));
+        item.set("size", Json::number(double(size)));
+        item.set("x", Json::number(double(in.pos.x)));
+        item.set("z", Json::number(double(in.pos.z)));
+        item.set("angle", Json::number(s.space == OvSpace::Billboard ? 0.0 : double(float(time_) * s.rotate)));
+        item.set("additive", Json::fromBool(s.additive));
+        item.set("before", Json::number(int64_t(plan_->size())));
+        icons->push(std::move(item));
+        break;
+    }
     case OvShape::Text: case OvShape::Bar: break;   // screen pass
     }
 }
@@ -783,47 +875,28 @@ void GameOverlays::drawScreen(const Camera& cam, const GameScene& s, float w, fl
     if (scene_ != &s) prepare(s, time_, vision_, *grid_, cam.distance);
     zoom_ = cam.distance;
     ImDrawList* dl = drawList ? static_cast<ImDrawList*>(drawList) : ImGui::GetBackgroundDrawList();
-    // entity elements object by object (bars of one object stay together, like they always did)
-    if (!screenEntityDefs_.empty())
-        for (size_t i = 0; i < s.objects.size(); ++i) {
-            const SceneObject& o = s.objects[i];
-            if (!o.visible || o.isProjectile || o.type >= rules_->types.size()) continue;
-            bool have = false;
-            float2 sp;
-            for (uint16_t di : screenEntityDefs_) {
-                const OverlayDef& d = set_.defs[di];
-                if (!d.enabled) continue;
-                const bool pv = previewed(d);
-                if (d.anchor == OvAnchor::Selected && !o.selected && !(pv && selected_.empty())) continue;
-                if (d.anchor == OvAnchor::Hovered && int(i) != hovered_) continue;
-                if (!matches(d.anchorFilter, o) || (!pv && !test(d.when, &o))) continue;
-                if (!have) {
-                    if (!view.overlayTop(cam, o, i, w, h, sp)) break;
-                    have = true;
-                }
-                Inst in;
-                in.pos = o.pos; in.obj = int(i); in.type = o.type; in.owner = o.owner;
-                drawScreenInst(d, di, in, sp.x + ox, sp.y + oy, dl);
+    int cached = -1;
+    float2 sp;
+    bool visible = false;
+    visitScreen(s, [&](const OverlayDef& d, size_t di, const Inst& in) {
+        if (d.anchor == OvAnchor::Entities || d.anchor == OvAnchor::Hovered || d.anchor == OvAnchor::Selected) {
+            if (cached != in.obj) {
+                cached = in.obj;
+                visible = view.overlayTop(cam, s.objects[size_t(cached)], size_t(cached), w, h, sp);
             }
-        }
-    for (uint16_t di : screenOtherDefs_) {
-        const OverlayDef& d = set_.defs[di];
-        if (!d.enabled || !gather(d, di, true)) continue;
-        for (const Inst& in : insts_) {
-            if (d.anchor == OvAnchor::Screen) {
-                drawScreenInst(d, di, in, (in.sx < 0 ? w + in.sx : in.sx) + ox, (in.sy < 0 ? h + in.sy : in.sy) + oy, dl);
-                continue;
-            }
+            if (!visible) return;
+        } else if (d.anchor == OvAnchor::Screen) {
+            sp = {in.sx < 0 ? w + in.sx : in.sx, in.sy < 0 ? h + in.sy : in.sy};
+        } else {
             const float rise = in.popup >= 0 ? d.event.rise * in.age : 0.0f;
             const float3 p{in.pos.x, view.heightAt(*grid_, in.pos.x, in.pos.z) + d.style.lift + rise, in.pos.z};
-            float2 sp;
-            if (!cam.worldToScreen(p, w, h, sp)) continue;
-            drawScreenInst(d, di, in, sp.x + ox, sp.y + oy, dl);
+            if (!cam.worldToScreen(p, w, h, sp)) return;
         }
-    }
+        drawScreenInst(d, di, in, sp.x + ox, sp.y + oy, dl);
+    });
 }
 
-void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in, float x, float y, void* dlp) {
+void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in, float x, float y, void* dlp, Json* preview) {
     ImDrawList* dl = static_cast<ImDrawList*>(dlp);
     const OvStyle& s = d.style;
     x += s.offsetX; y += s.offsetY;
@@ -834,10 +907,26 @@ void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in
         if (s.backgroundPlayer) b.w = 1;
         return imCol({b.x * s.backgroundShade, b.y * s.backgroundShade, b.z * s.backgroundShade, b.w * s.backgroundAlpha * in.alpha});
     };
+    if (preview) {
+        preview->set("dx", Json::number(double(s.offsetX)));
+        preview->set("dy", Json::number(double(s.offsetY)));
+        preview->set("rounding", Json::number(double(s.rounding)));
+    }
     switch (d.shape) {
     case OvShape::Text: {
         const std::string& txt = format(d, in);
         if (txt.empty()) break;
+        if (preview) {
+            preview->set("shape", Json::string("text"));
+            preview->set("text", Json::string(txt));
+            preview->set("size", Json::number(double(d.size[0])));
+            preview->set("color", Json::number(int64_t(col)));
+            if (s.shadow) preview->set("shadow", Json::number(int64_t(imCol({0, 0, 0, c.w * 0.75f}))));
+            if (s.hasBackground) preview->set("background", Json::number(int64_t(bgColor())));
+            preview->set("padX", Json::number(double(s.padX)));
+            preview->set("padY", Json::number(double(s.padY)));
+            break;
+        }
         ImFont* font = ImGui::GetFont();
         const float size = ImGui::GetFontSize() * d.size[0];
         const ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0, txt.c_str());
@@ -858,7 +947,6 @@ void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in
         const SceneObject& o = scene_->objects[size_t(in.obj)];
         const float bw = rules_->types[o.type].structure ? d.barWStructure : d.barW, bh = d.barH;
         const ImVec2 a(x - bw * 0.5f, y), b(x + bw * 0.5f, y + bh);
-        if (s.hasBackground) dl->AddRectFilled(ImVec2(a.x - s.border, a.y - s.border), ImVec2(b.x + s.border, b.y + s.border), bgColor());
         const float f = std::clamp(valueOf(d, o), 0.0f, 1.0f);
         float4 fc = c;
         if (!s.stops.empty()) {
@@ -866,19 +954,44 @@ void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in
             for (auto& [v, sc] : s.stops) if (f <= v) { fc = sc; break; }
             fc.w *= animAlpha(d, in);
         }
+        if (preview) {
+            preview->set("shape", Json::string("bar"));
+            preview->set("w", Json::number(double(bw))); preview->set("h", Json::number(double(bh)));
+            preview->set("fraction", Json::number(double(f))); preview->set("color", Json::number(int64_t(imCol(fc))));
+            preview->set("border", Json::number(double(s.border)));
+            if (s.hasBackground) preview->set("background", Json::number(int64_t(bgColor())));
+            break;
+        }
+        if (s.hasBackground) dl->AddRectFilled(ImVec2(a.x - s.border, a.y - s.border), ImVec2(b.x + s.border, b.y + s.border), bgColor());
         dl->AddRectFilled(a, ImVec2(a.x + bw * f, b.y), imCol(fc));
         break;
     }
     case OvShape::Icon: {
+        const float size = d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f);
+        if (preview) {
+            preview->set("shape", Json::string("icon"));
+            preview->set("image", Json::string(d.image));
+            preview->set("color", Json::number(int64_t(col)));
+            preview->set("size", Json::number(double(size)));
+            break;
+        }
         if (di >= images_.size() || !images_[di].valid()) break;
         const TextureRef& t = images_[di];
-        const float hs = (d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f)) * 0.5f;
+        const float hs = size * 0.5f;
         dl->AddImage(ImTextureRef(ImTextureID(t.tex.id)), ImVec2(x - hs, y - hs), ImVec2(x + hs, y + hs), ImVec2(t.u0, t.v0), ImVec2(t.u1, t.v1), col);
         break;
     }
     case OvShape::Circle: case OvShape::Ring: {
         const float r = radiusFor(d, in);
         if (r <= 0) break;
+        if (preview) {
+            preview->set("shape", Json::string("circle")); preview->set("radius", Json::number(double(r)));
+            preview->set("segments", Json::number(int64_t(s.segments)));
+            if (d.shape == OvShape::Circle || s.fill) preview->set("fill", Json::number(int64_t(s.hasFill ? imCol(s.fillColor) : col)));
+            if (d.shape == OvShape::Ring || s.outline) preview->set("line", Json::number(int64_t(s.hasLine ? imCol(s.lineColor) : col)));
+            preview->set("thickness", Json::number(double(s.thickness > 0 ? s.thickness : 1.5f)));
+            break;
+        }
         if (d.shape == OvShape::Circle || s.fill) dl->AddCircleFilled(ImVec2(x, y), r, s.hasFill ? imCol(s.fillColor) : col, s.segments);
         if (d.shape == OvShape::Ring || s.outline) dl->AddCircle(ImVec2(x, y), r, s.hasLine ? imCol(s.lineColor) : col, s.segments, s.thickness > 0 ? s.thickness : 1.5f);
         break;
@@ -886,6 +999,14 @@ void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in
     case OvShape::Rect: {
         const float g = in.popup >= 0 ? d.event.grow * in.age : 0.0f;
         const ImVec2 a(x - d.size[0] * 0.5f - g, y - d.size[1] * 0.5f - g), b(x + d.size[0] * 0.5f + g, y + d.size[1] * 0.5f + g);
+        if (preview) {
+            preview->set("shape", Json::string("rect"));
+            preview->set("w", Json::number(double(b.x-a.x))); preview->set("h", Json::number(double(b.y-a.y)));
+            if (s.fill) preview->set("fill", Json::number(int64_t(s.hasFill ? imCol(s.fillColor) : col)));
+            if (s.outline) preview->set("line", Json::number(int64_t(s.hasLine ? imCol(s.lineColor) : col)));
+            preview->set("thickness", Json::number(double(s.thickness > 0 ? s.thickness : 1.5f)));
+            break;
+        }
         if (s.fill) dl->AddRectFilled(a, b, s.hasFill ? imCol(s.fillColor) : col, s.rounding);
         if (s.outline) dl->AddRect(a, b, s.hasLine ? imCol(s.lineColor) : col, s.rounding, 0, s.thickness > 0 ? s.thickness : 1.5f);
         break;

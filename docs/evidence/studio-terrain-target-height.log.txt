@@ -1,0 +1,2 @@
+2026-11-26 07:17:30.459 AiverseStudioHTML5[62253:83261729] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:17:30.459 AiverseStudioHTML5[62253:83261729] [studio-web] JS: CROSS main VERIFIED AppKit picker sampled 2.5 m without history or height changes; drag to -3.25 m, compound undo, redo and reopen

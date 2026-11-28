@@ -1,0 +1,16 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/1 Test #585: studio_terrain_geometry ..........   Passed    1.68 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   1.68 sec*proc (1 test)
+
+Total Test time (real) =   1.71 sec
+2026-11-26 15:30:37.191 AiverseStudioHTML5[56650:85187319] [studio-web] JS: CROSS main DONE_1
+2026-11-26 15:30:36.649 AiverseStudioHTML5[56650:85187319] [studio-web] JS: CROSS main SECOND
+2026-11-26 15:30:37.190 AiverseStudioHTML5[56650:85187319] [studio-web] JS: CROSS main VERIFIED Russian captions on two maps and matching native HTML zone IDs via toolbar
+Renaming equal-length Cyrillic labels (blue/red pixel changes): (317, 174)
+Clean frame changes: (0, 0)

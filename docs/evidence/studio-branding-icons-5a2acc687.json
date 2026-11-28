@@ -1,0 +1,14 @@
+{
+  "sha": "5a2acc6878f1c061d693d25fc54acc23c883bc85",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-branding-icons-5a2acc687.log.txt",
+  "sha256": "6ea39d65df9409cc5d2d7758515c8187527b1b9f6239ac4d4689cdae47740c98"
+}

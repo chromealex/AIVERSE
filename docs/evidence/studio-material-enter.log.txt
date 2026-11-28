@@ -1,0 +1,2 @@
+2026-11-27 05:08:04.324 AiverseStudioHTML5[32938:87127554] [studio-web] JS: CROSS main VERIFIED Enter opened the focused asset and preserved the previous draft
+Only the edited material received the new roughness

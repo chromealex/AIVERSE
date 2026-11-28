@@ -1,0 +1,15 @@
+{
+  "sha": "8a2d799e4c890d88ff680b2fdc46c5ef25d1c159",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "../integration-verify-debug",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^spectrafx_(metal_gpu|metal_billboard|metal_rhi|preview_policy)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-cutover-spectrafx-metal.log.txt",
+  "sha256": "573f66141b06905e084706c114d194d68db82be4808143a2ac8e0ea332d9e5d3"
+}

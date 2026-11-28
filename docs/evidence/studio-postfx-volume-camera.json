@@ -1,0 +1,10 @@
+{
+  "sha": "422265c189a902afcb9f84cdeef755c764ab27fd",
+  "argv": [
+    "bash",
+    "/tmp/volume-profile-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-postfx-volume-camera.log.txt",
+  "sha256": "0b3718746a950f0e7e43288cd81bc02653b34ce92df9c477ba4da1e2198e016a"
+}

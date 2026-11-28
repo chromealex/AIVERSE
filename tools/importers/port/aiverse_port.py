@@ -48,6 +48,7 @@ def run(argv=None):
             if not args.out: raise ValueError('--out is required')
             model=read_json(root) if args.command=='emit' else extract(root,args.include)
             result=emit(model,args.out.expanduser(),args.scale,args.mapping,args.mode)
+            result['destination']=str(args.out.expanduser().resolve())
         else:
             result=read_json(root/'port-report.json')
             if args.command in ('item','resolve'):

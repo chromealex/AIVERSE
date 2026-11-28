@@ -1,0 +1,8 @@
+2026-11-26 08:29:13.393 AiverseStudioHTML5[3598:83469826] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/project-dir-ui-mPHlNI/Catalog.app/Contents/Resources/studio-web
+2026-11-26 08:29:13.520 AiverseStudioHTML5[3598:83469826] [studio-web] served index.html (7040 bytes)
+2026-11-26 08:29:13.525 AiverseStudioHTML5[3598:83469826] [studio-web] served assets/index-zSiW78HD.js (1655281 bytes)
+2026-11-26 08:29:13.557 AiverseStudioHTML5[3598:83469826] [studio-web] JS: CROSS main boot
+2026-11-26 08:29:13.565 AiverseStudioHTML5[3598:83469826] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 08:29:15.236 AiverseStudioHTML5[3598:83469826] [studio-web] JS: CROSS main SHOT_root
+2026-11-26 08:29:16.822 AiverseStudioHTML5[3598:83469826] [studio-web] JS: CROSS main SHOT_maps
+2026-11-26 08:29:18.233 AiverseStudioHTML5[3598:83469826] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:102:15 TypeError: undefined is not an object (evaluating 'label('maps').click')

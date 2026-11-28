@@ -1,0 +1,10 @@
+{
+  "sha": "b92c1ec7038bbfb71525383b3b09eb6e9952b724",
+  "argv": [
+    "bash",
+    "../build-texturesize.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-file-texture-size.log.txt",
+  "sha256": "8841572af093b30a5db2d62c54e11572edfe52d22deb5d6267c576d56c46d1cc"
+}

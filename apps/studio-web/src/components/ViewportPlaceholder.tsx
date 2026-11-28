@@ -4,8 +4,6 @@ import { Box } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import { SCENE_TOOL_KEYS } from './SceneToolbar';
 import SceneAxisGizmo from './SceneAxisGizmo';
-import { brushPixels, onSculptBrush, sculptBrush, strokeSpacing } from '../panels/sculptBrushStore';
-import { onReferenceView, referenceView } from '../panels/referenceStore';
 import { dockDragActive, forgetViewportRect, viewportRectChanged, visibleViewport, watchDockDrag, watchOverlays } from '../nativeOverlay';
 import {
   DEFAULT_SCENE_CAMERA, dragZoomAmount, flyStep, isSceneCameraState, navigationFor, stepFlySpeed,
@@ -18,10 +16,14 @@ const FLY_KEYS = new Set(['w', 'a', 's', 'd', 'q', 'e']);
 const ARROW_KEYS: Record<string, string> = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' };
 
 /** Layout source of truth for a real native GPU surface. Never streams raster frames to JS. */
-export default function ViewportPlaceholder({ title, active }: { title: string; active: boolean }) {
+export default function ViewportPlaceholder({ title, active, onSceneMenu }: { title: string; active: boolean; onSceneMenu: (event: React.MouseEvent) => void }) {
   const element = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; mode: DragMode; button: number } | null>(null);
   const pendingDelta = useRef<{ x: number; y: number; raf: number; mode: Exclude<DragMode, 'select' | 'handle'> }>({ x: 0, y: 0, raf: 0, mode: 'orbit' });
+  const roadToken=useRef('');
+  const roadPointer=useRef<{id:number;token:string;x:number;y:number;moved:boolean}|null>(null);
+  const areaToken=useRef('');
+  const areaPointer=useRef<{id:number;token:string}|null>(null);
   const flying = useRef(false);
   const handleInFlight = useRef(false);
   const flySpeedRef = useRef(1);
@@ -30,13 +32,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   const [speedVisible, setSpeedVisible] = useState(false);
   const speedTimer = useRef(0);
   const [camera, setCamera] = useState<SceneCameraState>(DEFAULT_SCENE_CAMERA);
-  // Character Creator sculpt: drag paints strokes, a circle shows the brush.
-  const [brush, setBrushView] = useState(sculptBrush());
-  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
-  const sculptDrag = useRef<{ x: number; y: number; busy: boolean; queued: { x: number; y: number } | null } | null>(null);
-  useEffect(() => onSculptBrush(setBrushView), []);
-  const [reference, setReference] = useState(referenceView());
-  useEffect(() => onReferenceView(setReference), []);
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
   const native = nativeConnected();
@@ -49,6 +44,13 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   useEffect(() => {
     if (!native) return;
     return onNativeEvent((event, payload) => {
+      if(event==='roadPick.armed')roadToken.current=(payload as {token:string}).token;
+      if(event==='roadPick.finished' && roadToken.current===(payload as {token:string}).token)roadToken.current='';
+      if(event==='area.armed' || event==='area.picked'){
+        const token=(payload as {token?:string})?.token;
+        if(token && event==='area.armed')areaToken.current=token;
+        else if(token===areaToken.current)areaToken.current='';
+      }
       if (event === 'viewport.ready') { setGpuReady(true); setGpuError(''); }
       if (event === 'viewport.camera' && isSceneCameraState(payload)) setCamera(payload);
       if (event === 'viewport.error') {
@@ -145,6 +147,11 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
           target.closest('input, textarea, select, [contenteditable="true"]')) return;
       const key=shortcutKey(event);
       boost=event.shiftKey;
+      if(key==='escape' && areaToken.current){
+        event.preventDefault();
+        void invoke('studio.areaPick',{token:areaToken.current,armed:false}).catch(console.warn);
+        return;
+      }
       if (event.altKey) return;
       if (!flying.current && !event.repeat && !event.shiftKey && SCENE_TOOL_KEYS[key]) {
         event.preventDefault();
@@ -223,37 +230,44 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
     flying.current=false;
     setNavigationActive(false);
   };
-  // One sculpt stroke per call; while the native side is busy only the latest
-  // cursor position is kept, so a fast drag never floods the bridge.
-  const stroke = (x: number, y: number, b: DOMRect) => {
-    const sd=sculptDrag.current;
-    if (sd?.busy) { sd.queued={ x, y }; return; }
-    if (sd) sd.busy=true;
-    void send({kind:'pick', x, y, width:b.width, height:b.height}).finally(() => {
-      const cur=sculptDrag.current;
-      if (!cur) return;
-      cur.busy=false;
-      const q=cur.queued; cur.queued=null;
-      if (q) stroke(q.x,q.y,b);
-    });
-  };
+  function sendAreaPointer(event:React.PointerEvent<HTMLElement>,token:string,phase:'down'|'drag'|'up'){
+    const bounds=event.currentTarget.getBoundingClientRect();
+    return send({kind:'areaGesture',token,phase,x:event.clientX-bounds.left,y:event.clientY-bounds.top,
+      width:bounds.width,height:bounds.height});
+  }
+  function cancelPointer(event:React.PointerEvent<HTMLElement>){
+    if(roadPointer.current?.id===event.pointerId)roadPointer.current=null;
+    const area=areaPointer.current;
+    if(area){
+      if(area.id!==event.pointerId)return;
+      areaPointer.current=null;
+      void invoke('studio.areaPick',{token:area.token,armed:false}).catch(console.warn);
+    }
+    endDrag();
+  }
   const navigationReady = native && active && gpuReady;
   return <section ref={element} className={'viewport' + (native && active && gpuReady ? ' viewport-native' : '')}
     aria-label={native && active ? 'Native Scene viewport' : 'Viewport placeholder'}
     tabIndex={0}
-    onContextMenu={event=>event.preventDefault()}
+    onContextMenu={event=>{ event.preventDefault(); if (native && active && event.shiftKey) onSceneMenu(event); }}
     onPointerDown={event => {
       if (!composite() || !active || !gpuReady) return;
+      if (event.button === 2 && event.shiftKey) return;
       event.currentTarget.focus();
-      const mode=navigationFor(event.button,{alt:event.altKey,meta:event.metaKey});
-      if (!mode || drag.current) return;
-      if (mode==='select' && sculptBrush().armed) {
-        const b=event.currentTarget.getBoundingClientRect();
-        sculptDrag.current={ x: event.clientX, y: event.clientY, busy: false, queued: null };
+      if(areaPointer.current || roadPointer.current || drag.current)return;
+      if(roadToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey){
+        roadPointer.current={id:event.pointerId,token:roadToken.current,x:event.clientX,y:event.clientY,moved:false};
         event.currentTarget.setPointerCapture(event.pointerId);
-        stroke(event.clientX-b.left,event.clientY-b.top,b);
         return;
       }
+      if(areaToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey){
+        areaPointer.current={id:event.pointerId,token:areaToken.current};
+        event.currentTarget.setPointerCapture(event.pointerId);
+        void sendAreaPointer(event,areaToken.current,'down');
+        return;
+      }
+      const mode=navigationFor(event.button,{alt:event.altKey,meta:event.metaKey});
+      if (!mode) return;
       if (mode!=='select') leaveAutoIso();
       if (mode==='look') flying.current=true;
       drag.current = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY,
@@ -271,14 +285,18 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={event => {
-      if (brush.armed) {
-        const b=event.currentTarget.getBoundingClientRect();
-        setCursor({ x: event.clientX-b.left, y: event.clientY-b.top });
-        const sd=sculptDrag.current;
-        if (sd && Math.hypot(event.clientX-sd.x,event.clientY-sd.y)>=strokeSpacing(brushPixels(brush.radius,b.height))) {
-          sd.x=event.clientX; sd.y=event.clientY;
-          stroke(event.clientX-b.left,event.clientY-b.top,b);
+      const road=roadPointer.current;
+      if(road && event.pointerId===road.id){
+        if(Math.hypot(event.clientX-road.x,event.clientY-road.y)>=5)road.moved=true;
+        return;
+      }
+      const area=areaPointer.current;
+      if(area){
+        if(area.id===event.pointerId && area.token===areaToken.current && !handleInFlight.current){
+          handleInFlight.current=true;
+          void sendAreaPointer(event,area.token,'drag').finally(()=>{handleInFlight.current=false;});
         }
+        return;
       }
       const state=drag.current;
       if (!state || !composite() || !gpuReady) return;
@@ -295,9 +313,26 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       } else if (state.moved && state.mode!=='select') sendDelta(dx,dy,state.mode);
     }}
     onPointerUp={event => {
-      if (sculptDrag.current) {
-        sculptDrag.current=null;
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      const road=roadPointer.current;
+      if(road && event.pointerId===road.id && event.button===0){
+        roadPointer.current=null;
+        if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+        if(!road.moved && road.token===roadToken.current && !event.altKey && !event.ctrlKey && !event.metaKey &&
+            Math.hypot(event.clientX-road.x,event.clientY-road.y)<5){
+          const bounds=event.currentTarget.getBoundingClientRect();
+          void send({kind:'pick',roadToken:road.token,chain:event.shiftKey,x:event.clientX-bounds.left,
+            y:event.clientY-bounds.top,width:bounds.width,height:bounds.height});
+        }
+        return;
+      }
+      const area=areaPointer.current;
+      if(area){
+        if(event.pointerId!==area.id || event.button!==0)return;
+        areaPointer.current=null;
+        if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)
+          void invoke('studio.areaPick',{token:area.token,armed:false}).catch(console.warn);
+        else void sendAreaPointer(event,area.token,'up');
+        if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
         return;
       }
       const state=drag.current;
@@ -316,9 +351,8 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
         void send({kind:'pick', x:event.clientX-bounds.left,y:event.clientY-bounds.top,width:bounds.width,height:bounds.height});
       }
     }}
-    onPointerLeave={() => setCursor(null)}
-    onPointerCancel={() => { sculptDrag.current=null; endDrag(); }}
-    onLostPointerCapture={() => { if (drag.current) endDrag(); }}
+    onPointerCancel={cancelPointer}
+    onLostPointerCapture={cancelPointer}
     onWheel={event => {
       if (!composite() || !active || !gpuReady) return;
       if (flying.current) { showSpeed(stepFlySpeed(flySpeedRef.current, event.deltaY)); return; }
@@ -330,14 +364,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       {navigationActive?(flying.current?'Flythrough · WASD move · Q/E down/up · Shift faster · Wheel speed':'Navigating Scene')
         :'RMB fly (WASD/QE) · Alt+LMB orbit · MMB / Alt+Cmd+LMB pan · Wheel / Alt+RMB zoom · F focus'}
     </div>}
-    {navigationReady && reference.src && reference.visible && <img className="studio-reference-photo" src={reference.src} alt="" aria-hidden="true"
-      style={{ opacity: reference.opacity, height: (reference.scale * 100) + '%',
-        transform: `translate(calc(-50% + ${reference.x * 50}%), calc(-50% + ${reference.y * 50}%))${reference.mirror ? ' scaleX(-1)' : ''}` }}/>}
-    {navigationReady && brush.armed && cursor && (() => {
-      const h=element.current?.getBoundingClientRect().height ?? 600, r=brushPixels(brush.radius,h);
-      return <div className="studio-sculpt-brush" aria-hidden="true"
-        style={{ left: cursor.x-r, top: cursor.y-r, width: r*2, height: r*2 }}/>;
-    })()}
     {navigationReady && speedVisible && <div className="studio-scene-fly-speed" role="status">
       Camera speed ×{flySpeed.toFixed(flySpeed < 1 ? 2 : 1)}</div>}
     {navigationReady && <SceneAxisGizmo camera={camera}

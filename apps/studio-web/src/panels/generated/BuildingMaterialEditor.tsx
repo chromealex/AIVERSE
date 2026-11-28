@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { StudioSelect } from '../../ui/StudioUI';
 import AssetReferencePicker from '../../components/AssetReferencePicker';
 import { invoke, nativeConnected, onNativeEvent } from '../../bridge';
 import type { MaterialData, MaterialPatch, MaterialLibrary } from '../materialSchema';
-import { materialNames } from '../materialSchema';
+import { materialFields, materialNames } from '../materialSchema';
 import './BuildingMaterialEditor.css';
 
 type NumericKey = 'metallic' | 'roughness' | 'emissiveStrength' | 'normalScale' | 'occlusionStrength';
@@ -26,16 +27,7 @@ const textures: ReadonlyArray<{ key: TextureKey; label:string }> = [
 
 const initial = (source: MaterialData): MaterialPatch => {
   const copy: MaterialPatch = {};
-  for (const {key} of numeric) {
-    const raw = source[key];
-    copy[key] = typeof raw === 'number' && Number.isFinite(raw) ? raw : key === 'roughness' ? 1 : 0;
-  }
-  for (const {key} of uvFields) {
-    const raw=source[key];
-    copy[key]=Array.isArray(raw)&&raw.length===2
-      ? raw.join(',') : typeof raw==='string' ? raw : key==='uvScale'?'1,1':'0,0';
-  }
-  for (const {key} of textures) copy[key] = typeof source[key] === 'string' ? source[key] : '';
+  for (const field of materialFields(source)) copy[field.key] = field.value;
   return copy;
 };
 
@@ -59,7 +51,7 @@ const editableSource = async (material:MaterialData):Promise<MaterialPatch> => {
 const same = (a:MaterialPatch,b:MaterialPatch) =>
   [...numeric.map(f=>f.key),...textures.map(f=>f.key),...uvFields.map(f=>f.key)].every(key => a[key]===b[key]);
 
-/** Edits a single existing Studio materials.json PBR resource.
+/** Edits a single existing project PBR material.
  *  The same material holds all scalar properties AND texture GUIDs.
  *  Does not silently mutate the generator's bundled architecture style. */
 export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projectLoaded:boolean;onSaved?:()=>void}) {
@@ -78,7 +70,7 @@ export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projec
       name && data.library[name] ? name : materialNames(data)[0] ?? '';
     const values = await editableSource(data.library[next] ?? {});
     setLibrary(data);setName(next);setDraft(values);setBaseline(values);
-    setMessage('');setError('');
+    setError('');
   };
   useEffect(()=>{
     if(!projectLoaded){setLibrary({library:{}});setName('');return;}
@@ -119,12 +111,16 @@ export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projec
     setBusy(true);setError('');setMessage('');
     try{
       // One native patch persists the scalar material values AND all image
-      // GUIDs atomically in the existing materials.json document.
-      const saved=await invoke('studio.materialPatch',{name,patch:draft});
+      // GUIDs through the project material library.
+      const patch:MaterialPatch = {};
+      for (const {key} of [...numeric,...uvFields,...textures]) {
+        if (draft[key] !== baseline[key]) patch[key] = draft[key];
+      }
+      const saved=await invoke('studio.materialPatch',{name,patch});
       setLibrary(saved);
       const next=await editableSource(saved.library[name]??{});
       setDraft(next);setBaseline(next);
-      setMessage('Material and textures saved together in materials.json.');
+      setMessage(saved.files?.[name] ? 'Saved ' + saved.files[name] : 'Material and texture references saved.');
       window.dispatchEvent(new Event('studio:assets-changed'));
       onSaved?.();
     }catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -133,14 +129,14 @@ export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projec
   return <section className="abg-material" aria-label="PBR material and texture editor">
     <div className="abg-material__header">
       <strong>PBR material + textures</strong>
-      <span className="abg-material__muted">Shared project materials.json</span>
+      <span className="abg-material__muted">{library.files?.[name] ?? 'Project material library'}</span>
     </div>
     <label className="abg-material__field">Material
-      <select className="au-input" value={name} disabled={!projectLoaded||busy}
+      <StudioSelect value={name} disabled={!projectLoaded||busy}
         onChange={e=>selectMaterial(e.target.value)}>
         {names.length===0&&<option value="">No project materials</option>}
         {names.map(item=><option key={item} value={item}>{item}</option>)}
-      </select>
+      </StudioSelect>
     </label>
     {!!name&&<div className="abg-material__grid">
       {numeric.map(({key,label,max})=><label className="abg-material__field" key={key}>{label}

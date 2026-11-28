@@ -2,8 +2,22 @@
 #include "StudioTerrainGeometry.h"
 #include "StudioDocumentVisuals.h"
 #include "engine/render/Model.h"
+#include "engine/render/LightmapUv.h"
+#include "engine/bake/LightmapData.h"
 #include <set>
 namespace aiverse::studio {
+// modelFromParts emits the ground as the first mesh and node 1 after its root.
+inline void studioTerrainLightmapUv(render::Model& model,const bake::LightmapData::Terrain& terrain) {
+    if(terrain.page<0 || terrain.extent[0]<=0 || terrain.extent[1]<=0 || model.meshes.empty())return;
+    for(auto& part:model.meshes.front().primitives){
+        for(size_t i=part.firstVertex;i<size_t(part.firstVertex)+part.vertexCount;++i){
+            auto& v=model.vertices[i];
+            render::setLightmapUv(v,{(v.pos.x-terrain.origin[0])/terrain.extent[0],
+                                     (v.pos.z-terrain.origin[1])/terrain.extent[1]});
+        }
+        part.lightmapUv=true;
+    }
+}
 // Uses exactly the existing document preview geometry, not game assets. This
 // PBR representation enables the shared receiver/GI passes on that preview.
 inline std::unique_ptr<render::Model> studioLightingPreview(const editor::MapDoc& doc,

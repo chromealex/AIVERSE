@@ -1,4 +1,4 @@
-// AIVERSE Studio: project/content is the ONLY root of the HTML5 Assets browser.
+// AIVERSE Studio: project/content is the root of the indexed Assets catalog.
 // This is an editor read-only listing, NOT a general project filesystem API.
 #pragma once
 

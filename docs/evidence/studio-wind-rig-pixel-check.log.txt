@@ -1,0 +1,9 @@
+base 0
+parts 11756
+depth 11354
+weight 11706
+skeleton 2
+Traceback (most recent call last):
+  File "../rig-compare.py", line 24, in <module>
+    im=read(mode);n=sum(any(abs(im[i+c]-off[i+c])>20 for c in (0,1,2)) for i in range(0,len(off),4));print(mode,n,flush=True);assert n==0 if mode=='base' else n>10
+AssertionError

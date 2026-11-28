@@ -1,0 +1,10 @@
+{
+  "sha": "54ab59da75dd344653d12157a8731b5a03ba326d",
+  "argv": [
+    "node",
+    "/tmp/pose-pointer.cjs"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-pose-pointer-capture.log.txt",
+  "sha256": "fbea027aa68c35b5086e3f0c3e8ce0235b37b7c944c38de20d97b8019107fe6c"
+}

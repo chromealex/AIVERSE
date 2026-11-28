@@ -3,26 +3,30 @@ import { ArchiveRestore, LocateFixed, Play, Pause, Square, StepForward } from 'l
 import { invoke } from '../bridge';
 import type { StudioGameState } from '../types';
 
-/** Play / Pause / Step / Stop, centred in the title bar (Unity layout). */
-export default function HeaderGameControls({enabled,onPlay,onError,onState}:{
-  enabled:boolean;onPlay:()=>void;onError:(message:string)=>void;onState?:(state:StudioGameState|null)=>void;
-}) {
+export function useStudioGameState(enabled:boolean,scriptErrors:boolean,project?:string) {
   const [state,setState]=useState<StudioGameState|null>(null);
-  const [pending,setPending]=useState(false);
-  const [note,setNote]=useState('');
-  useEffect(()=>{ if(!note)return; const t=window.setTimeout(()=>setNote(''),4000); return ()=>window.clearTimeout(t); },[note]);
-  useEffect(()=>{ onState?.(state); },[state,onState]);
   useEffect(()=>{
-    if(!enabled){setState(null);return;}
+    setState(null);
+    if(!enabled)return;
     let live=true,inFlight=false;
     const refresh=async()=>{
       if(inFlight)return;inFlight=true;
-      try {const next=await invoke('studio.gameState',{});if(live)setState(next);}
+      try {const next=await invoke('studio.gameState',{scriptErrors});if(live)setState(next);}
       catch {} finally {inFlight=false;}
     };
     void refresh();const timer=window.setInterval(refresh,500);
     return ()=>{live=false;window.clearInterval(timer);};
-  },[enabled]);
+  },[enabled,scriptErrors,project]);
+  return [state,setState] as const;
+}
+
+/** Play / Pause / Step / Stop, centred in the title bar (Unity layout). */
+export default function HeaderGameControls({enabled,onPlay,onError,state,setState}:{
+  enabled:boolean;onPlay:()=>void;onError:(message:string)=>void;state:StudioGameState|null;setState:(state:StudioGameState|null)=>void;
+}) {
+  const [pending,setPending]=useState(false);
+  const [note,setNote]=useState('');
+  useEffect(()=>{ if(!note)return; const t=window.setTimeout(()=>setNote(''),4000); return ()=>window.clearTimeout(t); },[note]);
   const action=async(kind:'play'|'here'|'pause'|'step'|'stop')=>{
     setPending(true);
     try {

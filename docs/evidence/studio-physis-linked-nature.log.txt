@@ -1,0 +1,3 @@
+2026-11-26 12:49:55.932 AiverseStudioHTML5[82372:84639145] [studio-web] JS: CROSS physis-detail DONE_1
+2026-11-26 12:49:55.931 AiverseStudioHTML5[82372:84639145] [studio-web] JS: CROSS physis-detail VERIFIED MCP command published into detached HTML panel, batch tick 13, click advanced same world to 14, disable and re-enable cleared old simulation
+Linked MCP tools/list and tools/call passed: private ignition, batch, UI tick round trip, malformed call isolation, playback, pause, disable and reset.

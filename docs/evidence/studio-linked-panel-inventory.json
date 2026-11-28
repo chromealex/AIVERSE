@@ -1,0 +1,10 @@
+{
+  "sha": "e99b0ef94e69f905785c4075333596f7a5701bec",
+  "argv": [
+    "bash",
+    "/tmp/panel-list.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-panel-inventory.log.txt",
+  "sha256": "d63571386761da9121370543a0a142647b3a0fdfb02cb291981e65eb0daa225f"
+}

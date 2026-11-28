@@ -26,7 +26,7 @@
         var el = document.getElementById('studio-boot-status');
         if (el) el.textContent = text;
         try {
-          var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.aiverse;
+          var handler = window.__aiverseLinux || (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.aiverse);
           if (handler) handler.postMessage({id: 0, method: 'studio.webDiagnostic', params: {message: text}});
         } catch (_) {}
       }
@@ -40,7 +40,7 @@
       });
       setTimeout(function () {
         if (document.getElementById('studio-boot')) {
-          report('The HTML document loaded, but React did not start. Check bundled JavaScript module loading in the macOS logs.');
+          report('The HTML document loaded, but React did not start. Check bundled JavaScript module loading in the Studio logs.');
         }
       }, 4500);
     }());

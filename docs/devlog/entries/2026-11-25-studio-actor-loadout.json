@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-actor-loadout",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "ee59734cd",
+  "author": null,
+  "links": [],
+  "title": "Снаряжение в Actors & Cameras",
+  "titleEn": "Loadout in Actors & Cameras",
+  "summary": "Вкладка Loadout показывает игровые параметры каждого слота снаряжения.",
+  "summaryEn": "Loadout displays the game settings for each equipment slot.",
+  "body": [
+    "Настройте урон и вместимость магазина, затем нажмите Save loadout. Изменения всех слотов записываются вместе."
+  ],
+  "bodyEn": [
+    "Adjust damage and magazine capacity, then choose Save loadout. All edited slots are saved together."
+  ],
+  "verified": "Проверены проекты с одним предметом и со списком из двух. После сохранения сверены все правила и файл карты.",
+  "verifiedEn": "Verified the single and two-slot formats on macOS. Compared the complete saved rules and map file.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-actor-loadout/loadout-multi.png",
+      "caption": "Снаряжение с двумя слотами",
+      "captionEn": "Two-slot loadout"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 // Map generator entry points: requests, presets, the pipeline and the match-time hook.
 #include "GenInternal.h"
+#include "GenSeed.h"
 #include "engine/core/Hash.h"
 
 namespace aiverse::gen {
@@ -78,7 +79,7 @@ bool parseRequest(const Json& b, uint64_t matchSeed, int defaultPlayers, GenRequ
     if (s.isString()) {
         if (s.str() != "match") { if (err) *err = "generate.seed: a number or \"match\""; return false; }
         r.seed = matchSeed;
-    } else if (s.isNumber()) r.seed = uint64_t(s.integer(1));
+    } else if (s.isNumber()) r.seed = uint64_t(integerSeed(s,1));
     else r.seed = matchSeed;
     r.players = int(b.getInt("players", defaultPlayers));
     if (r.players < 1 || r.players > 8) { if (err) *err = "generate.players: 1..8"; return false; }

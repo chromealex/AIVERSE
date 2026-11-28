@@ -19,6 +19,12 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <spawn.h>
+#include <sys/wait.h>
+extern char** environ;
+#endif
 
 #include "apps/editor/core/Net.h"
 #include "apps/editor/core/Workspace.h"
@@ -40,21 +46,32 @@ struct Options {
     bool noEditor = false;
 };
 
-std::string exeDir() {
-    std::error_code ec;
-#if defined(__linux__)
-    fs::path p = fs::read_symlink("/proc/self/exe", ec);
-    if (!ec) return p.parent_path().string();
-#endif
-    return fs::current_path(ec).string();
-}
-
 std::string findEditor(const Options& o, const std::string& self) {
     if (!o.editorPath.empty()) return o.editorPath;
-    for (fs::path c : {fs::path(self) / "aiverse_editor", fs::path(self) / "AiverseEditor.app/Contents/MacOS/AiverseEditor",
-                       fs::path(self) / "aiverse_editor.exe", fs::path(self) / "Release/aiverse_editor.exe"}) {
-        std::error_code ec;
-        if (fs::exists(c, ec)) return c.string();
+    const fs::path directory(self);
+    std::vector<fs::path> roots{directory, directory / "apps/studio-native"};
+    const fs::path config = directory.filename();
+    if (config == "Release" || config == "Debug" || config == "RelWithDebInfo" || config == "MinSizeRel")
+        roots.push_back(directory.parent_path() / "apps/studio-native" / config);
+#if defined(__APPLE__) || defined(_WIN32)
+#ifdef __APPLE__
+    const fs::path studio = "AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5";
+    // The MCP bundled inside the app is beside its executable.
+    std::error_code ec;
+    if (fs::is_regular_file(directory / "AiverseStudioHTML5", ec))
+        return (directory / "AiverseStudioHTML5").string();
+#else
+    const fs::path studio = "AiverseStudio.exe";
+#endif
+    for (const char* build : {"Release", "RelWithDebInfo", "Debug", "MinSizeRel"})
+        roots.push_back(directory / "apps/studio-native" / build);
+#else
+    const fs::path studio = "AiverseStudio";
+#endif
+    for (const auto& root : roots) {
+        std::error_code error;
+        const auto candidate = root / studio;
+        if (fs::is_regular_file(candidate, error)) return candidate.string();
     }
     return {};
 }
@@ -67,10 +84,47 @@ std::string findTool(const std::string& self, const char* name) {
     return name;
 }
 
+bool startEditor(std::vector<std::string> args) {
+#if defined(_WIN32)
+    std::wstring command;
+    for (const auto& arg : args) {
+        const auto value = fs::u8path(arg).wstring();
+        // These arguments are file names, option names and a port. Quotes cannot occur in Windows paths.
+        if (value.find(L'"') != std::wstring::npos) return false;
+        if (!command.empty()) command += L' ';
+        command += L'"' + value;
+        const auto last = value.find_last_not_of(L'\\');
+        command.append(last == std::wstring::npos ? value.size() : value.size()-last-1, L'\\');
+        command += L'"';
+    }
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) return false;
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return true;
+#else
+    std::vector<char*> argv;
+    for (auto& arg : args) argv.push_back(arg.data());
+    argv.push_back(nullptr);
+    posix_spawn_file_actions_t io;
+    if (posix_spawn_file_actions_init(&io)) return false;
+    pid_t child;
+    const bool started = !posix_spawn_file_actions_addopen(&io, 0, "/dev/null", O_RDONLY, 0) &&
+        !posix_spawn_file_actions_addopen(&io, 1, "/dev/null", O_WRONLY, 0) &&
+        !posix_spawn_file_actions_adddup2(&io, 1, 2) &&
+        !posix_spawnp(&child, argv[0], &io, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&io);
+    if (started) std::thread([child] { while (waitpid(child, nullptr, 0) < 0 && errno == EINTR) {} }).detach();
+    return started;
+#endif
+}
+
 // Connection to the editor. Reconnects lazily; launches the editor once if allowed.
 class EditorLink {
 public:
-    EditorLink(Options o, std::string self) : opt_(std::move(o)), self_(std::move(self)) {}
+    EditorLink(Options o, std::string self, std::string projectDir) : projectDir_(std::move(projectDir)), opt_(std::move(o)), self_(std::move(self)) {}
     // Connect and authenticate (agent-link protocol 2, docs/mcp-agent-link.md): the editor
     // accepts tool calls only after {"method":"hello","token":...} with the token it wrote to
     // net::agentTokenPath(port). The token is re-read on every connect (a restarted editor
@@ -109,14 +163,18 @@ public:
         launched_ = true;
         std::string ed = findEditor(opt_, self_);
         if (ed.empty()) return false;
-        std::string cmd = "\"" + ed + "\" --listen " + std::to_string(opt_.port) + " --engine \"" + opt_.engine + "\"";
-        if (!opt_.game.empty()) cmd += " --game \"" + opt_.game + "\"";
-#if defined(_WIN32)
-        cmd = "start \"\" " + cmd;
-#else
-        cmd += " >/dev/null 2>&1 &";
-#endif
-        if (std::system(cmd.c_str()) != 0) return false;
+        std::vector<std::string> args{ed, "--listen", std::to_string(opt_.port)};
+        const auto executable = fs::path(ed).filename();
+        if (executable == "AiverseStudioHTML5" || executable == "AiverseStudio" || executable == "AiverseStudio.exe") {
+            if (!opt_.game.empty()) {
+                if (projectDir_.empty()) return false;
+                args.insert(args.end(), {"--project", projectDir_});
+            }
+        } else {
+            args.insert(args.end(), {"--engine", opt_.engine});
+            if (!opt_.game.empty()) args.insert(args.end(), {"--game", opt_.game});
+        }
+        if (!startEditor(std::move(args))) return false;
         for (int i = 0; i < 100; ++i) {          // up to 10 s for the window to come up
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             if (connectAndHello()) return true;
@@ -147,6 +205,7 @@ public:
     bool connected() const { return cli_.connected(); }
 
 private:
+    std::string projectDir_;
     Options opt_;
     std::string self_;
     net::LineClient cli_;
@@ -173,9 +232,11 @@ void replyError(const Json& id, int code, const std::string& msg) {
 }
 
 // Tool result -> MCP content. Screenshots come back as images the model can look at.
-Json toContent(const Json& result) {
+Json toContent(const std::string& name,const Json& result) {
     Json content = Json::array();
-    bool isError = result.has("error");
+    // These status documents include the preview's error string even on a successful read.
+    const bool editorStatus=(name=="animation_editor_status" || name=="rig_editor_status") && result["ready"].type()==Json::Type::Bool;
+    const bool isError=result.has("error") && !editorStatus;
     if (result.has("png_base64")) {
         Json img = Json::object();
         img.set("type", Json::string("image"));
@@ -273,19 +334,19 @@ int main(int argc, char** argv) {
     }
     std::error_code ec;
     opt.engine = fs::weakly_canonical(opt.engine, ec).string();
-    const std::string self = exeDir();
+    const std::string self = platform::hostExecutablePath(argv[0]).parent_path().string();
 
     Workspace local;                      // used when no editor is reachable
     local.engineDir = opt.engine;
     aiverse::editor::setEditorLanguage(opt.engine + "/engine/assets/lang");
     local.buildTool = findTool(self, "aiversebuild");
     for (fs::path c : {fs::path(self) / "AiverseGame", fs::path(self) / "AiverseGame.exe", fs::path(self) / "AiverseGame.app/Contents/MacOS/AiverseGame",
-                       fs::path(self) / "Release/AiverseGame.exe"}) {   // ui_preview renders screens with the client
+                       fs::path(self) / "Release/AiverseGame.exe", fs::path(self) / "aiverse_client"}) {   // ui_preview renders screens with the client
         std::error_code ec2;
         if (fs::exists(c, ec2)) { local.gameExe = c.string(); break; }
     }
     if (!opt.game.empty()) { std::string err; local.openGame(opt.game, &err); }
-    EditorLink link(opt, self);
+    EditorLink link(opt, self, local.project.dir);
 
     std::string line;
     while (std::getline(std::cin, line)) {
@@ -321,7 +382,7 @@ int main(int argc, char** argv) {
                 if (!viaEditor && !link.lastError().empty())
                     std::fprintf(stderr, "aiversemcp: editor link: %s\n", link.lastError().c_str());
                 if (!viaEditor) result = local.call(name, args, "agent");
-                reply(id, toContent(result));
+                reply(id, toContent(name,result));
             } else if (method == "ping") {
                 reply(id, Json::object());
             } else if (isRequest) {

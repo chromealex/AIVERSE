@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-studio-multiplayer",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "4350c3d70",
+  "author": null,
+  "links": [],
+  "title": "Сетевая игра из HTML Studio",
+  "titleEn": "Network play from HTML Studio",
+  "summary": "Новая вкладка Multiplayer запускает хост и открывает отдельное игровое окно для подключения.",
+  "summaryEn": "Multiplayer starts a listen server and launches independent game clients.",
+  "body": [
+    "Сохраните карту и откройте Actors & Cameras → Multiplayer. Нажмите Start host, затем укажите адрес сервера и нажмите Connect."
+  ],
+  "bodyEn": [
+    "Save the map and open Actors & Cameras → Multiplayer. Start the host, enter a server address and select Connect."
+  ],
+  "verified": "На macOS два клиента открыли вторую карту проекта и подключились по WebSocket и UDP. При подключении по UDP счётчик серверных тиков вырос с 849 до 1041.",
+  "verifiedEn": "Two macOS clients opened the second project map and joined over loopback WebSocket and UDP. The UDP client HUD advanced from server tick 849 to 1041.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-panel.png",
+      "caption": "Управление сетевой игрой",
+      "captionEn": "Multiplayer controls"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-client.png",
+      "caption": "Подключённое игровое окно",
+      "captionEn": "Joined game window"
+    }
+  ]
+}

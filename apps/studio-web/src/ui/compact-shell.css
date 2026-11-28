@@ -94,7 +94,7 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 /* Layout follows the dock, including a narrow pane inside a wide window. */
 .nested-stack[data-narrow] {
   .console__bar, .ptp__edhead, .ptp__actions, .diff__summary,
-  .graph-summary, .materials-footer, .anim__transport { flex-wrap: wrap; }
+  .materials-footer, .anim__transport { flex-wrap: wrap; }
   .console__search:focus-within, .hier__search:focus-within { outline: 2px solid var(--au-accent); }
   .console__search { flex: 1 1 9rem; }
   .ptp__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
@@ -113,6 +113,10 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
   .studio-assets-toolbar { flex-wrap: wrap; }
   .studio-assets-breadcrumb { flex-basis: 100%; }
   .studio-assets-layout { flex-direction: column; }
+  .studio-assets-layout .studio-asset-import-settings {
+    width: 100%; max-width: none; max-height: 38%; flex: 0 1 auto;
+    border-left: 0; border-top: 1px solid var(--au-line);
+  }
   .studio-assets-folders {
     width: 100% !important; max-height: 27%; flex: 0 1 auto;
     border-inline-end: 0; border-bottom: 1px solid var(--au-line);
@@ -140,3 +144,18 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 .hier__row.is-primary { box-shadow: inset 2px 0 var(--au-accent); }
 .insp-comp__head { min-height: 29px; }
 .insp-comp__body { padding-block: var(--au-space-2); }
+
+:root[data-theme="light"] .project-breadcrumb b,
+:root[data-theme="light"] .log-row { color: var(--au-text); }
+:root[data-theme="light"] .log-warning,
+:root[data-theme="light"] .studio-statusbar__warn,
+:root[data-theme="light"] .studio-statusbar__dirty,
+:root[data-theme="light"] .studio-statusbar__action { color: var(--au-warning); }
+:root[data-theme="light"] .log-error { color: var(--au-danger); }
+:root[data-theme="light"] .studio-statusbar { color: var(--au-text-muted); }
+:root[data-theme="light"] .nested-tab { color: var(--au-text-soft); border-color: var(--au-line); }
+:root[data-theme="light"] .nested-tab:hover { color: var(--au-text); background: var(--au-hover); }
+:root[data-theme="light"] .nested-tab.nested-active {
+  color: var(--au-text);
+  background: var(--au-selection-gradient);
+}

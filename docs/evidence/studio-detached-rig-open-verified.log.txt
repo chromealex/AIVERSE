@@ -1,0 +1,3 @@
+2026-11-26 10:27:39.874 AiverseStudioHTML5[84175:83886003] [studio-web] JS: CROSS main DONE_1
+2026-11-26 10:27:39.874 AiverseStudioHTML5[84175:83886003] [studio-web] JS: CROSS main VERIFIED exclusive detached Rig ownership
+Verified linked inline open in restored native detached Rig, exclusive ownership, dirty report and replacement refusal.

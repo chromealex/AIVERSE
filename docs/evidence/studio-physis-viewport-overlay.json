@@ -1,0 +1,10 @@
+{
+  "sha": "0c4d708f73c900a3afd84916dadcfcc884e1c166",
+  "argv": [
+    "bash",
+    "/tmp/physis-overlay-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-viewport-overlay.log.txt",
+  "sha256": "73cec1bf93728319bede8794dc28db15083bc987f1b51cb566972737c8d51762"
+}

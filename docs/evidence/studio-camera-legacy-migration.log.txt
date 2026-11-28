@@ -1,0 +1,7 @@
+2026-11-25 23:49:57.704 AiverseStudioHTML5[44681:81701254] [studio-web] JS: CROSS main DONE_1
+2026-11-25 23:49:57.704 AiverseStudioHTML5[44681:81701254] [studio-web] JS: CROSS main VERIFIED 6 imported, occupied slot 1 preserved, conflict moved to 7, orthographic view recalled
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/legacy-bookmarks-qa-vA6OxG/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/legacy-bookmarks-qa-vA6OxG/Catalog.app: replacing existing signature
+2026-11-25 23:50:09.640 AiverseStudioHTML5[44891:81703150] [studio-web] JS: CROSS main DONE_2
+2026-11-25 23:50:09.640 AiverseStudioHTML5[44891:81703150] [studio-web] JS: CROSS main VERIFIED removed slot stayed empty, original pose and lens accessible after relaunch
+Legacy settings remained byte-identical.

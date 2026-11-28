@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-map-areas",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "1eb0c70fc",
+  "author": null,
+  "links": [],
+  "title": "Зоны карты в Inspector",
+  "titleEn": "Map areas in Inspector",
+  "summary": "Вкладка Areas позволяет рисовать зоны на сетке и менять их границы по координатам.",
+  "summaryEn": "Draw areas on the grid or enter their bounds in the Areas tab.",
+  "body": [
+    "При переименовании зоны обновляются ссылки в триггерах карты и маршрутах волн. Undo отменяет изменения одним шагом."
+  ],
+  "bodyEn": [
+    "Renaming an area updates map trigger references and wave routes in one undoable edit."
+  ],
+  "verified": "Проверены создание, удаление, переименование, Undo, Redo и сохранённый файл карты на macOS. В браузере проверена отрисовка зоны мышью при ширине окна 240 и 640 пикселей.",
+  "verifiedEn": "A detached macOS Inspector exercised create, remove, rename, Undo, Redo and save. Browser checks covered pointer drawing at 240 and 640 pixels.",
+  "limits": "Ссылки в Lua-скриптах проверяются вручную. Проверка Windows предстоит.",
+  "limitsEn": "Lua references require manual review. Windows acceptance is pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-map-areas/map-areas.png",
+      "caption": "Границы зоны в отдельном окне macOS",
+      "captionEn": "Area bounds in a detached macOS Inspector"
+    }
+  ]
+}

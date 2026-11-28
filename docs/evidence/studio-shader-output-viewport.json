@@ -1,0 +1,10 @@
+{
+  "sha": "ae6fa25b47e2224109c6a33ecc732dcd02b1b8ca",
+  "argv": [
+    "bash",
+    "/tmp/shader-bindings-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-shader-output-viewport.log.txt",
+  "sha256": "638b17e8a3977f1c86ec368493d01d3ad5923c45cacf8b7af475e45870e972a7"
+}

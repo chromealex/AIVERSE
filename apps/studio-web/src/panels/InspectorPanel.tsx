@@ -1,18 +1,23 @@
+import { revealProjectAsset } from '../assetNavigation';
+import { MapRegions } from './MapRegions';
+import { MapInspector } from './MapInspector';
 import { copyText } from '../clipboard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, ChevronDown, ChevronRight, Info, Lightbulb, Lock, LockOpen, MoreVertical, Move3d, Puzzle, Search, Shield, User
 } from 'lucide-react';
 import type { StudioComponentCatalogItem, StudioInspectorComponent, StudioProperty } from '../types';
-import { invoke } from '../bridge';
+import { invoke, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
 import GranularGridEditor from '../components/GranularGridEditor';
-import { StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
+import { StudioButton, StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
 import { canRemove, canReset, copyValues, mergeInspectors, missingOption, pasteValues, resetValues, type CopiedComponent, type FieldValue } from './inspectorActions';
 import type { StudioInspector } from '../types';
 import { fuzzyScore } from '../commandSearch';
 import type { StudioPanelContext } from './StudioPanelRenderer';
+import EvolveGroupNumeric from '../components/EvolveGroupNumeric';
 import './InspectorPanel.css';
+import { useLuaMenu } from './useLuaMenu';
 
 const ICONS: Record<string, typeof Box> = {
   Transform: Move3d, MeshRenderer: Box, Light: Lightbulb, Unit: User,
@@ -93,7 +98,7 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
         const shown = missing ? { ...property, options: [...(property.options ?? []), { label: String(property.value) + ' (missing)', value: String(property.value) }] } : property;
         return <div key={entityId + component.id + property.key} className={missing ? 'insp-field is-missing' : 'insp-field'}>
           <PropertyField property={shown} disabled={busy || property.editable === false} onChange={value => onChange(property.key, value)}/>
-          {missing && component.id === 'MeshRenderer' && <div className="insp-missing" role="alert">Not in materials.json ·
+          {missing && component.id === 'MeshRenderer' && <div className="insp-missing" role="alert">Material missing from this project ·
             <button type="button" disabled={busy} onClick={() => onCreateMaterial(String(property.value))}>Create “{String(property.value)}”</button>·
             <button type="button" disabled={busy} onClick={() => onChange(property.key, '')}>Use default</button></div>}
         </div>;
@@ -151,8 +156,10 @@ function AddComponent({ entityId, busy, onPick }: { entityId: string; busy: bool
 }
 
 /** Unity-style Inspector: entity header + its document components. */
-export default function InspectorPanel({ inspector: primary, selected, busy, inspectorPinned, toggleInspectorPin,
-  changeProperty, setBusy, commitSnapshot, showPanel, reportError, snapshot }: StudioPanelContext) {
+export default function InspectorPanel({ inspector: primary, selected, busy, inspectorRecord, inspectorPinned, toggleInspectorPin,
+  select, changeProperty, setBusy, commitSnapshot, showPanel, reportError, snapshot }: StudioPanelContext) {
+  const [status, setStatus] = useState('');
+  const lua = useLuaMenu(commitSnapshot, showPanel, setStatus, reportError);
   // Multi-selection: read every selected object and show their common components.
   const ids = !inspectorPinned && snapshot?.selectedIds && snapshot.selectedIds.length > 1 ? snapshot.selectedIds.slice(-50) : null;
   const [others, setOthers] = useState<StudioInspector[] | null>(null);
@@ -177,12 +184,13 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
   };
   const setMany = (component: StudioInspectorComponent, values: Record<string, FieldValue> | null) => {
     if (!inspector || !values || !Object.keys(values).length) return;
-    void run(() => invoke('studio.setProperties', targetIds
-      ? { entityIds: targetIds, componentId: component.id, values }
-      : { entityId: inspector.id, componentId: component.id, values }));
+    void run(() => invoke('studio.setProperties', {
+      ...(targetIds ? { entityIds: targetIds } : { entityId: inspector.id }),
+      scope: component.scope, componentId: component.id, values,
+    }));
   };
   const change = (component: StudioInspectorComponent, key: string, value: FieldValue) => {
-    if (targetIds) setMany(component, { [key]: value });
+    if (targetIds || component.scope) setMany(component, { [key]: value });
     else void changeProperty(key, value, component.id);
   };
   const menuItems = (component: StudioInspectorComponent): StudioMenuItem[] => [
@@ -207,14 +215,27 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     }
   };
   const createMaterial = (name: string) => {
-    void run(async () => { await invoke('studio.materialCreate', { name, preset: 'matte' }); return invoke('studio.snapshot', {}); });
+    const project = snapshot?.project.path;
+    if (!project) return;
+    void run(async () => {
+      const library = await invoke('studio.materialCreate', { name, preset: 'matte' });
+      const file = library.files?.[name];
+      if (file?.startsWith('content/')) revealProjectAsset(project, file.slice('content/'.length));
+      return invoke('studio.snapshot', {});
+    });
   };
   const [name, setName] = useState(inspector?.name ?? '');
   useEffect(() => setName(inspector?.name ?? ''), [inspector?.id, inspector?.name]);
   useEffect(() => {
     try { window.localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch { /* storage optional */ }
   }, [collapsed]);
+  const cancelNameOnBlur = useRef(false);
   const commitName = () => {
+    if (cancelNameOnBlur.current) {
+      cancelNameOnBlur.current = false;
+      setName(inspector?.name ?? '');
+      return;
+    }
     if (inspector?.nameEditable && name.trim() && name !== inspector.name)
       void changeProperty('name', name.trim(), 'Entity');
     else setName(inspector?.name ?? '');
@@ -224,8 +245,30 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     title={inspectorPinned ? 'Unlock Inspector' : 'Lock Inspector to current object'}
     aria-pressed={inspectorPinned} disabled={!selected && !inspectorPinned} onClick={toggleInspectorPin}
     icon={inspectorPinned ? <Lock size={12}/> : <LockOpen size={12}/>}/>;
-  return <div className="insp">
-    {!inspector ? <div className="insp__empty">
+  const [mapView,setMapView]=useState<"object"|"map"|"players"|"areas"|"regions">("object");
+  useEffect(()=>setMapView(!selected && inspectorRecord ? ({area:"areas",region:"regions",player:"players",body:"map",block:"map",wave:"map",trigger:"map"} as const)[inspectorRecord.kind] : "object"),
+    [selected?.id,snapshot?.graphDocument?.epoch,inspectorRecord]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='inspector.selection')setMapView(payload && typeof payload==='object' && 'kind' in payload &&
+      payload.kind==='map' ? 'map' : 'object');
+  }),[]);
+  const mapScope=snapshot?.scene.mapProperties && snapshot.graphDocument;
+  const showMap=mapScope && (mapView!=="object" || (!inspectorPinned && !selected && !inspector));
+  return <div className="insp" onContextMenu={event => {
+    const field = (event.target as Element).closest<HTMLElement>('[data-property-key]');
+    if (field?.dataset.propertyKey) void lua.open(event, 'inspector.property', field.dataset.propertyKey);
+  }}>
+    {lua.popup}
+    {status && <div role="status" className="insp-comp__hint">{status}</div>}
+    {mapScope && <nav className="insp__views" aria-label="Inspector views">
+      <button type="button" aria-pressed={!showMap} disabled={!selected && !inspector} onClick={()=>setMapView("object")}>Object</button>
+      <button type="button" aria-pressed={!!showMap && (mapView==="object" || mapView==="map")} onClick={()=>setMapView("map")}>{snapshot.scene.worldSpace?"Scene":"Map"}</button>
+      {!snapshot.scene.worldSpace && <><button type="button" aria-pressed={mapView==="players"} onClick={()=>setMapView("players")}>Players</button>
+      <button type="button" aria-pressed={mapView==="areas"} onClick={()=>setMapView("areas")}>Areas</button></>}
+      {snapshot?.scene.mapRegions && <button type="button" aria-pressed={mapView==="regions"} onClick={()=>setMapView("regions")}>Regions</button>}</nav>}
+    {mapScope && mapView==="regions" ? <MapRegions requestedRegion={inspectorRecord?.kind==="region"?inspectorRecord:null} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])}
+      scope={mapScope} busy={busy} onApply={commitSnapshot}/> : showMap && mapView!=="regions" ? <MapInspector inspectorRecord={inspectorRecord} view={mapView} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
+      onApply={commitSnapshot} onSelect={id=>{if(inspectorPinned)toggleInspectorPin();setMapView("object");void select(id);}}/> : !inspector ? <div className="insp__empty">
       {inspectorPinned && <div className="insp__empty-bar">{lock}</div>}
       <StudioEmptyState icon={selected ? <StudioLoader size={30}/> : undefined} title={selected ? 'Loading…' : 'Nothing selected'}
         description={selected ? 'Reading entity components.' : 'Select an entity in the Hierarchy or Scene.'}/>
@@ -237,10 +280,27 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
           title={inspector.nameEditable ? 'Rename' : 'This entity is named by its type'}
           onChange={event => setName(event.target.value)} onBlur={commitName}
           onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur();
-            if (event.key === 'Escape') { setName(inspector.name); event.currentTarget.blur(); } }}/>
+            if (event.key === 'Escape') { cancelNameOnBlur.current = true; event.currentTarget.blur(); } }}/>
         {lock}
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
+      {!inspectorPinned && snapshot?.canScaleEvolveRegions && snapshot.graphDocument && snapshot.selectedIds &&
+        <EvolveGroupNumeric key={JSON.stringify([snapshot.graphDocument.epoch,snapshot.selectedIds])}
+          ids={snapshot.selectedIds} scope={snapshot.graphDocument} onError={reportError}
+          onApplied={async () => commitSnapshot(await invoke('studio.snapshot',{}))}/>}
+      {multi && ids?.length===2 && snapshot?.selectedRoad && <div className="insp-map__actions">
+        {snapshot.graphDocument && <StudioButton disabled={busy} onClick={()=>void invoke('studio.viewportInput',{
+          kind:'focusRoad',ids,scope:snapshot.graphDocument!
+        }).catch(e=>reportError(String(e)))}>Show road in Scene</StudioButton>}
+        {ids.map(id=><StudioButton key={id} disabled={busy} onClick={()=>void select(id)}>
+          Inspect {snapshot.scene.entities.find(entity=>entity.id===id)?.name ?? id}
+        </StudioButton>)}
+      </div>}
+      {multi && ids?.length === 2 && snapshot?.graphDocument && typeof snapshot.selectedRoad === 'boolean' &&
+        <StudioButton size="sm" variant="secondary" disabled={busy || snapshot.mode !== 'edit'}
+          onClick={() => void run(() => invoke('studio.selectedRoadSet', {
+            ids, scope: snapshot.graphDocument!, linked: !snapshot.selectedRoad
+          }))}>{snapshot.selectedRoad ? 'Remove movement road' : 'Connect with movement road'}</StudioButton>}
       {inspector.components.filter(c=>c.id==='EvolveRegion').map(component=><EcologyPresetEditor key="evolve-preset" busy={busy} apply={values=>setMany(component,values)}/>)}
       {inspector.components.map(component => <ComponentCard key={inspector.id + ':' + component.id}
         component={component} entityId={inspector.id} busy={busy}

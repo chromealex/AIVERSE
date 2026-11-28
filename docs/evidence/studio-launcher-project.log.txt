@@ -1,0 +1,19 @@
+== Fri Nov 27 04:47:40 MSK 2026
+== web
+== configure
+== build
+== open
+== done: build/mac/apps/studio-native/AiverseStudioHTML5.app
+open </Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/launcher-check.vO2zZS/work/My project>
+cmake <-DAIVERSE_STUDIO_WEB_DIST=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/launcher-check.vO2zZS/repo/apps/studio-web/dist>
+== Fri Nov 27 04:47:40 MSK 2026
+== web
+== configure
+== build
+== open
+== done: build/mac/apps/studio-native/AiverseStudioHTML5.app
+open <build/mac/apps/studio-native/AiverseStudioHTML5.app>
+== Fri Nov 27 04:47:40 MSK 2026
+== web
+WEB BUILD FAILED
+Relative path, no-project startup, custom cache override and web failure propagation passed.

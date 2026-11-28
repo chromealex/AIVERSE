@@ -1,0 +1,10 @@
+{
+  "sha": "731e1d6369c34b4f9f3e8a01bbcea7018bb622b3",
+  "argv": [
+    "bash",
+    "/tmp/shader-retain-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-shader-retained-draft.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

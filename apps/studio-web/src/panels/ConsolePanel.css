@@ -22,3 +22,25 @@
 .console__list .log-row:hover .console__rowcopy{display:inline-grid}
 .console__rowcopy:hover{color:var(--au-text);background:var(--au-hover)}
 .console__copied{font-size:var(--au-font-xs);color:var(--au-text-muted);white-space:nowrap}
+
+.console__views{display:flex;gap:12px;padding:0 12px;border-bottom:1px solid var(--au-line)}
+.console__views button{background:transparent;color:var(--au-text-muted);font:inherit;padding:7px 2px;border:0;border-bottom:2px solid transparent;cursor:pointer}
+.console__views button[aria-pressed=true]{color:var(--au-text);border-color:var(--au-accent)}
+.console__bar{flex-wrap:wrap;overflow:visible;padding:5px 8px}
+.transcript-tools .console__level[aria-pressed=true]{background:var(--au-active);color:var(--au-text)}
+.transcript-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:6px 12px;border-bottom:1px solid var(--au-line);color:var(--au-text)}
+.transcript-status small{color:var(--au-text-muted);margin-left:auto}
+.transcript-status span{font-size:11px;color:var(--au-text-muted)}
+.transcript-status [data-phase=Completed],.transcript-line[data-level=Success]{color:#87d4aa}
+.transcript-status [data-phase=Failed],.transcript-line[data-level=Errors]{color:#ffaaa4}
+.transcript-line[data-level=Warnings]{color:#e9c285}
+.transcript-lines{padding:6px 0;background:var(--au-field);color:var(--au-text)}
+.transcript-line{display:grid;grid-template-columns:4ch minmax(0,1fr);gap:12px;padding:2px 12px;font:12px/1.55 ui-monospace,monospace}
+.transcript-line>span{text-align:right;color:var(--au-text-faint);user-select:none}
+.transcript-line code{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.console__list .log-row{padding:6px 8px;line-height:1.5;align-items:baseline}
+.console__list .log-row>span{color:var(--au-text-muted)}
+.console__list .console__text{color:inherit;overflow-wrap:anywhere}
+.console__list .log-error{color:var(--au-danger)}
+.console__list .log-warning{color:var(--au-warning)}

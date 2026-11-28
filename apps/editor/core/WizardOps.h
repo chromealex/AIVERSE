@@ -5,5 +5,5 @@
 
 namespace aiverse::editor {
 void registerWizardOps(Workspace& ws);
-std::string wizardStagingDir();   // ~/.aiverse/wizard/<time>: where an art link is downloaded
+std::string wizardStagingDir();   // Parent directory for individual artwork downloads
 }

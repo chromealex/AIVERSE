@@ -1,0 +1,10 @@
+{
+  "sha": "d2e50afb55119da76ea6cb6b671ea84e3f602125",
+  "argv": [
+    "bash",
+    "/tmp/planet-detail-final.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-planet-detail-seams.log.txt",
+  "sha256": "295526415daadb2914955f5fc813803050ce083d1e9b26f404ea44c712143885"
+}

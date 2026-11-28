@@ -34,6 +34,7 @@
 #include "../../engine/render/Renderer3D.h"
 #include "../../engine/data/Json.h"
 #include "../../engine/view/AppearanceAuthoringService.h"
+#include "../../engine/view/MaterialLibraryFiles.h"
 
 #include <algorithm>
 #include <cmath>
@@ -316,7 +317,11 @@ struct App {
         try { view = Json::parse(text); } catch (const std::exception& e) { log(std::string("view.json: ") + e.what()); return false; }
         if (materials()) {
             if (!readFile(path(view.getStr("library", "materials.json")), text)) { log("material library missing"); return false; }
-            try { library = Json::parse(text); } catch (const std::exception& e) { log(std::string("library: ") + e.what()); return false; }
+            try {
+                library=Json::parse(text);
+                if(library.has("materials"))library.set("materials",aiverse::view::materialLibraryFromIndex(library,
+                    [&](const std::string& file,std::string& bytes){return readFile(path(file),bytes);}));
+            } catch (const std::exception& e) { log(std::string("library: ") + e.what()); return false; }
         }
         return true;
     }

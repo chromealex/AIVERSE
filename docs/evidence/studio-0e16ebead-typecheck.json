@@ -1,0 +1,13 @@
+{
+  "sha": "0e16ebead0b0e9e7ae4aaa424c8bab0627fdc4fc",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "typecheck"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-0e16ebead-typecheck.log.txt",
+  "sha256": "faf69e7ecfd8c20b33792830e507724d015f288b5a790fdd527065901f77533f"
+}

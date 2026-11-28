@@ -96,7 +96,7 @@ export default function LayoutMenu({ workspace, dock, onApply, onError }: {
           setNaming(false);
         }}>
         <strong>Save Layout</strong>
-        <input autoFocus value={name} maxLength={40} placeholder="Name" aria-label="Layout name"
+        <input data-dialog-autofocus value={name} maxLength={40} placeholder="Name" aria-label="Layout name"
           onChange={event => setName(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setNaming(false); } }}/>
         <div className="layout-name__actions">

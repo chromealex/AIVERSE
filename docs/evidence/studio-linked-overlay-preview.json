@@ -1,0 +1,10 @@
+{
+  "sha": "205cc34c98e052c5fb73086622e63f0c8ab13404",
+  "argv": [
+    "bash",
+    "/tmp/studio-linked-overlay-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-overlay-preview.log.txt",
+  "sha256": "7cba20e0e63cb0dd14836177eb0ee58c00eaf22e16c38cb30ecf598619f4522b"
+}

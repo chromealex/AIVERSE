@@ -1,3 +1,8 @@
+#include "apps/editor/core/ErosionZoneGizmo.h"
+#include "apps/editor/core/TreeWindGizmo.h"
+#include "apps/editor/core/TerrainSlopeArrows.h"
+#include "apps/editor/core/RiverFlowGizmos.h"
+#include "apps/editor/core/TerrainTileSurface.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioPlanetGlobe.h"
 #include "apps/studio-native/StudioSpectraFields.h"
@@ -7,6 +12,7 @@
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
+#include "apps/studio-native/StudioRegionBorders.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -14,7 +20,159 @@ using namespace aiverse;
 using namespace aiverse::studio;
 using namespace aiverse::render;
 
+#include "apps/studio-native/StudioMapAreaBounds.h"
+
 int main() {
+    {
+        const auto slope=[](float x,float z){return x*.5f-z*.25f;};
+        const auto verify=[&](const char* json,int segments,const std::string& expected,uint32_t expectedColor){
+            int edges=0,labels=0;
+            editor::erosionZoneGizmo(Json::parse(json),false,slope,[&](auto a,auto b,uint32_t color){
+                AIVERSE_TEST_CHECK(std::abs(a.y-slope(a.x,a.z)-.3f)<1e-5f && std::abs(b.y-slope(b.x,b.z)-.3f)<1e-5f);
+                AIVERSE_TEST_CHECK(color==expectedColor);++edges;
+            },[&](auto p,const std::string& text,uint32_t){
+                AIVERSE_TEST_CHECK(std::abs(p.y-slope(p.x,p.z)-1.3f)<1e-4f && text==expected);++labels;
+            });
+            AIVERSE_TEST_CHECK(edges==segments && labels==1);
+        };
+        verify(R"({"id":"bank","x":3,"z":5,"radius":2,"coefficient":0,"soil":"rock"})",48,"bank x0 rock",rgba(90,160,255,210));
+        verify(R"({"id":"bed","points":[[0,0],[8,0],[8,4],[0,4]],"coefficient":3,"soil":"sand"})",12,"bed x3 sand",rgba(255,40,20,210));
+    }
+    {
+        editor::DocEntity tree;
+        tree.x=4;tree.z=6;
+        AIVERSE_TEST_CHECK(!editor::isWindGizmoTree(tree));
+        tree.type="TerraTreeOak";
+        AIVERSE_TEST_CHECK(editor::isWindGizmoTree(tree));
+        tree.type="oak";
+        tree.extra=Json::parse(R"({"components":{"TerraTree":{},"Transform":{"y":2}}})");
+        AIVERSE_TEST_CHECK(editor::isWindGizmoTree(tree));
+        render::wind::SceneWind wind;
+        wind.x=-60;
+        int samples=0,arrows=0,rings=0;
+        float baseY=2;
+        const auto check=[&]{
+            editor::treeWindGizmo(tree,wind,[&](float,float){++samples;return 5.f;},
+                [&](auto a,auto b,auto){AIVERSE_TEST_CHECK(a.y==baseY && b.y==a.y+12);},
+                [&](auto a,auto b,auto){++arrows;AIVERSE_TEST_CHECK(b.x==a.x-15 && b.y==a.y && b.z==a.z);},
+                [&](auto crown,auto){++rings;AIVERSE_TEST_CHECK(crown.x==4 && crown.y==17 && crown.z==6);});
+        };
+        check();
+        AIVERSE_TEST_CHECK(samples==0 && arrows==1 && rings==0);
+        tree.extra=Json::object();baseY=5;wind.x=.05f;
+        check();
+        AIVERSE_TEST_CHECK(samples==1 && arrows==1 && rings==1);
+    }
+    {
+        int count=0;
+        const auto slope=[](float x,float z){return .3f*x+.4f*z;};
+        editor::terrainSlopeArrows(5,7,8,4,slope,[&](float3 a,float3 b,float strength){
+            AIVERSE_TEST_CHECK(std::hypot(a.x-4,a.z-4)<=8);
+            AIVERSE_TEST_CHECK(a.x>b.x && a.z>b.z && std::abs(b.y-slope(b.x,b.z)-.4f)<1.e-5f);
+            AIVERSE_TEST_CHECK(std::abs(strength-5.f/6.f)<1.e-5f);
+            ++count;
+        });
+        AIVERSE_TEST_CHECK(count==13);
+        editor::terrainSlopeArrows(0,0,8,4,[](float,float){return 2.f;},[&](auto,auto,float){++count;});
+        AIVERSE_TEST_CHECK(count==13);
+    }
+    {
+        editor::DocEntity river;
+        river.x=4;river.z=8;
+        river.extra=Json::parse(R"({"components":{"Transform":{"y":3},"NereidWater":{"surfaceY":1,"points":[[0,0,1],[0,0,2],[8,0,3]],"flow":[-3,0,0],"currentField":{"nodes":[[0],[2],[4]]}}}})");
+        std::vector<std::pair<float3,float3>> banks,arrows;
+        float localSpeed=0;
+        editor::riverFlowGizmos(river,[&](float3 a,float3 b){banks.emplace_back(a,b);},
+            [&](float3 a,float3 b,float speed){arrows.emplace_back(a,b);localSpeed=speed;});
+        AIVERSE_TEST_CHECK(banks.size()==2 && arrows.size()==1);
+        AIVERSE_TEST_CHECK(banks[0].first.z==10 && banks[0].second.z==11);
+        AIVERSE_TEST_CHECK(banks[1].first.z==6 && banks[1].second.z==5);
+        AIVERSE_TEST_CHECK(arrows[0].first.x>arrows[0].second.x && arrows[0].first.y==4.25f && localSpeed==.5f);
+    }
+    {
+        Model model;
+        model.vertices.resize(3);
+        model.vertices[0].pos={0,0,0};
+        model.vertices[1].pos={2,2,0};
+        model.vertices[2].pos={0,0,2};
+        model.indices={0,1,2};
+        model.meshes.resize(1);
+        model.meshes.front().primitives.push_back({0,3});
+        model.nodes.resize(1);
+        model.nodes.front().mesh=0;
+        model.bindWorld.push_back(mat4::translate({0,1,0}));
+        editor::TerrainTileSurface tiles(12,12);
+        const auto world=mat4::translate({4,2,4});
+        tiles.add(model,world);
+        AIVERSE_TEST_CHECK(tiles.sample(4.25f,4.5f,-2)==3.25f);
+        tiles.add(model,world,{mat4::translate({0,4,0})});
+        tiles.add(model,world);
+        AIVERSE_TEST_CHECK(tiles.sample(4.25f,4.5f,-2)==6.25f);
+        AIVERSE_TEST_CHECK(tiles.sample(3.75f,4.f,-2)==6.f);
+        AIVERSE_TEST_CHECK(tiles.sample(2,2,-2)==-2);
+        AIVERSE_TEST_CHECK(tiles.sample(1e30f,4,-2)==-2);
+    }
+    {
+        editor::MapData slope;
+        slope.w=1;slope.h=1;slope.corners={0,0,0,32};
+        AIVERSE_TEST_CHECK(terrainMeshHeight(slope,.5f,.5f)==1.f);
+        slope.w=257;slope.corners.assign(258*2,0);slope.corners[1]=48;
+        AIVERSE_TEST_CHECK(terrainMeshHeight(slope,1,0)==0.f);
+    }
+    {
+        editor::MapData map;map.w=2;map.h=2;map.detailScale=4;map.detail.assign(81,0);
+        map.detail[10]=48;map.corners.assign(9,-32);
+        MeshBuilder mesh;
+        const auto stats=buildTerrainPreview(map,mesh);
+        AIVERSE_TEST_CHECK(stats.quads==64 && terrainPreviewHeight(map,.25f,.25f)==3.f);
+        AIVERSE_TEST_CHECK(terrainPreviewHeight(map,.125f,.25f)==1.5f);
+        MeshBuilder baseMesh;
+        AIVERSE_TEST_CHECK(buildTerrainPreview(map,baseMesh,1.5f,true).quads==4);
+        AIVERSE_TEST_CHECK(terrainPreviewHeight(map,.25f,.25f,1.5f,true)==-2.f);
+        AIVERSE_TEST_CHECK(std::all_of(baseMesh.vertices().begin(),baseMesh.vertices().end(),[](const auto& v){return v.pos.y==-2.f;}));
+        AIVERSE_TEST_CHECK(std::any_of(mesh.vertices().begin(),mesh.vertices().end(),[](const auto& v){
+            return v.pos.x==.25f && v.pos.z==.25f && v.pos.y==3.f;
+        }));
+    }
+    {
+        const StudioMapAreaBounds expected{2,3,8,10},single{4,5,1,1};
+        AIVERSE_TEST_CHECK(studioAreaBetween({9,3},{2,12})==expected);
+        AIVERSE_TEST_CHECK(studioAreaBetween({2,12},{9,3})==expected);
+        AIVERSE_TEST_CHECK(studioAreaBetween({4,5},{4,5})==single);
+    }
+    {
+        editor::MapDoc doc;doc.reset(16,16);
+        auto& map=doc.data;
+        map.regions[map.idx(0,0)]='A';map.regions[map.idx(1,0)]='A';map.regions[map.idx(2,0)]='B';
+        StudioRegionBorders borders;
+        auto build=[&]{borders.build(map,{0,0,map.w,map.h},1.5f,false,'B');};
+        build();
+        AIVERSE_TEST_CHECK(borders.edges.size()==7);
+        const auto shared=std::count_if(borders.edges.begin(),borders.edges.end(),[](const auto& e){
+            return e.a.x==2 && e.b.x==2 && e.a.z==0 && e.b.z==1 && e.letter=='B';
+        });
+        AIVERSE_TEST_CHECK(shared==1);
+        doc.beginEdit();doc.paintRegionRect(0,0,2,0,'.');build();
+        AIVERSE_TEST_CHECK(borders.edges.empty());
+        doc.undo();build();AIVERSE_TEST_CHECK(borders.edges.size()==7);
+        map.corners.assign(size_t(map.w+1)*(map.h+1),0);
+        map.corners[1]=16;
+        borders.build(map,{0,0,map.w,map.h},1.5f,true,'.');
+        AIVERSE_TEST_CHECK(std::any_of(borders.edges.begin(),borders.edges.end(),[](const auto& e){
+            return e.a.x==1 && e.a.z==0 && std::abs(e.a.y-1.05f)<.001f;
+        }));
+        doc.reset(260,260);
+        for(int z=0;z<map.h;++z)for(int x=0;x<map.w;++x)
+            map.regions[map.idx(x,z)]=(x+z)%2?'A':'B';
+        build();
+        AIVERSE_TEST_CHECK(borders.stride==1 && !borders.edges.empty());
+        // A third letter breaks the straight runs of selected-color edges.
+        for(int z=0;z<map.h;++z)for(int x=0;x<map.w;++x)
+            map.regions[map.idx(x,z)]="ABC"[(x+z)%3];
+        build();AIVERSE_TEST_CHECK(borders.stride>1 && borders.edges.size()<=32768);
+        borders.build(map,{32,32,40,40},1.5f,false,'B');
+        AIVERSE_TEST_CHECK(borders.stride==1 && !borders.edges.empty());
+    }
     {
         // The trunk lies along world +X. The capsule has radius .5 m,
         // total length 6 m; the prototype trunk is 3 m by .25 m radius.
@@ -181,6 +339,56 @@ int main() {
     globe.data.entities.push_back(e);
     const auto preview=StudioPlanetPreview::build(globe,0);
     AIVERSE_TEST_CHECK(preview&&preview->mesh.indices().size()==6*8*8*6);
+    // Exact vertices and shared cube seams must pick the front hemisphere.
+    const game::CubeSphere sphere(body.faceSize);
+    for(int face=0;face<6;++face)for(int x=0;x<=body.faceSize;++x)for(int y=0;y<=body.faceSize;++y){
+        const auto dir=normalize(StudioPlanetPreview::f3(sphere.dirFromFace(face,Fixed::fromInt(x),Fixed::fromInt(y))));
+        AIVERSE_TEST_CHECK(std::abs(preview->terrainHit({},dir)-64.f)<.02f);
+        AIVERSE_TEST_CHECK(std::abs(preview->terrainHit(dir*128.f,dir*(-1.f))-64.f)<.02f);
+    }
+    {
+        auto& surface=globe.data.bodies.front();
+        surface.detailScale=4;surface.detail.assign(6*33*33,0);
+        surface.detail[surface.detailIndex(0,9,13)]=3*256;
+        const auto refined=StudioPlanetPreview::build(globe,0);
+        const auto base=StudioPlanetPreview::build(globe,0,true);
+        AIVERSE_TEST_CHECK(refined && base && refined->mesh.indices().size()==6*32*32*6);
+        AIVERSE_TEST_CHECK(std::abs(refined->extent-67.f)<.01f && std::abs(base->extent-64.f)<.01f);
+        AIVERSE_TEST_CHECK(StudioPlanetPreview::height(surface,0,2.25f,3.25f)==3.f);
+        AIVERSE_TEST_CHECK(StudioPlanetPreview::height(surface,0,2.25f,3.25f,true)==0.f);
+        surface.detail.clear();surface.detailScale=0;
+        editor::MapDoc large;
+        auto& odd=large.data.bodies.emplace_back();
+        odd.id="odd";odd.faceSize=65;odd.corners.assign(6*66*66,0);
+        const auto capped=StudioPlanetPreview::build(large,0);
+        AIVERSE_TEST_CHECK(capped && capped->mesh.indices().size()==6*64*64*6);
+        // Every sampled boundary point is shared by at least two faces.
+        std::map<std::array<int,3>,unsigned> boundaries;
+        for(int face=0;face<6;++face){
+            std::set<std::array<int,3>> unique;
+            for(size_t i=size_t(face)*64*64*4;i<size_t(face+1)*64*64*4;++i){
+                const auto p=capped->mesh.vertices()[i].pos;
+                const auto m=std::max({std::abs(p.x),std::abs(p.y),std::abs(p.z)});
+                if(int(std::abs(std::abs(p.x)-m)<1e-4f)+int(std::abs(std::abs(p.y)-m)<1e-4f)+int(std::abs(std::abs(p.z)-m)<1e-4f)>=2)
+                    unique.insert({int(std::round(p.x*1000)),int(std::round(p.y*1000)),int(std::round(p.z*1000))});
+            }
+            for(const auto& key:unique)++boundaries[key];
+        }
+        AIVERSE_TEST_CHECK(boundaries.size()==12*63+8);
+        for(const auto& item:boundaries)AIVERSE_TEST_CHECK(item.second>=2);
+    }
+    {
+        game::TerrainLook look;
+        game::applyTerrainLook(look,Json::parse(R"({"layers":[{"id":"grass","tint":[0,1,0]},{"id":"clay","tint":[1,0,0]}],"cells":{"grass":"grass"}})"));
+        auto& surface=globe.data.bodies.front();
+        surface.faceExtra.resize(6,Json::object());
+        surface.faceExtra.front().set("material",Json::parse(R"(["1."])"));
+        const auto painted=StudioPlanetPreview::build(globe,0,false,&look);
+        AIVERSE_TEST_CHECK(painted && painted->mesh.vertices()[0].rgba==rgba(255,0,0));
+        AIVERSE_TEST_CHECK(painted->mesh.vertices()[4].rgba==rgba(0,255,0));
+        AIVERSE_TEST_CHECK(painted->mesh.vertices()[8*8*4].rgba==rgba(0,255,0));
+        surface.faceExtra.clear();
+    }
     Json grid=Json::parse(R"({"body":"terra","faceSize":8,"radius":64,"step":2,"side":5})");
     Json coarse=Json::array();for(int i=0;i<6*25;++i)coarse.push(Json::number(int64_t(0)));grid.set("corners",coarse);
     const auto low=buildStudioLivePlanetTerrain(grid,body,*preview);
@@ -218,7 +426,6 @@ int main() {
     AIVERSE_TEST_CHECK(regionLines==64&&gravityLines>0);
     PlanetRegionChart chart;chart.owner="entity:@front";chart.body="terra";
     chart.radius=Fixed::fromInt(64);
-    game::CubeSphere sphere(8);
     chart.up=sphere.dirFromFace(0,Fixed::fromInt(7),Fixed::fromInt(3));
     game::CubeSphere::faceTangents(0,chart.up,chart.east,chart.south);
     chart.area={100,-200,300,200,true};

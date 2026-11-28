@@ -1,0 +1,10 @@
+{
+  "sha": "af709b267d4605c46c6ae01d2c34a1765fa901d9",
+  "argv": [
+    "bash",
+    "/tmp/studio-source-raw.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-original-model-source-isolation.log.txt",
+  "sha256": "5e40a4a19d85e714f1c9de6a7cd201fb533cccf7536a26bfbb18cb9288d7bef9"
+}

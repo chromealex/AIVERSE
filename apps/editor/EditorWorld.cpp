@@ -1,3 +1,4 @@
+#include "core/DocumentWorldPreview.h"
 // World tree of the editor (docs/editor-world-tree.md): the rows of every object of the game world for the
 // Hierarchy / Inspector, the multi-selection, Scene picking of world objects, and the world_* MCP operations.
 //   Edit mode: the open map set up once in a throwaway simulation (WorldPreview), rebuilt after map / rules /
@@ -397,17 +398,7 @@ void Editor::updateWorld() {
         previewKey_ = key;
         // this thread only copies the inputs; the map / rules JSON, the scripts and the setup are made on the worker
         auto bs = prof.scope(EditorProfile::PreviewBuild);
-        auto data = std::make_shared<MapData>(doc().data);
-        preview_.start([data, path = doc().path, dir = ws_.project.dir, rules = ws_.project.rulesJson](Json& simRules, Json& simMap) {
-            MapDoc md;
-            md.data = std::move(*data);
-            md.path = path;
-            simMap = mapForSim(md.toJson(), dir);
-            Project p;
-            p.dir = dir;
-            p.rulesJson = rules;
-            simRules = p.simRules(simMap);
-        }, doc().data, worldCfg_);
+        startDocumentWorldPreview(preview_,doc(),ws_.project,worldCfg_);
     }
     // runtime objects of the preview that vanished on a rebuild leave the selection
     std::vector<Selection> keep;
@@ -459,23 +450,7 @@ void Editor::registerWorldOps() {
         ws_.registerOp({name, desc, Json::parse(schema), std::move(fn), true});
     };
     auto rowJson = [this](const WorldRow& r) {
-        Json j = Json::object();
-        j.set("ref", Json::number(int64_t(r.ref)));
-        j.set("index", Json::number(int64_t(r.e.index)));
-        if (r.doc >= 0) j.set("doc", Json::number(int64_t(r.doc)));
-        j.set("name", Json::string(worldRowName(world_, rules(), &doc().data, r)));
-        if (r.type >= 0) j.set("type", Json::string(rules().types[size_t(r.type)].id));
-        j.set("owner", Json::number(int64_t(r.owner)));
-        j.set("kind", Json::string(worldKindId(r.kind)));
-        j.set("origin", Json::string(r.origin == WorldOrigin::Map ? "map" : r.origin == WorldOrigin::Setup ? "setup" : "runtime"));
-        if (r.hasPos) { Json p = Json::array(); p.push(Json::number(double(r.x), 2)); p.push(Json::number(double(r.z), 2)); j.set("pos", p); }
-        if (r.maxHp > 0) { j.set("hp", Json::number(double(r.hp), 1)); j.set("maxHp", Json::number(double(r.maxHp), 1)); }
-        if (r.parent) { j.set("parent", Json::number(int64_t(r.parent))); j.set("parentRelation", Json::string(r.parentRel)); }
-        if (!r.label.empty()) j.set("label", Json::string(r.label));
-        Json c = Json::array();
-        r.eachComp([&](int k) { c.push(Json::string(worldComponents()[size_t(k)].id)); });
-        j.set("components", c);
-        return j;
+        return worldRowJson(world_,rules(),&doc().data,r);
     };
     add("world_regions_status",
         "Read region ownership diagnostics from the current editor preview or play simulation. Not a disk-save or collision residency report.",
@@ -500,35 +475,13 @@ void Editor::registerWorldOps() {
         "data:<key>) -> nested counts; 'filter': Hierarchy search (t: type, p: owner, c: component, r: region, d: data, #id).",
         R"J({"properties": {"group": {"type": "array", "items": {"type": "string"}}, "filter": {"type": "string"},
             "limit": {"type": "integer", "description": "entities listed (default 200, 0 = only groups)"}}})J",
-        [this, rowJson](const Json& p) {
+        [this](const Json& p) {
             ensureWorld();
             if (!worldLive_ && !preview_.sim()) {
                 previewForce_ = true;
                 throw std::runtime_error(preview_.error().empty() ? "world preview not ready yet, call again" : "world preview failed: " + preview_.error());
             }
-            const std::string filter = p.getStr("filter");
-            const int64_t limit = std::clamp<int64_t>(p["limit"].integer(200), 0, 5000);
-            std::vector<std::string> keys;
-            for (auto& k : p["group"].items()) keys.push_back(k.str());
-            Json groups = Json::object(), list = Json::array();
-            int64_t total = 0;
-            for (auto& r : world_.rows) {
-                if (!filter.empty() && !worldRowMatches(world_, rules(), &doc().data, r, filter)) continue;
-                ++total;
-                if (int64_t(list.size()) < limit) list.push(rowJson(r));
-                Json* g = &groups;
-                for (size_t k = 0; k < keys.size(); ++k) {
-                    const std::string v = worldGroupValue(world_, rules(), r, keys[k]);
-                    if (k + 1 == keys.size()) g->set(v, Json::number((*g)[v].integer() + 1));
-                    else g = &g->member(v);
-                }
-            }
-            Json r = Json::object();
-            r.set("mode", Json::string(worldLive_ ? "play" : "edit"));
-            r.set("tick", Json::number(int64_t(world_.tick)));
-            r.set("total", Json::number(total));
-            if (!keys.empty()) r.set("groups", groups);
-            r.set("entities", list);
+            auto r=listWorldRows(world_,rules(),&doc().data,p,worldLive_?"play":"edit");
             if (!worldLive_ && !preview_.error().empty()) r.set("previewError", Json::string(preview_.error()));
             return r;
         });

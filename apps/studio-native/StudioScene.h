@@ -1,7 +1,14 @@
 #include <tuple>
+#include "engine/bake/CapturedBake.h"
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include "engine/physis/PhysisSceneGeometry.h"
+#include <future>
+#include "apps/editor/core/RouteOps.h"
+#include "apps/studio-native/StudioMapAreaBounds.h"
+#include "apps/studio-native/StudioNatureLayers.h"
+#include "apps/studio-native/StudioSceneDocument.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include <chrono>
 #include <memory>
@@ -17,6 +24,7 @@
 #include <mutex>
 #include <chrono>
 #include <optional>
+#include "apps/studio-native/StudioRegionBorders.h"
 #include "apps/studio-native/StudioModelPicking.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
@@ -28,6 +36,8 @@
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
+#include "apps/editor/core/TerrainTileSurface.h"
+#include "apps/editor/core/SceneScreenshotOptions.h"
 #include "engine/gfx/Gfx.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/world/NereidManifestHost.h"
@@ -47,6 +57,7 @@
 #include "apps/studio-native/StudioSpectraSources.h"
 
 namespace aiverse::editor { class Workspace; class TextureGraphGpuPreview; }
+namespace aiverse::world { struct NaturePresentationFrame; }
 namespace aiverse::studio {
 class StudioScene final {
 public:
@@ -266,6 +277,11 @@ public:
         lastFrameSignature_=0;settleFrames_=30;
         return result;
     }
+    void requestMapCapture(const StudioSceneDocument& document,editor::SceneScreenshotOptions options,gfx::Device::CaptureFn callback) {
+        mapCapture_=MapCapture{document,options,std::move(callback)};
+    }
+    void cancelMapCapture() { mapCapture_.reset(); }
+    void renderMapOutput(const StudioSceneDocument& document,int width,int height,const std::function<void(int,int)>& draw);
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
     void setCaveGlobe(std::string body,const std::string& project,const std::string& map);
     bool caveGlobeRequested()const noexcept{return !globeBody_.empty();}
@@ -310,6 +326,7 @@ public:
     uint64_t fxCompletedFrameSerial() const {return device_?device_->completedFrameSerial():0;}
     uint64_t fxSubmissionFence() const {return device_?device_->gpuSubmissionFence():0;}
     uint64_t fxCompletedFence() const {return device_?device_->gpuCompletedFence():0;}
+    std::string shaderPreviewError() const;
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
     void setWindPreview(const StudioWindState& state) { wind_ = state; }
@@ -339,13 +356,21 @@ public:
     void look(float dx, float dy);
     void move(float right, float up, float forward);
     void focusSelected(const editor::MapDoc& map, bool fpsProject, const std::string& selectedId);
+    Json groundHeights(const Json& points,const editor::MapDoc& map);
+    Json focusCoordinates(float x,float y,float z,float distance,const editor::MapDoc& map);
     void resetView();
     // Unity-style Scene view helpers: animated orbit to an axis view and the
     // Persp/Iso toggle. Orientation/projection are editor camera state only.
     void setOrientation(float yaw, float pitch);
     void setOrthographic(bool ortho);
-    struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; };
-    CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target}; }
+    void setFieldOfView(float radians) { camera_.fovY = radians; }
+    struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; float fov = 0; };
+    void requestSceneFocus(render::float3 position,float distance,std::optional<std::array<float,4>> bounds={}) {
+        pendingSceneFocus_=std::make_pair(position,distance);
+        focusBounds_=bounds;
+    }
+    bool hasSceneCamera() const { return cameraInitialized_; }
+    CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target, camera_.fovY}; }
     void setPlanetOrbitCamera(const CameraState& state){
         tween_.active=false;camera_.target=state.target;camera_.distance=state.distance;
         camera_.yaw=state.yaw;camera_.pitch=state.pitch;camera_.ortho=state.ortho;autoIso_=false;cameraInitialized_=true;
@@ -366,6 +391,34 @@ public:
     void setLocalSpace(bool local) { localSpace_ = local; }
     bool localSpace() const { return localSpace_; }
     void setSnap(bool enabled, float move, float rotate, float scale);
+    void syncStaticGeometry(const std::string& project,const std::string& file);
+    Json staticGeometryReport(const std::string& project,const std::string& file) const;
+    void setPlanetTerrainLook(const std::shared_ptr<const game::TerrainLook>& look){
+        if(planetTerrainLook_!=look){planetTerrainLook_=look;planetRevision_=std::numeric_limits<uint64_t>::max();}
+    }
+    bool baseTerrainView()const {return baseTerrainView_;}
+    void setBaseTerrainView(bool base){
+        if(baseTerrainView_==base)return;
+        baseTerrainView_=base;
+        planetRevision_=std::numeric_limits<uint64_t>::max();
+        terrainRevision_=std::numeric_limits<uint64_t>::max();
+        lightingRevision_=std::numeric_limits<uint64_t>::max();
+        lastFrameSignature_=0;
+    }
+    void setRegionBorders(char letter) {
+        if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
+    }
+    struct FieldOutline { Vec3 center; Fixed radius; physis::DebugColor color; };
+    using FieldOutlines = std::vector<FieldOutline>;
+    void setFieldOutlines(std::shared_ptr<const FieldOutlines> outlines) { fieldOutlines_=std::move(outlines); }
+    using HeatmapTiles = std::vector<physis::SceneDiagnosticTile>;
+    void setHeatmapTiles(std::shared_ptr<const HeatmapTiles> tiles) { heatmapTiles_=std::move(tiles); }
+    void setNatureFrame(std::shared_ptr<const world::NaturePresentationFrame> frame) { natureFrame_=std::move(frame); }
+    void setNatureLayers(const StudioNatureLayers& layers){natureLayers_=layers;}
+    void setErosionHighlight(int index){erosionHighlight_=index;}
+    void setWorldAxes(bool visible) { worldAxes_ = visible; }
+    void setObjectBounds(bool visible) { objectBounds_ = visible; }
+    void setSelectionBox(bool visible) { selectionBoxVisible_ = visible; }
     void setGizmosVisible(bool visible) { gizmosVisible_ = visible; }
     // Hold V while moving: the object's pivot snaps to the nearest other object's pivot on screen.
     void setPivotSnap(bool on) { pivotSnap_ = on; }
@@ -391,6 +444,7 @@ public:
     // ids (outlined), hidden ids (not drawn, not picked), locked ids (not picked), hover.
     void setEditorState(std::set<std::string> selection, std::set<std::string> hidden,
                         std::set<std::string> locked, std::string hover) {
+        if(hidden_!=hidden)terrainTileSurface_.reset();
         selection_=std::move(selection); hidden_=std::move(hidden); locked_=std::move(locked); hover_=std::move(hover);
     }
     // Marquee rectangle in normalised view coordinates (0..1), drawn over the Scene.
@@ -400,9 +454,13 @@ public:
                                        const editor::MapDoc& map, bool fpsProject) const;
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
+    std::optional<Json> playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc) const;
+    std::optional<render::float3> flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc,bool requireSurface=false) const;
+    void showAreaBounds(std::optional<StudioMapAreaBounds> rect){areaBounds_=rect;}
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;
     void setForestSelection(Json selection){forestSelection_=std::move(selection);}
+    bool planetBrushPoint(double x,double y,double w,double h,const editor::MapDoc& doc,render::float3& hit,std::string& body,double& elevation)const;
     std::optional<Json> forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision) const;
     bool beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height);
     std::optional<Json> updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool symmetric,bool snap,bool finish);
@@ -415,6 +473,31 @@ public:
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
     // Texture Resources / Frame Capture panels: live GPU textures (format-based size estimate) and draw calls.
     Json textureResources() const;
+    Json textureReadback(const Json& params, std::string (*encodeRgb)(const void*, int, int));
+    void setPostPreview(const std::string& project,const Json& game,const Json& map,render::PrismaQuality quality,bool visible);
+    Json prismaFrameReports(const std::string& project, const std::string& map) const;
+    Json lensViewPose() const;
+    Json configureLensCamera(const Json& params);
+    bool lensCameraReady() const {return lensCamera_.has_value();}
+    Json attachmentCommand(const std::string& project,const Json& params,bool originalModel=false);
+    Json gpuEmitterCommand(const std::string& project,const Json& params);
+    void drawGpuEmitter(int width,int height);
+    Json effectFileCommand(const std::string& project,const Json& params);
+    std::optional<render::float3> natureGroundPoint(float x,float y,float width,float height) const;
+    Json drawNature(int width,int height,struct StudioNaturePreview& state,const World& source,const editor::MapDoc& map,
+                    const std::string& project,float levelHeight,const editor::SceneScreenshotOptions& capture);
+    void drawEffectFile(int width,int height);
+    Json sourceModelCommand(const std::string& project,const Json& rules,const Json& params);
+    void drawSourceModel(int width,int height);
+    void drawAttachments(int width,int height);
+    void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
+                           const render::Pose& pose,float yaw);
+    bake::CapturedBake captureLightBake(const editor::MapDoc& doc, const std::string& project, const game::Rules& rules);
+    std::optional<bake::CapturedBake> prepareLightBake(const editor::MapDoc& doc,const std::string& project,
+        const game::Rules& rules,const Json& rulesJson,float levelHeight);
+    void setBakedSceneEnabled(bool enabled);
+    Json bakedSceneStatus() const;
+    Json geometryStats() const;
     uint32_t drawCalls() const { return renderer_.drawCalls(); }
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
@@ -444,13 +527,17 @@ public:
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius,bool volume=false,bool fill=false) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; brushVolume_=volume; brushFill_=fill; }
-    void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; planetRevision_=std::numeric_limits<uint64_t>::max(); terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
+    void resetCamera() { pendingSceneFocus_.reset(); focusBounds_.reset(); if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; planetRevision_=std::numeric_limits<uint64_t>::max(); terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
     uint64_t framesSkipped() const { return framesSkipped_; }
     // Default: draw every frame() call and rebuild lighting on every edit (tests,
     // automation, captures). The interactive Studio viewport turns this off: it
     // then skips idle frames and debounces lighting rebuilds during edit bursts.
+    void setWeatherPreview(const render::Lighting& lighting, PreviewDayLighting day, float seconds=0) {
+        weatherEnvironment_=lighting;
+        weatherDay_=day;weatherSeconds_=seconds;
+    }
     void setContinuousRedraw(bool on) { continuousRedraw_ = on; }
     // Automation (AIVERSE_STUDIO_WIND_SHOTS): frame a point of interest.
     // Automation (AIVERSE_STUDIO_SKY_SHOTS): the engine's PhysicalSky with a given sun, for the splash art.
@@ -461,15 +548,38 @@ public:
         cameraInitialized_=true;
     }
 private:
+    void beginDeviceFrame(int width, int height);
+    std::function<void()> pendingTextureRead_;
+    std::string textureReadTicket_;
+    std::shared_future<Json> textureReadResult_;
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> deviceLifetime_;
     std::unique_ptr<editor::TextureGraphGpuPreview> textureGraph_;
     struct GraphPresentation;
     std::unique_ptr<GraphPresentation> graphPresentation_;
     render::Renderer3D renderer_;
+    bake::CapturedBake collectLightBake(const editor::MapDoc& doc,const game::Rules& rules,
+        const render::Lighting& environment,float levelHeight,bool terrain);
+    struct StaticScenery;
+    std::unique_ptr<StaticScenery> staticScenery_;
+    struct SceneBake;
+    std::unique_ptr<SceneBake> sceneBake_;
+    void syncSceneBake(const std::string& project,const std::string& mapPath);
+
     world::NereidManifestHost nereid_;
+    world::NereidManifestHost mapWater_;
+    std::string mapWaterRefusal_;
+    std::shared_ptr<const game::TerrainLook> appliedWaterLook_;
+    bool mapWaterBaseGrid_ = false;
+    void syncMapWater(const editor::MapData& map, float levelHeight, bool visible);
     double underwaterFrameTime_=0;
+    std::string prismaReportProject_, prismaReportMap_;
     render::Prisma post_;
+    std::string postProject_;
+    Json gamePostSettings_, mapPostSettings_;
+    struct GraphParticlePreview;
+    std::unique_ptr<GraphParticlePreview> graphParticles_;
+    std::unique_ptr<render::Prisma> graphPreviewPost_;
     render::RenderLightingRuntime lightingRuntime_;
     std::unique_ptr<render::Model> lightingModel_;
     uint64_t lightingRevision_ = std::numeric_limits<uint64_t>::max();
@@ -574,7 +684,18 @@ private:
     std::string sparseTerrainProject_;
     std::string planetChartIdentity_;
     std::string sparseTerrainError_;
+    std::shared_ptr<const game::TerrainLook> planetTerrainLook_;
+    bool baseTerrainView_=false;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
+    std::unique_ptr<class StudioGpuEmitterPlayback> gpuEmitter_;
+    struct NatureView;
+    std::unique_ptr<NatureView> natureView_;
+    std::unique_ptr<class StudioEffectPlayback> effectFile_;
+    struct ConfiguredModel;
+    std::unique_ptr<ConfiguredModel> configuredModel_;
+    std::unique_ptr<class StudioAttachmentPreview> attachmentPreview_;
+    std::shared_ptr<const render::Model> animationSource_;
+    std::unique_ptr<render::Model> animationModel_;
     std::unique_ptr<render::Model> materialSphere_;
     std::unique_ptr<render::Model> buildingPreview_;
     bool buildingPreviewGpuReady_=false;
@@ -614,6 +735,7 @@ private:
     bool facialMode_=false,facialReady_=false;
     std::string facialError_;
     uint64_t materialRevision_ = std::numeric_limits<uint64_t>::max();
+    std::string graphPreviewError_;
     bool materialMode_ = false;
     uint64_t terrainRevision_ = std::numeric_limits<uint64_t>::max();
     float terrainLevelHeight_ = 1.5f;
@@ -623,11 +745,21 @@ private:
     std::set<std::string> rejectedDocumentModels_;
     std::map<std::string,std::filesystem::file_time_type> documentModelTimes_;
     std::vector<StudioModelPickInstance> modelInstances_;
+    std::optional<editor::TerrainTileSurface> terrainTileSurface_;
     bool pivotSnap_ = false;
     struct ThumbJob { std::string project, asset, file; };
     std::deque<ThumbJob> thumbJobs_;
     struct ThumbShared { std::mutex mutex; std::vector<std::string> done; };
     std::shared_ptr<ThumbShared> thumbShared_ = std::make_shared<ThumbShared>();
+    struct MapCapture { StudioSceneDocument document; editor::SceneScreenshotOptions options; gfx::Device::CaptureFn callback; };
+    std::optional<MapCapture> mapCapture_;
+    MapCapture* captureOutput_=nullptr; // scoped to one render-thread frame
+    gfx::TextureHandle captureColor_,captureDepth_;
+    int captureWidth_=0,captureHeight_=0;
+    void beginMapOutput(int width,int height);
+    void setMapOutput(gfx::PassDesc& pass) const;
+    void readMapOutput();
+    bool cleanMapOutput() const { return captureOutput_ && captureOutput_->options.clean; }
     gfx::TextureHandle thumbColor_, thumbDepth_;
     std::map<std::string,std::unique_ptr<render::Model>> thumbModels_; // models not placed in the map
     void renderThumbnail();
@@ -657,6 +789,12 @@ private:
     render::PostFx antialiasing_;
     bool spectraDockHdr_=false;
     render::Camera camera_;
+    std::optional<render::Camera> lensCamera_;
+    std::optional<render::Camera> pendingSceneLens_;
+    std::optional<std::pair<render::float3,float>> pendingSceneFocus_;
+    std::optional<std::array<float,4>> focusBounds_;
+    std::chrono::steady_clock::time_point focusBoundsUntil_{};
+    void applyPendingSceneLens();
     render::AdaptiveShadowResolution shadowResolution_;
     bool cameraInitialized_ = false;
     // Short eased transition for focus / axis snaps; any direct input cancels it.
@@ -674,17 +812,30 @@ private:
     render::Camera viewCamera() const;
     bool orientationGizmo_ = false;
     TransformTool tool_ = TransformTool::Move;
+    StudioRegionBorders regionBorders_;
+    char regionBorderLetter_=0;
+    bool regionBordersDirty_=true;
+    std::vector<StudioMapCell> rampTiles_,resourceTiles_;
+    std::vector<editor::RoutePreviewLine> mapRoutes_;
+    std::shared_ptr<const FieldOutlines> fieldOutlines_;
+    std::shared_ptr<const HeatmapTiles> heatmapTiles_;
+    std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
+    StudioNatureLayers natureLayers_;
+    const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);
+    int erosionHighlight_=-2;
+    bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;
     float snapMove_ = 1.0f, snapRotate_ = 15.0f, snapScale_ = 0.1f;
     struct TransformDrag {
         int axis = -1; TransformTool tool = TransformTool::Move; std::string id;
         render::float3 pivot{}, dir{}; render::float3 axes[3]{};
+        std::optional<uint64_t> expectedRevision;
         float startT = 0, startX = 0, lengthPx = 1, worldLength = 1, value = 0;
         float startAngle = 0, lastAngle = 0, accumulated = 0; bool facing = false; render::float2 screenPivot{};
         render::float3 planeNormal{}, startHit{}, moveOffset{}; // Move: world offset (axis or plane)
         render::float3 startVec{}; bool snapping = false;     // Rotate: ring direction under the press, snap active
     } drag_;
-    bool selectedIsLight_ = false, selectedAxesValid_ = false;
+    bool selectedIsLight_ = false, selectedAxesValid_ = false, selectedOrientedCollider_ = false;
     std::set<std::string> selection_, hidden_, locked_;
     LoadProgress loadProgress_;
     bool modelsPending_ = false;
@@ -703,6 +854,7 @@ private:
     std::vector<OverlayShape> overlayShapes_;
     std::optional<SkyShot> skyShot_;
     bool brushVolume_=false,brushFill_=false;
+    std::optional<StudioMapAreaBounds> areaBounds_;
     bool brushVisible_ = false; render::float3 brushCenter_{}; float brushRadius_ = 0;
     void drawBrushCursor(const render::Camera& view, int width, int height);
     void drawTransformGizmo(const render::Camera& view, int width, int height);
@@ -745,7 +897,9 @@ private:
     std::vector<render::PointLight> activeLights_;
     Json lightingSettings_ = Json::object();
     bool useLighting_ = false;
-    PreviewDayLighting day_{};
+    PreviewDayLighting day_{},weatherDay_{};
+    float weatherSeconds_=0;
+    std::optional<render::Lighting> weatherEnvironment_;
     bool showTerrain_ = true;
     void rebuildProxyDraws(const editor::MapDoc& doc);
     // Lighting/GI rebuilds are expensive (GPU idle wait, GI snapshot): a burst of

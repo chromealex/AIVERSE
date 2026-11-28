@@ -1,0 +1,10 @@
+{
+  "sha": "5831ca90834c3b5fecf7a7debcc831b331f86b88",
+  "argv": [
+    "bash",
+    "/tmp/road-html-check.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-webkit-metal-road.log.txt",
+  "sha256": "3887736ee5e7fb81d9c214f782825589e1591946760493c7e5a84dc5308c7175"
+}

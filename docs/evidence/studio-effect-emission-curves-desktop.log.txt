@@ -1,0 +1,6 @@
+2026-11-26 05:25:14.643 AiverseStudioHTML5[87076:82894176] [studio-web] JS: CROSS main DONE_1
+2026-11-26 05:25:14.643 AiverseStudioHTML5[87076:82894176] [studio-web] JS: CROSS main VERIFIED ranges, source bounds, shorthand and paired curves, middle key, reload or discard phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-range-ui-rD2uDJ/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-range-ui-rD2uDJ/Catalog.app: replacing existing signature
+2026-11-26 05:25:22.506 AiverseStudioHTML5[87359:82895450] [studio-web] JS: CROSS main DONE_2
+2026-11-26 05:25:22.505 AiverseStudioHTML5[87359:82895450] [studio-web] JS: CROSS main VERIFIED ranges, source bounds, shorthand and paired curves, middle key, reload or discard phase 2

@@ -1,0 +1,14 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 556: studio_metal_lighting
+1/2 Test #556: studio_metal_lighting ............   Passed    9.44 sec
+    Start 567: studio_fps_lighting_document
+2/2 Test #567: studio_fps_lighting_document .....   Passed    1.52 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+EDITOR      =  10.96 sec*proc (2 tests)
+LIGHTING    =   9.44 sec*proc (1 test)
+
+Total Test time (real) =  10.99 sec

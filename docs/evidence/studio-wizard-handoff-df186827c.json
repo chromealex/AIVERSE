@@ -1,0 +1,14 @@
+{
+  "sha": "df186827c28e5acd05ae3551b67604ecc9f3bf71",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wizard-handoff-df186827c.log.txt",
+  "sha256": "95b46a98f94fc2320aaa7a1eb46ddfdf2fc71579690bdb121f06726425997d64"
+}

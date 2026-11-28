@@ -1,0 +1,7 @@
+2026-11-27 00:42:40.729 AiverseStudioHTML5[976:86408994] [studio-web] JS: CROSS main DONE_1
+2026-11-27 00:42:40.729 AiverseStudioHTML5[976:86408994] [studio-web] JS: CROSS main VERIFIED hosted PHYSIS read-only Scene layer toggles, paused frame and stop, PHYSIS available cells 64
+Restored Scene changed sample count 0
+base wind changed Scene samples 0
+Traceback (most recent call last):
+  File "<stdin>", line 15, in <module>
+AssertionError: ('base', 'wind', 0, 0)

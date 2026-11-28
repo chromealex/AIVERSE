@@ -1,5 +1,8 @@
 #include "apps/editor/PhysisAuthoring.h"
+#include "apps/editor/PhysisDiagnosticDemo.h"
+#include "apps/editor/core/PhysisDiagnosticFrame.h"
 #include <cstdio>
+#include <set>
 #include "apps/editor/core/Workspace.h"
 using namespace aiverse;
 using namespace aiverse::editor;
@@ -38,8 +41,37 @@ void mcpAuthoring() {
     CHECK(w.map.loadJson(Json::parse(R"({"name":"FPS","colliders":[],"spawns":[]})"),nullptr));
     p.set("config",valid);p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
     CHECK(w.call("physis_set",p).getBool("ok")); CHECK(w.map.toJson()["physis"]==valid);
-    int count=0;for(const auto& op:w.ops())if(op.name.rfind("physis_",0)==0)++count;
-    CHECK(count==3);
+    const std::set<std::string> expectedAuthoring{
+        "physis_demo", "physis_get", "physis_set", "physis_validate", "physis_zone", "physis_zone_group"
+    };
+    std::set<std::string> authoring, linked;
+    for (const auto& op : w.ops()) {
+        if (op.name.rfind("physis_", 0) == 0)
+            (op.studioLinkOnly ? linked : authoring).insert(op.name);
+    }
+    CHECK(authoring == expectedAuthoring);
+    CHECK(linked == std::set<std::string>{"physis_nature_preview"});
+    const auto liveWorld=makePhysisDiagnosticDemo();
+    const auto liveParams=Json::parse(R"({"cellX":3,"cellZ":2,"layer":8,"action":"step60"})");
+    const auto captured=readPhysisGameFrame(liveWorld.get(),liveParams);
+    CHECK(captured.getBool("active") && captured["tick"].integer()==25);
+    CHECK(captured["cell"]["tick"]==captured["tick"] && captured["cell"].getBool("available"));
+    CHECK(captured["cell"]["wind"].size()==3 && captured["cell"]["gravity"].size()==3);
+    CHECK(liveWorld->resourceConst<physis::State>()->tick==25);
+    CHECK(!readPhysisGameFrame(nullptr,liveParams).getBool("active"));
+    const auto mapBefore=w.map.toJson();
+    const auto revisionBefore=w.map.revision;
+    auto demo=[&](const char* args){return w.call("physis_demo",Json::parse(args));};
+    CHECK(!demo(R"({"action":"view"})").getBool("active"));
+    const auto first=demo(R"({"action":"reset"})");
+    CHECK(first["tick"].integer()==25 && first["available"].integer()==1024);
+    CHECK(demo(R"({"action":"step60","size":0})").has("error"));
+    CHECK(demo(R"({"action":"step"})")["tick"].integer()==26);
+    CHECK(demo(R"({"action":"view","centerX":1000})")["available"].integer()==0);
+    CHECK(demo(R"({"action":"reset"})")["values"]==first["values"]);
+    Workspace other;
+    CHECK(!other.call("physis_demo",Json::parse(R"({"action":"view"})")).getBool("active"));
+    CHECK(w.map.toJson()==mapBefore && w.map.revision==revisionBefore);
 }
 void plainMapAndUndo() {
     MapDoc map; map.reset(8,8);

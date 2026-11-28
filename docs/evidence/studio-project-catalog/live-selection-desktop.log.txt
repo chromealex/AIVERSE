@@ -1,0 +1,8 @@
+2026-11-25 19:30:42.867 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS main viewport hidden {"x":279.453125,"y":213,"width":853.109375,"height":398.234375,"top":213,"right":1132.5625,"bottom":611.234375,"left":279.453125} loading=true error=
+2026-11-25 19:30:47.380 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS main viewport hidden {"x":279.453125,"y":213,"width":853.109375,"height":398.234375,"top":213,"right":1132.5625,"bottom":611.234375,"left":279.453125} loading=true error=
+2026-11-25 19:30:48.282 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS main present test Game viewport
+2026-11-25 19:30:56.655 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS crosshier selected 1
+2026-11-25 19:30:57.102 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS crossinsp late inspector Entity 1
+2026-11-25 19:30:57.382 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS crosshier selected 2
+2026-11-25 19:30:57.466 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS crossinsp updated inspector 2 components=9
+2026-11-25 19:30:57.566 AiverseStudioHTML5[47240:80272056] [studio-web] JS: CROSS main READY_FOR_CAPTURE

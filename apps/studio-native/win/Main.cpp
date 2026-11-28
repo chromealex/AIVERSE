@@ -4,8 +4,12 @@
 // injected at document creation gives it the window.webkit.messageHandlers.aiverse bridge it already uses.
 // Engine headers first: <windows.h> defines near / far / small / interface as macros.
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "apps/editor/core/ProjectFile.h"
+#include "apps/editor/core/FileAssoc.h"
+#include "engine/platform/EngineDir.h"
 #include "engine/gfx/vulkan/Vulkan.h"
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -15,6 +19,7 @@
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#include "GameDeviceOverlay.h"
 #include <dwmapi.h>
 #include <objbase.h>
 #include <shellapi.h>
@@ -178,7 +183,7 @@ WinShell* gShell = nullptr;
 
 class WinShell final : public studio::StudioHostPlatform {
 public:
-    WinShell(std::string project, bool dev) : project_(std::move(project)), dev_(dev) {}
+    WinShell(std::string project, bool dev, int listenPort) : project_(std::move(project)), dev_(dev), listenPort_(listenPort) {}
 
     int run() {
         HINSTANCE instance = GetModuleHandleW(nullptr);
@@ -190,7 +195,7 @@ public:
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = mainProc;
         wc.hInstance = instance;
-        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = CreateSolidBrush(RGB(14, 17, 23));
         // The resource holds 16–256 with alpha. LoadIcon keeps one 32px frame and drops that alpha.
         wc.hIcon = reinterpret_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, 256, 256, LR_DEFAULTCOLOR));
@@ -202,7 +207,7 @@ public:
         fc.style = CS_HREDRAW | CS_VREDRAW;
         fc.lpfnWndProc = floatProc;
         fc.hInstance = instance;
-        fc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        fc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         fc.hbrBackground = wc.hbrBackground;
         fc.hIcon = wc.hIcon;
         fc.hIconSm = wc.hIconSm;
@@ -212,7 +217,7 @@ public:
         sc.style = CS_OWNDC | CS_DBLCLKS;
         sc.lpfnWndProc = surfaceProc;
         sc.hInstance = instance;
-        sc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        sc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         sc.lpszClassName = kSurfaceClass;
         RegisterClassExW(&sc);
 
@@ -225,32 +230,28 @@ public:
                                 width, height, nullptr, nullptr, instance, nullptr);
         if (!main_) { fatal("The main window could not be created"); return 1; }
         extendClientOverCaption(main_);
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < int(studio::StudioSurface::Count); ++i) {
             surfaces_[i] = CreateWindowExW(0, kSurfaceClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 16, 16,
                                            main_, nullptr, instance, nullptr);
             SetWindowLongPtrW(surfaces_[i], GWLP_USERDATA, LONG_PTR(i));
         }
 
-        const std::string root = AIVERSE_STUDIO_SOURCE_DIR;
+        const std::string root = aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,nullptr);
+        aiverse::platform::setEngineAssetsDir(narrow((exeDir() / L"engine").c_str()));
         core_ = std::make_unique<studio::StudioHost>(*this, root, false);
+        if (listenPort_ && !core_->session().listenForAgent(listenPort_))
+            throw std::runtime_error("Could not start the authenticated Studio agent listener");
         const std::string exe = exeDir().string();
-#ifdef AIVERSE_STUDIO_BUILD_TOOL
-        core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
-#else
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exe, root));
-#endif
-#ifdef AIVERSE_STUDIO_MCP_TOOL
-        core_->session().setMcpTool(AIVERSE_STUDIO_MCP_TOOL);
-#else
         core_->session().setMcpTool(exe + "\\aiversemcp.exe");
-#endif
         if (project_.empty()) project_ = lastProject();
-        else rememberLastProject(project_);
         core_->setPendingProject(project_);
 
         ShowWindow(main_, SW_SHOWDEFAULT);
         UpdateWindow(main_);
         if (!startWebView()) return 1;
+        const auto association = aiverse::editor::ensureFileAssociation(narrow((exeDir() / L"AiverseStudio.exe").c_str()));
+        if (!association.empty()) logLine(association);
         SetTimer(main_, kTickTimer, 15, nullptr); // ~60 Hz; WM_TIMER also runs inside modal move/resize loops
 
         MSG msg;
@@ -284,6 +285,37 @@ public:
         HWND child = surfaces_[index(surface)];
         HWND host = GetParent(child);
         return IsWindowVisible(child) && host && IsWindowVisible(host) && !IsIconic(host);
+    }
+    void captureStudioWindow(aiverse::gfx::Device::CaptureFn done) override {
+        RECT rect{};
+        if (!IsWindowVisible(main_) || IsIconic(main_) || !GetWindowRect(main_,&rect)) {done(0,0,{});return;}
+        const int w=rect.right-rect.left,h=rect.bottom-rect.top;
+        if (w<=0 || h<=0 || int64_t(w)*h>32*1024*1024) {done(0,0,{});return;}
+        BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;info.bmiHeader.biPlanes=1;
+        info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+        HDC dc=CreateCompatibleDC(nullptr);
+        void* bytes=nullptr;
+        HBITMAP bitmap=dc?CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bytes,nullptr,0):nullptr;
+        HGDIOBJ previous=bitmap?SelectObject(dc,bitmap):nullptr;
+        std::vector<uint8_t> pixels;
+        if (previous && bytes && PrintWindow(main_,dc,2 /* PW_RENDERFULLCONTENT */)) {
+            GdiFlush();
+            const auto* bgra=static_cast<const uint8_t*>(bytes);
+            pixels.resize(size_t(w)*h*4);
+            for (size_t i=0;i<pixels.size();i+=4) {
+                pixels[i]=bgra[i+2];pixels[i+1]=bgra[i+1];pixels[i+2]=bgra[i];pixels[i+3]=255;
+            }
+        }
+        if (previous) SelectObject(dc,previous);
+        if (bitmap) DeleteObject(bitmap);
+        if (dc) DeleteDC(dc);
+        if (pixels.empty()) done(0,0,{});
+        else done(w,h,std::move(pixels));
+    }
+    void gameDeviceChanged(const Json& state) override {
+        if (!gameChrome_.update(surfaces_[index(studio::StudioSurface::Game)],state["device"]))
+            logLine("Could not update the Game device overlay");
     }
     bool gameFocused() override {
         HWND host = GetParent(surfaces_[1]);
@@ -385,9 +417,43 @@ public:
             done(std::move(sources));
         });
     }
-    void revealInFileManager(const fs::path& path) override {
+    PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
+        const auto exe=studio::studioNetworkPlayer(exeDir()/L"AiverseGame.exe");
+        return launchExecutable(exe,args);
+    }
+    void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
+        launchExecutable(executable, {"--project", project});
+    }
+    static PlayerExitStatus launchExecutable(const std::filesystem::path& exe, const std::vector<std::string>& args) {
+        // CreateProcess receives one command line. Escape quotes and trailing backslashes for the CRT.
+        auto quote=[](const std::wstring& value){
+            std::wstring out(1,L'"');size_t slashes=0;
+            for(wchar_t c:value){
+                if(c==L'\\'){++slashes;continue;}
+                out.append(c==L'"'?2*slashes+1:slashes,L'\\');slashes=0;out+=c;
+            }
+            out.append(2*slashes,L'\\');return out+L'"';
+        };
+        std::wstring command=quote(exe.wstring());
+        for(const auto& arg:args)command+=L" "+quote(widen(arg));
+        STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
+        if(!CreateProcessW(exe.c_str(),command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&process))
+            throw std::runtime_error(exe.filename().string()+" could not start (Windows error "+std::to_string(GetLastError())+").");
+        CloseHandle(process.hThread);
+        auto child=std::shared_ptr<void>(process.hProcess,[](HANDLE h){CloseHandle(h);});
+        return [child]() -> std::optional<int> {
+            if(WaitForSingleObject(child.get(),0)==WAIT_TIMEOUT)return std::nullopt;
+            DWORD code=1;GetExitCodeProcess(child.get(),&code);return int(code);
+        };
+    }
+    void revealInFileManager(const fs::path& path, bool openFolder) override {
+        if(openFolder){ShellExecuteW(main_, L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);return;}
         const std::wstring args = L"/select,\"" + path.wstring() + L"\"";
         ShellExecuteW(main_, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+    }
+    fs::path legacyEditorSettingsDir() override {
+        const auto dir = knownFolder(FOLDERID_RoamingAppData);
+        return dir.empty() ? fs::path{} : dir / L"AIVERSE Editor";
     }
     fs::path cacheDir() override {
         fs::path dir = knownFolder(FOLDERID_LocalAppData);
@@ -559,9 +625,11 @@ public:
         WinShell* s = gShell;
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
+            if(which==int(studio::StudioSurface::Character)||which==int(studio::StudioSurface::Appearance))return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
+            if(which>=3 && which!=int(studio::StudioSurface::Nature) && which!=int(studio::StudioSurface::EffectFile) && which!=int(studio::StudioSurface::GpuEmitter))return DefWindowProcW(h,msg,wp,lp);
             const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
                 which==1?s->gameInput(h,msg,wp,lp):
-                s->fxInput(h,msg,wp,lp);
+                s->fxInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
             if (handled != LRESULT(-1)) return handled;
         }
         switch (msg) {
@@ -573,26 +641,55 @@ public:
     }
     // Dedicated native Vulkan FX child. It may only orbit/zoom its own
     // particle camera; it never routes to Scene selection, brush or ECS.
-    LRESULT fxInput(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    LRESULT characterInput(HWND h,UINT msg,WPARAM wp,LPARAM lp,studio::StudioSurface surface){
+        POINT p{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+        RECT rect{};GetClientRect(h,&rect);
+        switch(msg){
+        case WM_LBUTTONDOWN:case WM_RBUTTONDOWN:
+            SetFocus(h);SetCapture(h);fxLast_=p;
+            if(msg==WM_LBUTTONDOWN)core_->humanPick(surface,p.x,p.y,rect.right,rect.bottom);
+            return 0;
+        case WM_MOUSEMOVE:
+            if(GetCapture()==h&&(wp&(MK_LBUTTON|MK_RBUTTON))){
+                if(!(wp&MK_LBUTTON)||!core_->humanPick(surface,p.x,p.y,rect.right,rect.bottom))
+                    core_->humanOrbit(surface,p.x-fxLast_.x,p.y-fxLast_.y);
+                fxLast_=p;
+            }
+            return 0;
+        case WM_LBUTTONUP:case WM_RBUTTONUP:if(GetCapture()==h)ReleaseCapture();return 0;
+        case WM_MOUSEWHEEL:core_->humanZoom(surface,double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);return 0;
+        default:return DefWindowProcW(h,msg,wp,lp);
+        }
+    }
+    LRESULT fxInput(HWND h, UINT msg, WPARAM wp, LPARAM lp,studio::StudioSurface surface) {
         if(!core_)return -1;
         switch(msg) {
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
             SetFocus(h);SetCapture(h);fxLast_={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+            natureClickPending_=surface==studio::StudioSurface::Nature && msg==WM_LBUTTONDOWN;
             return 0;
         case WM_MOUSEMOVE:
             if(GetCapture()==h && (wp&(MK_LBUTTON|MK_RBUTTON))) {
                 const POINT now{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
-                core_->fxCameraOrbit(now.x-fxLast_.x,now.y-fxLast_.y);
+                if(natureClickPending_ && std::abs(now.x-fxLast_.x)<3 && std::abs(now.y-fxLast_.y)<3)return 0;
+                natureClickPending_=false;
+                core_->fxCameraOrbit(surface,now.x-fxLast_.x,now.y-fxLast_.y);
                 fxLast_=now;
             }
             return 0;
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
+            if(GetCapture()==h && msg==WM_LBUTTONUP && surface==studio::StudioSurface::Nature && natureClickPending_ &&
+               std::abs(GET_X_LPARAM(lp)-fxLast_.x)<3 && std::abs(GET_Y_LPARAM(lp)-fxLast_.y)<3){
+                RECT rect{};GetClientRect(h,&rect);
+                core_->natureClick(GET_X_LPARAM(lp),GET_Y_LPARAM(lp),rect.right,rect.bottom);
+            }
+            natureClickPending_=false;
             if(GetCapture()==h)ReleaseCapture();
             return 0;
         case WM_MOUSEWHEEL:
-            core_->fxCameraZoom(double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);
+            core_->fxCameraZoom(surface,double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);
             return 0;
         case WM_KEYDOWN:
         case WM_KEYUP:
@@ -693,7 +790,7 @@ public:
 
 private:
     static int index(studio::StudioSurface s) {
-        return s==studio::StudioSurface::Scene?0:s==studio::StudioSurface::Game?1:2;
+        return static_cast<int>(s);
     }
     static void postTask(HWND target, std::function<void()> fn) {
         auto* task = new std::function<void()>(std::move(fn));
@@ -712,7 +809,8 @@ private:
         if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\AIVERSE\\Studio", L"LastProject", RRF_RT_REG_SZ, nullptr, buf, &size) != ERROR_SUCCESS)
             return {};
         std::error_code ec;
-        return fs::is_directory(fs::path(buf), ec) ? narrow(buf) : std::string();
+        if (fs::is_directory(fs::path(buf), ec)) return narrow(buf);
+        return aiverse::editor::resolveProjectDir(narrow(buf), nullptr);
     }
     void setFolder(IFileDialog* dialog, const std::string& dir) {
         if (dir.empty()) return;
@@ -926,13 +1024,12 @@ private:
             if ((*it)->hwnd == hwnd) { floats_.erase(it); return; }
     }
     void releaseSurfaces(HWND host) {
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < int(studio::StudioSurface::Count); ++i) {
             HWND child = surfaces_[i];
             if (!child || GetParent(child) != host) continue;
             ShowWindow(child, SW_HIDE);
             SetParent(child, main_);
-            if (core_) core_->surfaceDetached(i==0?studio::StudioSurface::Scene:
-                i==1?studio::StudioSurface::Game:studio::StudioSurface::Fx);
+            if (core_) core_->surfaceDetached(static_cast<studio::StudioSurface>(i));
         }
     }
     void closeAllFloats() {
@@ -1135,6 +1232,29 @@ private:
         w = double(r.right) / k;
         hgt = double(r.bottom) / k;
     }
+    void openSceneMenu(HWND scene, LPARAM location) {
+        const HWND host = GetParent(scene);
+        auto* controller = controller_.p;
+        auto* web = web_.p;
+        if (host != main_) {
+            auto pane = std::find_if(floats_.begin(), floats_.end(), [host](const auto& p) { return p->hwnd == host; });
+            if (pane == floats_.end()) return;
+            controller = (*pane)->controller.p;
+            web = (*pane)->web.p;
+        }
+        RECT bounds{};
+        POINT point{GET_X_LPARAM(location), GET_Y_LPARAM(location)};
+        if (!web || !controller || !GetClientRect(scene, &bounds) || !PtInRect(&bounds, point)) return;
+        // Relative surface coordinates remain valid across host DPI and WebView zoom changes.
+        const auto u = std::to_wstring(double(point.x) / bounds.right);
+        const auto v = std::to_wstring(double(point.y) / bounds.bottom);
+        const auto script = std::wstring(L"(()=>{const el=document.querySelector('.viewport');if(!el)return;"
+            L"const r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('contextmenu',"
+            L"{bubbles:true,cancelable:true,shiftKey:true,button:2,clientX:r.left+r.width*") + u +
+            L",clientY:r.top+r.height*" + v + L"}));})()";
+        controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+        web->ExecuteScript(script.c_str(), nullptr);
+    }
     // Returns -1 when the message is not the Scene's.
     LRESULT sceneInput(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         const double k = scale();
@@ -1151,6 +1271,23 @@ private:
         case WM_MBUTTONUP: button = 2; phase = 2; break;
         case WM_MOUSEMOVE: button = captured_ >= 0 ? captured_ : 0; phase = 1; break;
         default: break;
+        }
+        if (phase == 0 && button == 1 && (wp & MK_SHIFT) && captured_ < 0) {
+            SetFocus(h);
+            SetCapture(h);
+            sceneMenuPress_ = true;
+            return 0;
+        }
+        if (sceneMenuPress_) {
+            if (phase == 2 && button == 1) {
+                sceneMenuPress_ = false;
+                if (GetCapture() == h) ReleaseCapture();
+                openSceneMenu(h, lp);
+            } else if (msg == WM_CAPTURECHANGED || msg == WM_CANCELMODE) {
+                sceneMenuPress_ = false;
+                if (GetCapture() == h) ReleaseCapture();
+            }
+            if (phase >= 0 || msg == WM_CAPTURECHANGED || msg == WM_CANCELMODE) return 0;
         }
         if (phase >= 0) {
             double x = 0, y = 0;
@@ -1293,13 +1430,17 @@ private:
 
     std::string project_;
     bool dev_ = false;
+    int listenPort_ = 0;
+    studio::GameDeviceOverlay gameChrome_;
     HWND main_ = nullptr;
-    HWND surfaces_[3] = {nullptr, nullptr, nullptr}; // Scene, Game, FX
+    HWND surfaces_[int(studio::StudioSurface::Count)] = {}; // Scene, Game, FX
     Com<ICoreWebView2Controller> controller_;
     Com<ICoreWebView2> web_;
     std::unique_ptr<studio::StudioHost> core_;
     int captured_ = -1;
+    bool sceneMenuPress_ = false;
     bool tracking_ = false;
+    bool natureClickPending_=false;
     POINT fxLast_{0,0};
     std::pair<double, double> last_{0, 0}, lastGame_{0, 0};
     uint32_t highSurrogate_ = 0;
@@ -1329,22 +1470,36 @@ int aiverseMain(int argc, char** argv) {
     std::string project;
     bool dev = false;
     // The UTF-8 code page manifest makes argv UTF-8; read the wide command line anyway (older Windows).
+    int listenPort = 0;
     int wargc = 0;
     LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
     for (int i = 1; i < wargc; ++i) {
         const std::wstring arg = wargv[i];
         if (arg == L"--dev") dev = true;
+        else if (arg == L"--listen" && i + 1 < wargc) {
+            listenPort = aiverse::editor::net::parseListenPort(narrow(wargv[++i]));
+            if (!listenPort) { LocalFree(wargv); return 2; }
+        }
         else if (arg == L"--project" && i + 1 < wargc) project = narrow(wargv[++i]);
+        else if (project.empty() && aiverse::editor::isProjectFilePath(narrow(wargv[i]))) {
+            std::string error;
+            project = aiverse::editor::resolveProjectDir(narrow(wargv[i]), &error);
+            if (project.empty()) {
+                LocalFree(wargv);
+                MessageBoxW(nullptr, widen(error).c_str(), L"AIVERSE Studio", MB_OK | MB_ICONERROR);
+                return 2;
+            }
+        }
         else {
             LocalFree(wargv);
-            MessageBoxW(nullptr, L"Usage: AiverseStudio.exe [--dev] [--project <folder>]", L"AIVERSE Studio", MB_OK);
+            MessageBoxW(nullptr, L"Usage: AiverseStudio.exe [--dev] [--listen PORT] [--project <folder> | <project file>]", L"AIVERSE Studio", MB_OK);
             return 2;
         }
     }
     LocalFree(wargv);
     (void)argc; (void)argv;
     try {
-        WinShell shell(project, dev);
+        WinShell shell(project, dev, listenPort);
         gShell = &shell;
         const int code = shell.run();
         gShell = nullptr;

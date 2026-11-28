@@ -1,0 +1,1 @@
+2026-11-27 02:48:56.061 AiverseStudioHTML5[59912:86744871] [studio-web] JS: CROSS main VERIFIED atlas disabled in native estimate; per-platform limit retained

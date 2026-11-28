@@ -133,10 +133,15 @@ themselves (`engine/platform/EngineDir.h`), so the unpacked folder runs anywhere
 **Rule:** whenever `main` gets a verified change to the editor, the engine or the tools, the integrator
 (MAIN agent) republishes both platforms from that exact `main` commit:
 
-1. Windows — cross-compile with mingw-w64 (Linux or a Mac with `brew install mingw-w64`), CMake build
-   tree in `build/.temp/windows` (intermediates always under a `.temp` folder):
-   `cmake -S . -B build/.temp/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=<mingw toolchain> -DAIVERSE_BUILD_TESTS=OFF`,
-   `cmake --build build/.temp/windows --target aiverse_editor aiversemcp aiversebuild aiverse_headless aiverse_client assetpipe`.
+1. Windows — build the HTML5 frontend in `apps/studio-web` with `npm install --no-audit --no-fund`
+   and `npm run build`. From the repository root, configure the Windows x64 build with the Visual
+   Studio 2022 generator used by the staged Studio launch check:
+   `cmake -S . -B build/.temp/windows -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_TOOLS=ON`.
+   For the mingw-w64 cross-build on Linux or macOS, use the Ninja generator with
+   `-DCMAKE_TOOLCHAIN_FILE=<mingw toolchain> -DCMAKE_BUILD_TYPE=Release` in place of the Visual Studio generator and architecture.
+   Build the Release configuration:
+   `cmake --build build/.temp/windows --config Release --target aiverse_studio aiversemcp aiversebuild aiverse_headless aiverse_client assetpipe`.
+   The Windows package contains `AiverseStudio.exe`, `WebView2Loader.dll` and the built `studio-web` assets.
 2. macOS — the Mac build (`build/mac`, BuildMac) of the same commit.
 3. `python3 tools/release/package_engine.py --platform windows|macos --bin <build dir>` → `build/dist/*.zip`.
 4. `python3 tools/release/publish_builds.py <zips>` — replaces the branch with one commit holding the newest

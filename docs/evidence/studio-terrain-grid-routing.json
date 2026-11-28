@@ -1,0 +1,10 @@
+{
+  "sha": "e4cb2fd5093f584f86fd92e592f54a26c0143d4c",
+  "argv": [
+    "bash",
+    "/tmp/terrain-grid-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-terrain-grid-routing.log.txt",
+  "sha256": "5c0503a04ce2ce3eb97b730df698e7db164bd54ae2b3f2ad79489b00d27fefbc"
+}

@@ -1,0 +1,14 @@
+{
+  "sha": "9dc0e069b493578e181fc798d8731471c2898eaa",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_(asset_catalog|pbr_adapter|session)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-file-material-recovery-9dc0e069b.log.txt",
+  "sha256": "30ab9506eee072c1386d0e1a56bcd2c16b76741a8f4640785e25760e37bc867c"
+}

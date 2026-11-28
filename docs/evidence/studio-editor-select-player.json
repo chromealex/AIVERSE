@@ -1,0 +1,10 @@
+{
+  "sha": "6a933b116e1aa6930a3d5aa6a90ee94c867058f8",
+  "argv": [
+    "bash",
+    "/tmp/select-player.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-editor-select-player.log.txt",
+  "sha256": "a2149c0a36bbe3dc2457418ab9caa0c322cfb94f0c56b34c2d4e53e4f71c7de5"
+}

@@ -1,0 +1,14 @@
+{
+  "sha": "4a2613ab0bd3d0ba12b816ffaddb47851196371f",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_(terrain_geometry|session)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-region-borders-4a2613ab0.log.txt",
+  "sha256": "963339d77bab7bcf32b80b709398095d332eb475fd72f1a139c95d8cacf3a11d"
+}

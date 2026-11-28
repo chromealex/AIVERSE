@@ -1,0 +1,10 @@
+{
+  "sha": "96491287c5b56104b84d93be003b751e0c9f9333",
+  "argv": [
+    "bash",
+    "../build-delivery.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-delivery-mode.log.txt",
+  "sha256": "2bee5c9565e26e9046bdc53fc600a630a950f6cb18a715bc7377660ecf0f1024"
+}

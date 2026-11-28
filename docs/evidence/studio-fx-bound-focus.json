@@ -1,0 +1,10 @@
+{
+  "sha": "1cc1218222d9cdfecd55f20bf29d833c169619f1",
+  "argv": [
+    "bash",
+    "../fx-focus.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-fx-bound-focus.log.txt",
+  "sha256": "c66f9f437aa1aacf7ea908b5545ab41cb1964d1186a85bd9aec81a99ede1486c"
+}

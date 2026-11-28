@@ -1,0 +1,10 @@
+{
+  "sha": "19a7e170363d9faeb90bd6d0916ceb9c44e69375",
+  "argv": [
+    "bash",
+    "/tmp/world-list.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-world-entities.log.txt",
+  "sha256": "da6588994177de9dbf9d0006e36607dbbde32ae3d7942e1e380cd5a908792c23"
+}

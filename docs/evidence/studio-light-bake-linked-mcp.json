@@ -1,0 +1,10 @@
+{
+  "sha": "72b6090ea859782762c457623c3ada0eafc0cd63",
+  "argv": [
+    "bash",
+    "/tmp/mcp-bake-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-bake-linked-mcp.log.txt",
+  "sha256": "97037499335890ca0f2fe52cfa1394b1054778ba5ea92a60857b19466b7044a1"
+}

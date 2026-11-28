@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <map>
+#include <limits>
 #include <optional>
 #include <span>
 #include <set>
@@ -300,7 +301,8 @@ public:
 
     // Optional editor/user-facing collision report, using actual dispatch precedence.
     // Disabled contexts are ignored by default because they cannot shadow an action.
-    std::vector<BindingConflict> conflicts(bool activeOnly=true) const {
+    std::vector<BindingConflict> conflicts(bool activeOnly=true, std::size_t limit=std::numeric_limits<std::size_t>::max(),
+                                           std::uint64_t* total=nullptr) const {
         struct Bound { std::string context,action; std::uint64_t id; Control control;
                        bool consume; int priority; };
         std::vector<Bound> ordered;
@@ -315,13 +317,24 @@ public:
             if(a.priority!=b.priority)return a.priority>b.priority;
             return a.context<b.context;
         });
+        std::map<Control,std::vector<std::size_t>> byControl;
+        for(std::size_t i=0;i<ordered.size();++i) byControl[ordered[i].control].push_back(i);
+        if(total){
+            *total=0;
+            for(const auto& entry:byControl){
+                const std::uint64_t count=entry.second.size();
+                *total+=count*(count-1)/2;
+            }
+        }
         std::vector<BindingConflict> result;
-        for(std::size_t i=0;i<ordered.size();++i)
-            for(std::size_t j=i+1;j<ordered.size();++j)
-                if(ordered[i].control==ordered[j].control)
-                    result.push_back({ordered[i].control,ordered[i].context,ordered[j].context,
-                                      ordered[i].action,ordered[j].action,ordered[i].id,
-                                      ordered[j].id,ordered[i].consume});
+        for(std::size_t i=0;i<ordered.size() && result.size()<limit;++i){
+            const auto& indices=byControl.at(ordered[i].control);
+            for(auto it=std::upper_bound(indices.begin(),indices.end(),i);it!=indices.end() && result.size()<limit;++it){
+                const auto& later=ordered[*it];
+                result.push_back({ordered[i].control,ordered[i].context,later.context,
+                                  ordered[i].action,later.action,ordered[i].id,later.id,ordered[i].consume});
+            }
+        }
         return result;
     }
 

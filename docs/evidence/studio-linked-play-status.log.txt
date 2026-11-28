@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/play-status-client.py", line 49, in <module>
+    assert status()=={'playing':False}
+  File "/tmp/play-status-client.py", line 47, in status
+    assert not res.get('isError'),res
+AssertionError: {'content': [{'type': 'text', 'text': '{"error": "Requires an authenticated HTML5 Studio agent link"}'}], 'isError': True}

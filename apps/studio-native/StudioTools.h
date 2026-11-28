@@ -23,7 +23,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
         {"building_generator", {"building_graph_diagnostics"}},
         {"feature_readiness", {"feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"}},
-        {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
+        {"terrain", {"map_info", "planet_info", "terrain_sculpt", "terraweave_sparse_paint", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
                      "terraweave_meadow_get", "terraweave_meadow_set", "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
         {"caverns", {"terraweave_caverns_paint","terraweave_caverns_pick"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
@@ -31,28 +31,30 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                    "road_toggle", "road_type_set", "road_stop_set", "road_driveway_set"}},
         {"tiles", {"tileset_list", "tile_info", "tiles_init", "tile_paint", "tiles_remove"}},
         {"fog", {"rules_get", "rules_merge", "rules_delete"}},
-        {"generate", {"gen_presets", "map_generate", "map_mirror", "map_resize", "map_validate", "map_ascii"}},
-        {"postfx", {"postfx_get", "postfx_compositor_set", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
+        {"generate", {"gen_presets", "map_generate", "map_generation_disable", "map_mirror", "map_resize", "map_validate", "map_ascii"}},
+        {"postfx", {"view_postfx", "postfx_get", "postfx_compositor_set", "postfx_volumes_set", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},
-        {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear"}},
+        {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear", "lightbake_atlas_preview"}},
+        {"shader_graph", {"shader_graph_create","shader_graph_apply"}},
+        {"static_geometry", {"geometry_instances_list","geometry_strata_set"}},
         {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},
-        {"overlays", {"overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
+        {"overlays", {"overlay_plan_preview", "overlay_placement_preview", "overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},
         {"fields", {"field_list", "field_get", "field_paint", "field_set_rules", "region_paint", "territory_paint"}},
-        {"physis", {"physis_get", "physis_validate", "physis_set"}},
-        {"actor", {"actor_get", "actor_set", "lens_scene_get", "lens_scene_validate", "lens_scene_set", "lens_camera_set", "lens_camera_delete"}},
+        {"physis", {"physis_zone_group", "physis_zone", "physis_demo", "physis_get", "physis_validate", "physis_set"}},
+        {"actor", {"actor_get", "actor_set", "lens_scene_get", "lens_camera_presets", "lens_scene_validate", "lens_scene_set", "lens_camera_set", "lens_camera_delete"}},
         {"raid", {"raid_info", "raid_set", "raid_point", "raid_run"}},
         {"balance", {"balance_stats", "balance_duel", "balance_matrix", "balance_batch", "match_run", "scenario_run", "rules_lint"}},
         {"fx_graph", {"fx_graph_list", "fx_graph_node_catalog", "fx_graph_get", "fx_graph_validate", "fx_graph_set", "fx_graph_edit",
                       "fx_graph_bake", "fx_graph_delete", "fx_graph_draft_list", "fx_graph_draft_get", "fx_graph_draft_set", "fx_graph_draft_publish", "fx_graph_preview", "fx_asset_check", "fx_replay_prepare", "fx_replay_status", "fx_replay_capture", "fx_checkpoint_timeline", "fx_checkpoint_file", "fx_replay_preset_list", "fx_replay_preset_get", "fx_replay_preset_save", "fx_replay_preset_check", "fx_replay_preset_relocate_preview", "fx_replay_preset_relocate_apply", "fx_replay_preset_portable_export", "fx_replay_preset_portable_preview", "fx_replay_preset_portable_apply", "fx_replay_package_list", "fx_replay_package_export", "fx_replay_package_preview", "fx_replay_package_apply"}},
-        {"fx_functions", {"fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
-        {"modeling", {"modeling_catalog", "modeling_volume_texture_import", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
+        {"fx_functions", {"fx_gpu_list", "fx_gpu_read", "fx_gpu_validate", "fx_gpu_save", "fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
+        {"modeling", {"modeling_preview", "modeling_catalog", "modeling_volume_texture_import", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
-                      "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_image_asset", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_publications_get", "texture_graph_publication_finalize", "texture_graph_publication_quarantine", "texture_graph_quarantine_get", "texture_graph_quarantine_restore", "texture_graph_publication_resume", "texture_graph_material_variant", "texture_graph_gpu_preview"}},
-        {"anim_assets", {"modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
-        {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
+                      "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_image_asset", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview", "texture_graph_publications_get", "texture_graph_publication_finalize", "texture_graph_publication_quarantine", "texture_graph_quarantine_get", "texture_graph_quarantine_restore", "texture_graph_publication_resume"}},
+        {"anim_assets", {"animation_model_info", "animation_root_motion_generate", "animation_ragdoll_generate", "animation_asset_list", "animation_avatar_suggest", "animation_avatar_validate", "modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
+        {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "animation_graph_preview", "animation_graph_edit", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
                         "animation_montage_validate"}},
         {"anim_rig", {"animation_avatar_suggest", "animation_avatar_validate", "rig_auto_weights", "rig_edit", "animation_ragdoll_generate",
                       "animation_root_motion_generate"}},
@@ -64,6 +66,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
             "world_save_create", "world_save_checkpoint", "world_save_retention_preview", "world_save_retention_apply", "world_save_fork",
             "world_job_start", "world_job_status", "world_job_cancel", "world_job_release",
             "world_simulation_lod_get", "world_simulation_lod_validate", "world_simulation_lod_set"}},
+        {"hierarchy", {"editor_select"}},
         {"project_import", {"port_scan", "port_report", "port_item", "port_resolve", "port_import"}},
         // Package catalog (AIVERSE-PACKAGES): search and install content into the open project.
         {"catalog", {"package_search", "package_info", "package_status", "package_add", "package_remove", "package_install"}},
@@ -88,7 +91,9 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if(op=="building_graph_diagnostics")return true;
+    if(op=="animation_graph_edit"||op=="animation_graph_preview"||op=="animation_ragdoll_generate"||op=="animation_root_motion_generate")return true;
+    if(op=="editor_select")return true;
+    if(op=="building_graph_diagnostics" || op=="view_postfx")return true;
     if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
     if (op == "texture_graph_preview" || op == "texture_graph_image_asset" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;

@@ -1,0 +1,10 @@
+{
+  "sha": "aafb2229871368760bf25c7a8bc3fb738fb83230",
+  "argv": [
+    "bash",
+    "/tmp/actor-game-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-hosted-actor-game.log.txt",
+  "sha256": "63c1aba2f8854c74de99a1c8681599da5bb190b348fb5a66fc93e94e41869b5d"
+}

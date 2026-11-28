@@ -1,0 +1,15 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/1 Test #585: studio_terrain_geometry ..........   Passed    0.11 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   0.11 sec*proc (1 test)
+
+Total Test time (real) =   0.15 sec
+2026-11-26 15:20:41.250 AiverseStudioHTML5[52281:85152992] [studio-web] JS: CROSS main DONE_1
+2026-11-26 15:20:41.250 AiverseStudioHTML5[52281:85152992] [studio-web] JS: CROSS main VERIFIED erosion overlay toggle and captured labels via toolbar
+new protected/fast zone pixels (1421, 1915)
+clean protected/fast changed pixels (0, 0)

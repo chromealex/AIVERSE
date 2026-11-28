@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CloudSun, Lightbulb, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { CloudSun, Crosshair, Lightbulb, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
-import { LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightProperties } from './lightingSchema';
+import { LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightColor, lightProperties } from './lightingSchema';
 import type { LightEditableKey, LightingScalarKey, LightingState } from './lightingSchema';
+import {hexToRgb,rgbToHex} from './humanCreatorSchema';
 import './LightingPanel.css';
+import LightingWeatherPreview from './LightingWeatherPreview';
 import RenderLightingControls from './RenderLightingControls';
 
-interface LightingPanelProps { projectPath: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
+interface LightingPanelProps { dirty: boolean; saveMap: () => Promise<void>; openScene: () => void; projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
 const empty: LightingState = { lighting: null, lights: [] };
 
-export default function LightingPanel({ projectPath, selectedId, onSelect }: LightingPanelProps) {
+export default function LightingPanel({ dirty, saveMap, openScene, projectPath, documentEpoch, selectedId, onSelect }: LightingPanelProps) {
   const [state, setState] = useState<LightingState>(empty);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -26,7 +28,7 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Keep the scroll position and focused field on same-document refreshes.
     setError('');
     if (!available) {
       setState(empty);
@@ -60,7 +62,7 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
   const lightFields = useMemo(() => activeLight ? lightProperties(activeLight) : [], [activeLight]);
   const editSetting = (key: string, value: string | number | boolean) => {
     if (typeof value !== 'number' || !(LIGHTING_KEYS as readonly string[]).includes(key)) return;
-    void perform(() => invoke('studio.lightingSet', { key: key as LightingScalarKey, value }));
+    void perform(() => invoke('studio.lightingSet', { key: key as LightingScalarKey, value, expectedDocumentEpoch:documentEpoch }));
   };
   const editLight = (key: string, value: string | number | boolean) => {
     if (!(LIGHT_EDITABLE_KEYS as readonly string[]).includes(key) || !activeLight) return;
@@ -83,18 +85,41 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
     {error && <p role="alert" className="lighting-error">{error}</p>}
     {loading ? <div className="lighting-state">Loading map lighting…</div> :
       <div className="lighting-scroll">
-        <div className="lighting-section-heading">Environment</div>
+        <div className="lighting-section-heading lighting-list-heading">
+          <span>Environment</span>
+          {state.lighting && <button className="lighting-add" disabled={busy || !available || !nativeConnected()}
+            title="Remove all map lighting overrides" onClick={()=>void perform(()=>invoke('studio.lightingSet',{key:'remove',value:true,expectedDocumentEpoch:documentEpoch}))}>
+            Use project lighting
+          </button>}
+        </div>
         <div className="lighting-fields">
-          {settings.map(property => <PropertyField key={property.key} property={property}
+          <label className="property-row"><span>Palette preset</span>
+            <select aria-label="Palette preset" value={state.lighting?.preset ?? ''} disabled={busy || !available || !nativeConnected()}
+              onChange={event=>{const value=event.target.value;void perform(()=>invoke('studio.lightingSet',{key:'preset',value,expectedDocumentEpoch:documentEpoch}));}}>
+              <option value="">Project palette</option>
+              {['Desert','Snow','Volcanic','Overcast','Cave'].map(label=><option key={label} value={label.toLowerCase()}>{label}</option>)}
+            </select>
+          </label>
+          <p className="property-description">Empty fields use the palette or project settings.</p>
+          {settings.map(property => <PropertyField key={property.key} property={state.lighting?.[property.key as LightingScalarKey] === undefined ? {...property,mixed:true} : property}
             disabled={busy || !available || !nativeConnected()} onChange={value => editSetting(property.key, value)}/>)}
         </div>
+        {nativeConnected() && documentEpoch && <LightingWeatherPreview epoch={documentEpoch} lighting={state.lighting}
+          busy={busy} apply={value=>perform(()=>invoke('studio.lightingSet',{key:'weather',value,expectedDocumentEpoch:documentEpoch}))}/>}
         <RenderLightingControls projectPath={projectPath}/>
         <div className="lighting-section-heading lighting-list-heading">
           <span>Local lights ({state.lights.length})</span>
+        </div>
+        <div className="lighting-placement">
+          <button className="lighting-add" disabled={busy || !available || !nativeConnected()}
+            title="Place a light at the Scene camera target, snapped to half a unit"
+            onClick={() => void perform(() => invoke('studio.lightAdd', {atSceneTarget:true, expectedDocumentEpoch:documentEpoch}), true)}>
+            <Crosshair size={14}/> Add at Scene target
+          </button>
           <button className="lighting-add" disabled={busy || !available || !nativeConnected()}
             title="Add light at map center / FPS origin"
-            onClick={() => void perform(() => invoke('studio.lightAdd', {}), true)}>
-            <Plus size={14}/> Add
+            onClick={() => void perform(() => invoke('studio.lightAdd', {expectedDocumentEpoch:documentEpoch}), true)}>
+            <Plus size={14}/> Add at center
           </button>
         </div>
         {state.lights.length === 0 ? <p className="lighting-state">No authored lights in this map.</p> :
@@ -104,11 +129,29 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
                 <button key={light.entityId ?? index} type="button" role="option" aria-selected={selected === index}
                   className={'lighting-light-item' + (selected === index ? ' active' : '')}
                   onClick={() => { if (light.entityId) void onSelect(`light:${light.entityId}`); setConfirmDelete(false); }}>
-                  <Lightbulb size={15}/><span>{light.name || (light.type === 'spot' ? 'Spot' : 'Point') + ' #' + (index + 1)}</span>
+                  <Lightbulb size={15} color={rgbToHex(lightColor(light))}/><span>{light.name || (light.type === 'spot' ? 'Spot' : 'Point') + ' #' + (index + 1)}</span>
                   <small>{index + 1}</small>
                 </button>)}
             </div>
             {activeLight && <div className="lighting-fields lighting-light-fields">
+              <button className="lighting-add" disabled={busy || !selectedId || !documentEpoch || !nativeConnected()}
+                onClick={async () => {
+                  if(!selectedId || !documentEpoch)return;
+                  try {
+                    await invoke('studio.viewportInput',{kind:'focusLight',entityId:selectedId,expectedDocumentEpoch:documentEpoch});
+                    openScene();
+                  } catch(err) { setError(err instanceof Error ? err.message : String(err)); }
+                }}><Crosshair size={14}/> Show in Scene</button>
+              <label className="property-row"><span>Light color</span>
+                <span className="lighting-color">
+                  <input type="color" aria-label="Light color" value={rgbToHex(lightColor(activeLight))}
+                    disabled={busy || !available || !nativeConnected()} onChange={event=>{
+                      const value=hexToRgb(event.target.value);
+                      if(value) void perform(()=>invoke('studio.lightUpdate',{index:selected,entityId:selectedId ?? undefined,key:'color',value}));
+                    }}/>
+                  <code>{rgbToHex(lightColor(activeLight)).toUpperCase()}</code>
+                </span>
+              </label>
               {lightFields.map(property => <PropertyField key={selected + ':' + property.key}
                 property={property} disabled={busy || !available || !nativeConnected()}
                 onChange={value => editLight(property.key, value)}/>)}
@@ -122,6 +165,12 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
             </div>}
           </>}
       </div>}
-    <div className="panel-footer">Authoring data · use Save in the main toolbar to persist</div>
+    <div className="panel-footer">
+      <button className="au-button au-button--sm" disabled={!dirty||busy||loading||!available||!nativeConnected()} onClick={async()=>{
+        setBusy(true);setError('');
+        try{await saveMap();}catch(e){setError(e instanceof Error?e.message:String(e));}
+        finally{setBusy(false);}
+      }}>Save map</button>
+    </div>
   </section>;
 }

@@ -1,0 +1,10 @@
+{
+  "sha": "fba8172ab63c577386ae563614b00c4c9bade0e0",
+  "argv": [
+    "bash",
+    "/tmp/atlas-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-bake-atlas.log.txt",
+  "sha256": "0271a10694ae618116b4b1124245fee8b4977fe703b4c9c5ccc3ce12c34f1353"
+}

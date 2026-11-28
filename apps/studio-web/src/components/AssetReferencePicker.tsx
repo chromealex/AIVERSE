@@ -143,7 +143,7 @@ export default function AssetReferencePicker({
           <button type="button" aria-label="Close asset chooser" onClick={() => setOpen(false)}><X size={18}/></button>
         </header>
         <label className="studio-asset-reference__search"><Search size={16}/>
-          <input autoFocus value={search} onChange={event => setSearch(event.target.value)}
+          <input data-dialog-autofocus value={search} onChange={event => setSearch(event.target.value)}
             placeholder={folderMode?'Search folder path…':'Search name, path or GUID…'} aria-label="Search assets"/>
         </label>
         <div className="studio-asset-reference__results" role="listbox" aria-label="Available assets">

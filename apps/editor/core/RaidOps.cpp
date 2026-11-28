@@ -15,6 +15,13 @@ Json mapView(const MapDoc& doc) {
     if (const Json& r = doc.data.extra["raid"]; !r.isNull()) m.set("raid", r);
     return m;
 }
+void applyMapRaid(Workspace& ws, const Json& candidate) {
+    game::raidRulesForMap(ws.project.rules, candidate);
+    ws.map.beginEdit();
+    if (candidate.has("raid")) ws.map.data.extra.set("raid", candidate["raid"]);
+    else ws.map.data.extra.erase("raid");
+    ws.map.touched();
+}
 const char* const kPhase[] = {"briefing", "running", "over"};
 const char* const kPointPhase[] = {"locked", "sleep", "inbound", "open", "departing"};
 const char* const kStatus[] = {"waiting", "in_raid", "extracted", "dead", "timeout", "abandoned"};
@@ -168,11 +175,9 @@ void registerRaidOps(Workspace& ws) {
                 return e;
             };
             if (toMap) {
-                w->map.beginEdit();
-                if (del) w->map.data.extra.erase("raid");
-                else { Json e = merged(w->map.data.extra.find("raid")); w->map.data.extra.set("raid", e); }
-                game::raidRulesForMap(w->project.rules, mapView(w->map));   // throws: the snapshot is still there to undo
-                w->map.touched();
+                Json candidate = Json::object();
+                if (!del) candidate.set("raid", merged(w->map.data.extra.find("raid")));
+                applyMapRaid(*w, candidate);
                 w->note({Change::Map, 0, 0, -1, -1, -1, "Рейд карты"});
             } else {
                 Json rules = w->project.rulesJson;
@@ -200,8 +205,8 @@ void registerRaidOps(Workspace& ws) {
             if (!w->project.rules.raid.enabled) throw std::runtime_error("the game has no rules \"raid\" block (raid_set first)");
             const std::string id = p.getStr("id");
             if (id.empty()) throw std::runtime_error("id expected");
-            w->map.beginEdit();
-            Json& raid = w->map.data.extra.member("raid");
+            Json candidate = mapView(w->map);
+            Json& raid = candidate.member("raid");
             Json& pts = raid.member("points");
             if (!pts.isArray()) pts = Json::array();
             size_t at = pts.size();
@@ -212,8 +217,7 @@ void registerRaidOps(Workspace& ws) {
                 e.set("id", str(id));
                 if (at < pts.size()) pts.at(at) = e; else pts.push(e);
             }
-            game::raidRulesForMap(w->project.rules, mapView(w->map));   // validate
-            w->map.touched();
+            applyMapRaid(*w, candidate);
             w->note({Change::Map, 0, 0, -1, -1, -1, "Точка эвакуации: " + id});
             Json r = Json::object();
             r.set("ok", Json::fromBool(true));

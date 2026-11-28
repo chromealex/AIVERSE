@@ -112,6 +112,13 @@ public:
     bool outlineHovered() const { return outlineHovered_; }
     const std::vector<OverlayMinimapMark>& minimapMarks() const { return marks_; }
 
+    struct PlanPrimitive {
+        render::float3 a, b, c;
+        uint32_t color;
+        bool triangle;
+    };
+    // Capture the ground pass of a private CPU preview using the same shape emitter as drawWorld.
+    std::vector<PlanPrimitive> groundPlan(const GameScene&, const MapGrid&, double time, Json* screen = nullptr);
     void drawWorld(render::Renderer3D& r, const GameScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid, const GameView& view);
     void drawScreen(const render::Camera& cam, const GameScene& s, float w, float h, float ox, float oy, void* drawList, const GameView& view);
     // view.draw batches of the view scripts (window points), in layer order; textures through this TextureCache.
@@ -127,6 +134,8 @@ public:
     size_t popupCount() const { return popups_.size(); }
 
 private:
+    std::vector<PlanPrimitive>* plan_ = nullptr;
+    void appendPlan(PlanPrimitive primitive);
     struct Inst {
         render::float3 pos;              // world point (y = ground)
         int obj = -1;                    // scene object index
@@ -173,7 +182,7 @@ private:
     size_t cellCap(const OverlayDef& d) const;
     bool resolveTo(const OverlayDef& d, const Inst& in, render::float3& out) const;
     // GameOverlaysDraw.cpp: world geometry
-    void emit(const OverlayDef& d, size_t di, const Inst& in);
+    void emit(const OverlayDef& d, size_t di, const Inst& in, Json* icons = nullptr);
     float groundY(const OverlayDef& d, float x, float z, float anchorGround) const;
     void seg(const OverlayDef& d, render::float3 a, render::float3 b, uint32_t col);
     void tri(const OverlayDef& d, render::float3 a, render::float3 b, render::float3 c, uint32_t col, gfx::TextureHandle tex = {},
@@ -188,7 +197,8 @@ private:
     Bucket& bucket(gfx::TextureHandle tex, uint8_t pipe);
     void flush(render::Renderer3D& r);
     // GameOverlaysDraw.cpp: screen elements
-    void drawScreenInst(const OverlayDef& d, size_t di, const Inst& in, float sx, float sy, void* dl);
+    template<class Visit> void visitScreen(const GameScene&, Visit&&);
+    void drawScreenInst(const OverlayDef& d, size_t di, const Inst& in, float sx, float sy, void* dl, Json* preview = nullptr);
 
     const Rules* rules_ = nullptr;
     gfx::Device* dev_ = nullptr;

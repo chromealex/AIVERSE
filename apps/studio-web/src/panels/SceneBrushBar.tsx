@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import TileAtlasPicker from './TileAtlasPicker';
 import { Brush, Spline } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import { WorldProcessDiagnostics } from '../components/WorldProcessDiagnostics';
@@ -6,9 +7,9 @@ import type { StudioSceneBrush, EvolveLayer, EvolveLiveState, AetherLayer } from
 
 export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
-  terrain: 'Sculpt', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', field: 'Field', road: 'Draw road', river: 'Draw river', caverns: 'Caverns',
+  terrain: 'Sculpt', sparse: 'Open world', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', region: 'Regions', field: 'Field', road: 'Draw road', river: 'Draw river', caverns: 'Caverns',
 };
-const OPS: Array<[StudioSceneBrush['op'], string]> = [['raise', 'Raise'], ['lower', 'Lower'], ['smooth', 'Smooth'], ['flatten', 'Flatten'], ['noise', 'Noise'], ['erode', 'Erode']];
+const OPS: Array<[StudioSceneBrush['op'], string]> = [['raise', 'Raise'], ['lower', 'Lower'], ['smooth', 'Smooth'], ['flatten', 'Flatten'], ['set','Set height'], ['noise', 'Noise'], ['erode', 'Erode'], ['stamp','Stamp']];
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as Record<string, any>;
 
@@ -174,7 +175,7 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
       <button type="button" onClick={()=>setHistory([])}>Clear history</button><button type="button" onClick={()=>exportHistory('csv')}>CSV</button><button type="button" onClick={()=>exportHistory('json')}>JSON</button>
     </div>}{nutrients&&<small>Absorbed: {state.absorbedUnits??"—"} · respired: {state.respiredUnits??"—"}</small>}{vegetation&&<small>Rooted plants: {state.plantCount??0} · displayed {state.plants?.length??0}</small>}</div>;
 }
-export function EcologyLayerPicker(){
+export function EcologyLayerPicker({showDiagnostics=true}:{showDiagnostics?:boolean}={}){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
   const [live,setLive]=useState(false);
   const [granularCellCm,setGranularCellCm]=useState(0);
@@ -193,48 +194,58 @@ export function EcologyLayerPicker(){
     const next=e.target.value as EvolveLayer;
     setPending(true);
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label><input type="checkbox" checked={liveGravity} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveGravity:e.target.checked}).then(r=>{setLiveGravity(r.liveGravity??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Effective PHYSIS gravity (planet)</label><label><input type="checkbox" checked={liveFracture} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveFracture:e.target.checked}).then(r=>{setLiveFracture(r.liveFracture??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>FRACTURE structural state (planet)</label><label><input type="checkbox" checked={liveMorph} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveMorph:e.target.checked}).then(r=>{setLiveMorph(r.liveMorph??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>MORPH node displacement (planet)</label><label><input type="checkbox" checked={liveEcho} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveEcho:e.target.checked}).then(r=>{setLiveEcho(r.liveEcho??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>ECHO acoustic graph (planet)</label><label><input type="checkbox" checked={liveCrowd} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveCrowd:e.target.checked}).then(r=>{setLiveCrowd(r.liveCrowd??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>CROWD reservations / routes (planet)</label><label><input type="checkbox" checked={liveCircuit} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveCircuit:e.target.checked}).then(r=>{setLiveCircuit(r.liveCircuit??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>CIRCUIT power / logic (planet)</label><label><input type="checkbox" checked={liveSociety} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveSociety:e.target.checked}).then(r=>{setLiveSociety(r.liveSociety??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>SOCIETY knowledge / trust (planet)</label><label className="ptp__row"><span>AETHER gas mass / potential (planet)</span><select className="au-input" value={aetherLayer} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{aetherLayer:e.target.value as AetherLayer}).then(r=>{setAetherLayer(r.aetherLayer??'off');setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}>{(['off','smoke','toxin','oxygen'] as const).map(v=><option key={v} value={v}>{v}</option>)}</select></label><label className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label data-debug-live-toggle><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label data-debug-requires-live><input type="checkbox" checked={liveGravity} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveGravity:e.target.checked}).then(r=>{setLiveGravity(r.liveGravity??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Effective PHYSIS gravity (planet)</label><label data-debug-requires-live><input type="checkbox" checked={liveFracture} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveFracture:e.target.checked}).then(r=>{setLiveFracture(r.liveFracture??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>FRACTURE structural state (planet)</label><label data-debug-requires-live><input type="checkbox" checked={liveMorph} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveMorph:e.target.checked}).then(r=>{setLiveMorph(r.liveMorph??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>MORPH node displacement (planet)</label><label data-debug-requires-live><input type="checkbox" checked={liveEcho} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveEcho:e.target.checked}).then(r=>{setLiveEcho(r.liveEcho??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>ECHO acoustic graph (planet)</label><label data-debug-requires-live><input type="checkbox" checked={liveCrowd} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveCrowd:e.target.checked}).then(r=>{setLiveCrowd(r.liveCrowd??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>CROWD reservations / routes (planet)</label><label data-debug-requires-live><input type="checkbox" checked={liveCircuit} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveCircuit:e.target.checked}).then(r=>{setLiveCircuit(r.liveCircuit??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>CIRCUIT power / logic (planet)</label><label data-debug-requires-live><input type="checkbox" checked={liveSociety} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveSociety:e.target.checked}).then(r=>{setLiveSociety(r.liveSociety??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>SOCIETY knowledge / trust (planet)</label><label data-debug-requires-live className="ptp__row"><span>AETHER gas mass / potential (planet)</span><select className="au-input" value={aetherLayer} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{aetherLayer:e.target.value as AetherLayer}).then(r=>{setAetherLayer(r.aetherLayer??'off');setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}>{(['off','smoke','toxin','oxygen'] as const).map(v=><option key={v} value={v}>{v}</option>)}</select></label><label data-debug-requires-live className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
     setPending(true);void invoke('studio.evolveLayer',{granularCellCm:Number(e.target.value)}).then(r=>{setGranularCellCm(r.granularCellCm??0);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{Array.from(new Set([0,10,25,50,100,200,500,1000,2000,5000,10000,granularCellCm])).sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n===0?'Off':n}</option>)}</select></label><small>Display scale only; ground-relative tops, no physical geometry changes.</small><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
+  }}>{Array.from(new Set([0,10,25,50,100,200,500,1000,2000,5000,10000,granularCellCm])).sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n===0?'Off':n}</option>)}</select></label><small>Display scale only; ground-relative tops, no physical geometry changes.</small>{showDiagnostics&&<><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></>}</div>;
 }
-export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
+export interface BrushField { id:string; perPlayer:boolean; layers:number; type:string; min?:number; max?:number; resolution:number; kernels:string[]; effects:string[] }
+const EMPTY_FIELDS: BrushField[] = [];
+export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog, project }: { kinds: BrushKind[]; project:string; tileCatalog?: {mapTileset?:string;tilesets?:{path:string;terrains?:{id:string}[]}[]}; fields?: BrushField[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const [options, setOptions] = useState<{ tiles: string[]; fields: string[]; types: string[]; roads: string[] }>({ tiles: [], fields: [], types: [], roads: [] });
+  const [options, setOptions] = useState<{ types: string[]; roads: string[] }>({ types: [], roads: [] });
   const set = (patch: Partial<StudioSceneBrush>) =>
     void invoke('studio.sceneBrush', patch).then(b => { setBrush(b); setError(''); }).catch(e => setError(message(e)));
   useEffect(() => {
     void invoke('studio.sceneBrush', kinds.includes('terrain') ? {} : { kind: kinds[0] }).then(b =>
       kinds.includes(b.kind) ? setBrush(b) : invoke('studio.sceneBrush', { kind: kinds[0], armed: false }).then(setBrush)).catch(() => {});
-    const off = onNativeEvent((event, payload) => { if (event === 'brush.changed' && payload) setBrush(payload as StudioSceneBrush); });
+    const off = onNativeEvent((event, payload) => { if (event === 'brush.changed' && payload) setBrush(payload as StudioSceneBrush);
+      if (event === 'document.changed' && kinds.includes('sparse')) void invoke('studio.sceneBrush',{}).then(setBrush).catch(()=>{}); });
     // Leaving the panel puts the brush down: Scene clicks select again.
     return () => { off(); void invoke('studio.sceneBrush', { armed: false }).catch(() => {}); void invoke('studio.splineEdit', { kind: '' }).catch(() => {}); };
   }, [kinds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const kind = brush && kinds.includes(brush.kind) ? brush.kind : kinds[0];
   useEffect(() => {
     // Choices for the active tool, from the same ops the panels use.
-    if (kind === 'tiles') void op('tileset_list').then(r => setOptions(o => ({ ...o,
-      tiles: (r.tilesets ?? []).filter((t: any) => !r.mapTileset || t.name === r.mapTileset || t.path?.includes(r.mapTileset)).flatMap((t: any) => (t.terrains ?? []).map((x: any) => x.id)) }))).catch(() => {});
-    if (kind === 'field') void op('field_list').then(r => setOptions(o => ({ ...o, fields: (r.fields ?? []).map((f: any) => f.id) }))).catch(() => {});
     if (kind === 'road') void op('road_types').then(r => setOptions(o => ({ ...o, roads: (r.types ?? []).map((t: any) => t.id ?? t.name).filter(Boolean) }))).catch(() => {});
     if (kind === 'objects') void invoke('studio.rules', {}).then((r: any) => setOptions(o => ({ ...o, types: Object.keys(r.types ?? {}).sort() }))).catch(() => {});
   }, [kind]);
+  const tileset = tileCatalog?.tilesets?.find(t => t.path === tileCatalog.mapTileset);
   // A tool with nothing chosen yet takes the first choice, so a stroke never fails on an empty setting.
   useEffect(() => {
     if (!brush) return;
-    if (kind === 'tiles' && !brush.tile && options.tiles[0]) set({ tile: options.tiles[0] });
-    if (kind === 'field' && !brush.field && options.fields[0]) set({ field: options.fields[0] });
+    if (kind === 'tiles' && tileset?.terrains?.length && !tileset.terrains.some(t => t.id === brush.tile)) set({ tile: tileset.terrains[0].id });
+    if (kind === 'field' && fields.length) {
+      const selected = fields.find(f => f.id === brush.field);
+      if (!selected) set({ field: fields[0].id });
+      else if (selected.perPlayer && selected.layers > 1 && brush.fieldPlayer >= selected.layers) set({ fieldPlayer: 1 });
+    }
     if (kind === 'road' && !brush.roadType && options.roads[0]) set({ roadType: options.roads[0] });
     if (kind === 'objects' && !brush.type && options.types[0]) set({ type: options.types.find(t => /tree|rock|stone/i.test(t)) ?? options.types[0] });
-  }, [kind, options, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, fields, tileset, options, brush?.fieldPlayer, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!brush) return null;
-  const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'field' || kind === 'objects';
+  const field = fields.find(f => f.id === brush.field);
+  const stamping = kind==='terrain' && brush.op==='stamp';
+  const detailOnly = (op:StudioSceneBrush['op']) => op==='erode' || op==='stamp';
+  const usesDetail = !(brush.planet && kind==='paint') && (brush.terrainGrid==='detail' || (brush.terrainGrid==='auto' && (kind==='paint' || brush.detailScale>0 || detailOnly(brush.op))));
+  const continuous = kind === 'terrain' || kind === 'sparse' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
-    <EcologyLayerPicker/>
+    {kinds.includes('terrain') && <h3 className="terrain-brush-heading">Terrain brush</h3>}
+    {kind !== 'field' && kind !== 'river' && !kinds.includes('region') && !kinds.includes('terrain') && <EcologyLayerPicker/>}
     <div className="tbrush__row">
-      <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed}
-        onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title="Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)">
+      <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed} disabled={!brush.armed && ((kind === 'tiles' && !tileset?.terrains?.length) || (kind === 'field' && (!field || (field.perPlayer && field.layers <= 1))))}
+        onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title={kind==='terrain' && brush.op==='stamp'?'Click to stamp the Scene ([ ] size, Esc stops)':'Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)'}>
         <Brush size={13}/>{brush.armed ? 'Brush on' : 'Brush'}</button>
       {(kind === 'road' || kind === 'river') && <button type="button" className={'au-button au-button--sm' + (editing ? ' au-button--primary' : '')}
         aria-pressed={editing} title="Show the nodes in the Scene and drag them (each move is one History step)"
@@ -244,15 +255,85 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
         {kinds.map(k => <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'is-on' : ''}
           onClick={() => set({ kind: k })}>{KIND_LABEL[k]}</button>)}</div>}
     </div>
+    {kind === 'sparse' && <fieldset className="tbrush__stamp"><legend>Open-world terrain</legend>
+      <Choice label="Chunk operation" value={brush.sparseMode} options={['create','raise','lower']}
+        onChange={v=>set({sparseMode:v as StudioSceneBrush['sparseMode']})}/>
+      {brush.sparseChunks ? <small>{brush.sparseChunks} {brush.sparseChunks===1?'chunk':'chunks'} · {brush.chunkMetres} m each</small>
+        : <Slider label="Chunk size (m)" value={brush.chunkMetres} min={16} max={1024} step={1} onCommit={v=>set({chunkMetres:v})}/>}
+      {brush.sparseMode!=='create' && <Slider label="Depth (cm)" value={brush.depthCm} min={1} max={500} step={1} onCommit={v=>set({depthCm:v})}/>}
+      <button type="button" className="au-button au-button--sm" onClick={async()=>{
+        try {
+          const camera=await invoke('studio.viewportInput',{kind:'camera'}) as {x?:number;z?:number};
+          if(camera.x===undefined || camera.z===undefined)throw new Error('Open the Scene to place a chunk at the camera target');
+          await op('terraweave_sparse_paint',{mode:'create',xCm:Math.round(camera.x*100),zCm:Math.round(camera.z*100),chunkMetres:brush.chunkMetres});
+          set({});
+        }catch(e){setError(message(e));}
+      }}>Create chunk at camera target</button>
+      <small>Paint beyond the map edge. Hold Shift to reverse raise and lower.</small>
+    </fieldset>}
+    {(kind==='terrain' || (kind==='paint' && !brush.planet)) && <label className="ptp__row"><span>Terrain grid</span>
+      <select className="au-input" value={brush.terrainGrid} onChange={e=>{
+        const terrainGrid=e.target.value as StudioSceneBrush['terrainGrid'];
+        set({terrainGrid,...(terrainGrid==='base' && detailOnly(brush.op)?{op:'raise' as const}:{})});
+      }}>
+        <option value="auto">{brush.planet?'Automatic (body grid)':<>Automatic ({kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)?'detail':'base'})</>}</option>
+        <option value="base">Base cells</option><option value="detail">Detail samples</option>
+      </select></label>}
+    {(kind==='terrain' || kind==='paint') && !brush.planet && brush.terrainGrid==='base' && brush.detailScale>0 &&
+      <small>{brush.armed?'Scene shows the base grid. Turn the brush off to see the detail surface.':'Turn the brush on to see and edit the base grid.'}</small>}
     {kind === 'terrain' && <div className="ptp__seg" role="radiogroup" aria-label="Sculpt operation">
-      {OPS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
+      {OPS.filter(([id])=>(!brush.planet && brush.terrainGrid!=='base') || !detailOnly(id)).map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
         className={brush.op === id ? 'is-on' : ''} onClick={() => set({ op: id })}>{label}</button>)}</div>}
-    {kind === 'paint' && <Slider label="Layer" value={brush.layer} min={0} max={3} step={1} onCommit={v => set({ layer: v })}/>}
-    {kind === 'tiles' && <Choice label="Terrain" value={brush.tile} options={options.tiles} onChange={v => set({ tile: v })}/>}
+    {kind === 'terrain' && brush.op==='set' && <fieldset className="tbrush__stamp"><legend>Target elevation</legend>
+      <label className="ptp__row"><span>Height (m)</span><input className="au-input" type="number" step="any" min={-2048} max={2047.9375}
+        key={brush.targetHeight} defaultValue={brush.targetHeight} onBlur={e=>{
+          if(e.target.value!=='' && e.target.validity.valid)set({targetHeight:e.target.valueAsNumber});
+          else e.target.value=String(brush.targetHeight);
+        }} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>
+      <button type="button" className="au-button au-button--sm" aria-pressed={brush.pickHeight}
+        onClick={()=>set({armed:true,pickHeight:!brush.pickHeight})}>{brush.pickHeight?'Cancel height pick':'Pick height from Scene'}</button>
+    </fieldset>}
+    {kind === 'terrain' && brush.op==='stamp' && <fieldset className="tbrush__stamp"><legend>Terrain stamp</legend>
+      <label className="ptp__row"><span>Shape</span><select className="au-input" value={brush.stamp}
+        onChange={e=>set({stamp:e.target.value as StudioSceneBrush['stamp']})}>
+        {['crater','mesa','dunes','rocks'].map(s=><option key={s} value={s}>{s}</option>)}</select></label>
+      <Slider label="Rotation (°)" min={0} max={360} step={1} value={brush.angle} onCommit={angle=>set({angle})}/>
+      <label className="ptp__row"><span>Seed</span><input className="au-input" type="number" min={0} max={4294967295} step={1}
+        key={brush.seed} defaultValue={brush.seed} onBlur={e=>{
+          if(e.target.validity.valid && Number.isInteger(e.target.valueAsNumber))set({seed:e.target.valueAsNumber});
+          else e.target.value=String(brush.seed);
+        }}/></label>
+    </fieldset>}
+    {(kind==='terrain' || kind==='paint') && usesDetail && <Slider label="Hardness" min={0} max={0.95} step={0.05}
+      value={brush.hardness} onCommit={hardness=>set({hardness})}/>}
+    {brush.planet && (kind==='paint' || kind==='terrain') && <small>Paint the visible body in Scene. Radius is measured in surface cells.</small>}
+    {kind==='paint' && !usesDetail && <small>Hold Shift while painting to restore the cell material.</small>}
+    {kind === 'paint' && <label className="ptp__row"><span>Layer</span>
+      <select className="au-input" value={brush.layer} onChange={e=>set({layer:Number(e.target.value)})}>
+        {[0,1,2,3].map(i=><option key={i} value={i}>{brush.layerNames?.[i] ?? `Layer ${i}`}</option>)}
+      </select></label>}
+    {kind === 'region' && <label className="ptp__row"><span>Region</span>
+      <select value={brush.regionLetter} onChange={e => set({ regionLetter: e.target.value })}>
+        {Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ', letter => <option key={letter}>{letter}</option>)}
+        <option value=".">Erase region</option>
+      </select></label>}
+    {kind === 'tiles' && <>
+      <Choice label="Terrain" value={brush.tile} options={tileset?.terrains?.map(t => t.id) ?? []} onChange={v => set({ tile: v })}/>
+      {tileset && <TileAtlasPicker key={project + '/' + tileset.path} project={project} tileset={tileset.path}
+        tile={brush.fixedTile} select={fixedTile => set({fixedTile})}/>}
+    </>}
     {kind === 'field' && <>
-      <Choice label="Field" value={brush.field} options={options.fields} onChange={v => set({ field: v })}/>
+      <Choice label="Field" value={brush.field} options={fields.map(f => f.id)} onChange={v => set({ field: v })}/>
+      {field && <small>{field.type === 'fixed' ? 'Fractional' : 'Integer'} · {field.resolution} × {field.resolution} map cells per field cell
+        {field.kernels.length > 0 && ' · Kernels: ' + field.kernels.join(', ')}
+        {field.effects.length > 0 && ' · Effects: ' + field.effects.join(', ')}</small>}
+      {field?.perPlayer && <label className="ptp__row"><span>Player layer</span>
+        <select className="au-input" value={brush.fieldPlayer} onChange={e => set({ fieldPlayer: Number(e.target.value) })}>
+          {Array.from({length: field.layers - 1}, (_, i) => <option key={i} value={i + 1}>Player {i + 1}</option>)}
+        </select></label>}
+      <small>Hold Shift while painting to erase.</small>
       <Choice label="Mode" value={brush.fieldMode} options={['set', 'add', 'max', 'erase']} onChange={v => set({ fieldMode: v as StudioSceneBrush['fieldMode'] })}/>
-      <Slider label="Value" value={brush.value} min={0} max={100} step={1} onCommit={v => set({ value: v })}/></>}
+      {brush.fieldMode !== 'erase' && <Slider label="Value" value={Math.max(field?.min ?? -1000, Math.min(field?.max ?? 1000, brush.value))} min={field?.min ?? -1000} max={field?.max ?? 1000} step={field?.type === 'fixed' ? 0.01 : 1} onCommit={v => set({ value: v })}/>}</>}
     {kind === 'objects' && <>
       <Choice label="Type" value={brush.type} options={options.types} onChange={v => set({ type: v })}/>
       <Slider label="Owner" value={brush.owner} min={-1} max={8} step={1} onCommit={v => set({ owner: v })}/>
@@ -260,11 +341,15 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
       <Slider label="Spread" value={brush.spread} min={0} max={8} step={0.5} onCommit={v => set({ spread: v })}/></>}
     {kind === 'road' && <Choice label="Road type" value={brush.roadType} options={options.roads} onChange={v => set({ roadType: v })}/>}
     {kind === 'river' && <Slider label="Width, m" value={brush.width} min={2} max={80} step={1} onCommit={v => set({ width: v })}/>}
-    {continuous && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={0.5} max={24} step={0.5} onCommit={v => set({ radius: v })}/>}
-    {(kind === 'terrain' || kind === 'paint') && <Slider label="Strength" value={brush.strength} min={0.05}
+    {kind === 'region' && <Slider label="Radius (cells)" value={Math.floor(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.5 })}/>}
+    {kind === 'field' && <Slider label="Radius (cells)" value={Math.round(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.25 })}/>}
+    {continuous && kind !== 'region' && kind !== 'field' && !(kind==='sparse' && brush.sparseMode==='create') && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={stamping?0.25:0.5} max={stamping?32:24} step={stamping?0.25:0.5} onCommit={v => set({ radius: v })}/>}
+    {((kind === 'terrain' && brush.op!=='set') || (kind === 'paint' && usesDetail)) && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}
-    {brush.armed && <p className="ptp__hint">{continuous ? 'Drag in the Scene to paint' : 'Drag the path in the Scene; it is built on release'} · one History step per stroke · [ ] size · Esc stops</p>}
+    {brush.pickHeight && <p className="ptp__hint">Click the terrain to sample its elevation · Esc cancels</p>}
+    {brush.armed && !brush.pickHeight && <p className="ptp__hint">{kind==='terrain' && brush.op==='stamp' ? 'Click in the Scene to place one stamp' : continuous ? 'Drag in the Scene to paint' : 'Drag the path in the Scene; it is built on release'} · one History step per stroke · [ ] size · Esc stops</p>}
+    {(kinds.includes('terrain') || kinds.includes('region') || kind === 'river') && <details><summary>World overlays</summary><EcologyLayerPicker/></details>}
     {error && <div className="tool__error" role="alert">{error}</div>}
   </div>;
 }

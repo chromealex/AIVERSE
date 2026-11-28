@@ -1,4 +1,5 @@
 #include "apps/editor/core/Workspace.h"
+#include <cmath>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -92,6 +93,15 @@ int main() {
     auto followScene = call("lens_scene_validate", Json::parse(R"({"scene":{"version":1,"cameras":[{"id":7,"name":"Follow","camera":{},
         "rig":{"mode":2},"follow":{"preset":"follow-speed","bounds":[0,0,100,80]}}]}})"));
     require(followScene.getBool("ok"), "follow preset camera rejected");
+    auto optics=[&](int focus){
+        auto args=Json::parse(R"({"opticsId":4,"scene":{"version":1,"cameras":[{"id":4,"camera":{},"lens":{"fNumber":4,"shutterSeconds":0.015625,"iso":100}}]}})");
+        args.member("scene").member("cameras").itemsMut()[0].member("lens").set("focusDistance",Json::number(int64_t(focus)));
+        return call("lens_scene_validate",args)["optics"];
+    };
+    const auto finite=optics(5), distant=optics(1000);
+    require(std::abs(finite["ev100"].toDouble()-10)<0.001 && finite["nearMetres"].toDouble()>0 &&
+            finite["nearMetres"].toDouble()<5 && finite["farMetres"].toDouble()>5,"physical camera readouts");
+    require(distant.getBool("farInfinite")&&!distant.has("farMetres"),"infinite far focus must remain valid JSON");
     auto badFollow = call("lens_scene_validate", Json::parse(R"({"scene":{"version":1,"cameras":[{"id":7,"camera":{},"follow":{"preset":"nope"}}]}})"));
     require(!badFollow.getBool("ok"), "unknown follow preset accepted");
     std::cout << "PASS LENS operations: CRUD, stale edits, validation, bounds, symlinks, registry\n";

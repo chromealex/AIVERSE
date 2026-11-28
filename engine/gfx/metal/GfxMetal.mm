@@ -746,19 +746,28 @@ public:
         const MTLPixelFormat pixelFormat = t->tex.pixelFormat;
         const bool isBGRA = pixelFormat == MTLPixelFormatBGRA8Unorm ||
                             pixelFormat == MTLPixelFormatBGRA8Unorm_sRGB;
-        const bool isRGBA = pixelFormat == MTLPixelFormatRGBA8Unorm ||
-                            pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB;
-        const bool isHalf = pixelFormat == MTLPixelFormatRGBA16Float;
-        const bool isFloat = pixelFormat == MTLPixelFormatRGBA32Float;
-        if ((!isBGRA && !isRGBA && !isHalf && !isFloat) ||
-            (isFloat ? t->fmt != PixelFormat::RGBA32F : isHalf ? t->fmt != PixelFormat::RGBA16F :
-             t->fmt != PixelFormat::RGBA8 && t->fmt != PixelFormat::RGBA8_sRGB))
-            return false;
+        bool compatible = false;
+        switch (t->fmt) {
+            case PixelFormat::R8: compatible = pixelFormat == MTLPixelFormatR8Unorm; break;
+            case PixelFormat::RG8: compatible = pixelFormat == MTLPixelFormatRG8Unorm; break;
+            case PixelFormat::R16F: compatible = pixelFormat == MTLPixelFormatR16Float; break;
+            case PixelFormat::RG16F: compatible = pixelFormat == MTLPixelFormatRG16Float; break;
+            case PixelFormat::R32F: compatible = pixelFormat == MTLPixelFormatR32Float; break;
+            case PixelFormat::RG32F: compatible = pixelFormat == MTLPixelFormatRG32Float; break;
+            case PixelFormat::RGBA16F: compatible = pixelFormat == MTLPixelFormatRGBA16Float; break;
+            case PixelFormat::RGBA32F: compatible = pixelFormat == MTLPixelFormatRGBA32Float; break;
+            case PixelFormat::RGBA8:
+            case PixelFormat::RGBA8_sRGB:
+                compatible = isBGRA || pixelFormat == MTLPixelFormatRGBA8Unorm || pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB;
+                break;
+            default: break;
+        }
+        if (!compatible) return false;
         const size_t width = size_t(std::max<NSUInteger>(1,
                               t->tex.width >> request.mipLevel));
         const size_t height = size_t(std::max<NSUInteger>(1,
                                t->tex.height >> request.mipLevel));
-        const size_t bpp = isFloat ? 16u : isHalf ? 8u : 4u;
+        const size_t bpp = uncompressedTexturePixelBytes(t->fmt);
         // Align bytesPerRow for the Metal texture-to-buffer blit.
         if (width > SIZE_MAX / bpp) return false;
         const size_t packedRow = width*bpp;

@@ -1,0 +1,10 @@
+{
+  "sha": "4151ea3a7b94857cb7f09831d34c64f62962165e",
+  "argv": [
+    "bash",
+    "/tmp/studio-model-route.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-model-attachments-navigation.log.txt",
+  "sha256": "b5fa63e40ff8a670ddfeaa0d06da4136cc321bb64c2f925444941b5d61bcd77b"
+}

@@ -1,0 +1,3 @@
+2026-11-26 01:21:05.956 AiverseStudioHTML5[26157:82107771] [studio-web] JS: CROSS bakeproof DONE_1
+2026-11-26 01:21:05.956 AiverseStudioHTML5[26157:82107771] [studio-web] JS: CROSS bakeproof VERIFIED native settings, quality preset, Apply, Undo/Redo, output stats, correct folder and clear
+Verified saved settings indirect 4 256

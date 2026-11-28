@@ -1,0 +1,10 @@
+{
+  "sha": "29330d93ac013c78b49b58972fbef739de3d3c6c",
+  "argv": [
+    "bash",
+    "/tmp/select-area.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-editor-select-area.log.txt",
+  "sha256": "dd7b0c4efb04a2e0c1448d505b5ffc5301318c3bd71fe195f34aa6929c58778d"
+}

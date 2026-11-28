@@ -1,0 +1,4 @@
+2026-11-26 14:07:56.608 AiverseStudioHTML5[21782:84905940] [studio-web] JS: CROSS main DONE_1
+2026-11-26 14:07:56.608 AiverseStudioHTML5[21782:84905940] [studio-web] JS: CROSS main VERIFIED Game plus Post FX, switched to Console plus Post FX, Scene stayed closed
+Explicit all and default captured Studio at (1280, 800) with Game visible and hidden; Scene remained closed.
+Composited Green terrain pixels 325000 versus Console 217 external window alignment 0.942

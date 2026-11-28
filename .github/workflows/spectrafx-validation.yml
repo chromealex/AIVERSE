@@ -42,13 +42,16 @@ jobs:
         with:
           submodules: recursive
           lfs: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Linux graphics and build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q \
             ninja-build libx11-dev libegl-dev libgles-dev libvulkan-dev \
-            xvfb mesa-vulkan-drivers
+            libwebkit2gtk-4.1-dev libsqlite3-dev xvfb mesa-vulkan-drivers
       - name: Configure, build all, test all, verify SpectraFX and Metal
         env:
           AIVERSE_ACCEPTANCE_JOBS: "4"

@@ -163,3 +163,15 @@ test('graph diagnostics component and helper have distinct case-insensitive modu
   assert.match(readFileSync(new URL(relative,import.meta.url),'utf8'),/import GraphDiagnosticsPanel from '[^']*GraphDiagnosticsPanel';/);
  }
 });
+
+test('embedded shader dependencies share repeated texture samples',()=>{
+ const nodes=['content/slate.png','content/slate.png','content/normal.png'].map(texture=>({op:'sampleTexture',texture}));
+ const graph=materialGraph('stone',{shaderGraph:{nodes}});
+ const samples=graph.nodes.filter(node=>node.id.startsWith('shaderTexture:'));
+ assert.deepEqual(samples.map(node=>node.label),['content/slate.png','content/normal.png']);
+ const shader=graph.nodes.find(node=>node.id==='shader');
+ for(const sample of samples){
+  const wire=graph.links.find(link=>link.from===sample.id && link.to===shader.id);
+  assert.ok(shader.inputs.some(port=>port.id===wire?.input));
+ }
+});

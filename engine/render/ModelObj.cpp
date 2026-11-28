@@ -178,6 +178,7 @@ std::unique_ptr<Model> loadObj(const std::string& path, const std::string& text,
                 if (defaultMat < 0) { Material d; d.name = "default"; defaultMat = int(m.materials.size()); m.materials.push_back(d); }
                 p.material = defaultMat;
             } else p.material = mat;
+            p.firstVertex = uint32_t(m.vertices.size());
             p.firstIndex = uint32_t(m.indices.size());
             std::map<std::tuple<int, int, int>, uint32_t> dedup;
             for (size_t i = 0; i < corners.size(); ++i) {
@@ -205,6 +206,7 @@ std::unique_ptr<Model> loadObj(const std::string& path, const std::string& text,
                     m.indices.push_back(id);
                 } else m.indices.push_back(it->second);
             }
+            p.vertexCount = uint32_t(m.vertices.size()) - p.firstVertex;
             p.indexCount = uint32_t(m.indices.size()) - p.firstIndex;
             if (m.materials[size_t(p.material)].normalTex >= 0) generateTangents(m.vertices, m.indices, p.firstIndex, p.indexCount);
             md.primitives.push_back(p);

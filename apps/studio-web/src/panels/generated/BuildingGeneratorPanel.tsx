@@ -1,3 +1,4 @@
+import { revealProjectAsset } from '../../assetNavigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Dices, RefreshCw, WandSparkles } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../../bridge';
@@ -754,9 +755,8 @@ export default function BuildingGeneratorPanel({
 
   const reveal=()=>{
     if(!saved)return;
+    revealProjectAsset(snapshot?.project.path ?? '', saved.path);
     showPanel('assets');
-    // Reopening a dock may mount Assets only on the next React commit.
-    requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path:saved.path}})));
   };
   const applyToSelected=async()=>{
     if(!saved||busy||!snapshot?.selectedId?.startsWith('entity:'))return;
@@ -1306,7 +1306,7 @@ export default function BuildingGeneratorPanel({
       </StudioSection>
       <BuildingMaterialDependenciesView key={snapshot?.project.path??''} bindings={materialBindings} library={materialLibrary}
         onFocusSlot={focusMaterial}
-        onRevealAsset={path=>{showPanel('assets');requestAnimationFrame(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path}})));}}/>
+        onRevealAsset={path=>{revealProjectAsset(snapshot?.project.path ?? '', path);showPanel('assets');}}/>
       <StudioSection title="Texture reimport dependencies">
         <div className="abg__actions">
           <StudioButton variant="secondary" disabled={busy||checkingMaterials||!nativeConnected()}

@@ -565,7 +565,7 @@ void registerModelingOps(Workspace &ws) {
     ws.registerOp({"animation_editor", "Open an authoring asset in the animation editor; tab=clips|graph.", schema,
                    [](const Json &) {
                        auto r = Json::object();
-                       r.set("error", Json::string("animation editor requires AiverseEditor"));
+                       r.set("error", Json::string("animation editor requires a linked Studio session"));
                        return r;
                    },
                    true});

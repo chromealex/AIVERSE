@@ -1,0 +1,10 @@
+{
+  "sha": "438c0a0d8cd86a61443dbd4eba3a18db65c61492",
+  "argv": [
+    "bash",
+    "../rule-report.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-file-rule-report.log.txt",
+  "sha256": "fee6337f1d01afb499edf7c7c02a760970f0c083de0a8bd59c501cba10ccda87"
+}

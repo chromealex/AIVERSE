@@ -4,6 +4,7 @@
 // Call only on a Mac with a real Metal device. No silent device skip.
 #include "engine/gfx/Gfx.h"
 #include "engine/render/AlphaCoverageMips.h"
+#include "engine/render/TexturePreviewGrid.h"
 #include "engine/gfx/VirtualTextureFeedbackPass.h"
 #include "engine/gfx/VirtualTextureStreamer.h"
 #include "engine/gfx/VirtualTextureFileStreamer.h"
@@ -76,6 +77,7 @@ struct Read {
     std::vector<uint8_t> expected;
     std::string label;
     int tolerance = 0; // zero for blits, <=1 LSB for sampled float->UNORM
+    PixelFormat expectedFormat = PixelFormat::RGBA8;
     TextureReadbackResult output;
     bool done = false;
 };
@@ -136,7 +138,7 @@ void verifyReads(Device& dev, const std::vector<std::shared_ptr<Read>>& probes,
             continue;
         }
         const bool shape=p->output.success() &&
-            p->output.format==PixelFormat::RGBA8 &&
+            p->output.format==p->expectedFormat &&
             p->output.width==p->width && p->output.height==p->height &&
             p->output.pixels.size()==p->expected.size();
         if (!shape) {
@@ -157,7 +159,7 @@ void verifyReads(Device& dev, const std::vector<std::shared_ptr<Read>>& probes,
                 "FAIL: %s GPU bytes differ at %zu (wanted %u, got %u, tolerance %d)\n",
                 p->label.c_str(),at,unsigned(*mismatch.first),
                 unsigned(p->output.pixels[at]),p->tolerance);
-        } else std::printf("PASS: %s (%dx%d GPU RGBA8 bytes; tolerance %d)\n",
+        } else std::printf("PASS: %s (%dx%d GPU bytes; tolerance %d)\n",
                            p->label.c_str(),p->width,p->height,p->tolerance);
     }
     timing.compareMs=elapsedMs(compareStart,Clock::now());
@@ -304,6 +306,73 @@ void volume(Device& dev) {
         return r.handle==h;
     }),"Metal resource inventory removes destroyed 3D texture");
 }
+void dataTexturePreviews(Device& dev) {
+    const auto verify = [&](PixelFormat format, const auto& source,
+                            std::array<uint8_t, 3> expected, const char* name) {
+        TextureDesc desc;
+        desc.width = desc.height = 1;
+        desc.format = format;
+        desc.data = source.data();
+        const auto texture = dev.createTexture(desc);
+        check(texture.valid(), name);
+        if (!texture.valid()) return;
+        std::vector<uint8_t> bytes(sizeof(source));
+        std::memcpy(bytes.data(), source.data(), bytes.size());
+        auto read = probe(texture, 0, 0, 1, 1, bytes, name);
+        read->expectedFormat = format;
+        verifyReads(dev, {read}, name);
+        const auto grid = aiverse::render::texturePreviewGrid(read->output, true);
+        check(grid.colors.size() == 1 && grid.colors.front() == expected, name);
+        dev.destroyTexture(texture);
+    };
+    verify(PixelFormat::RG8, std::array<uint8_t,2>{37,217}, {37,217,0}, "RG8 preview");
+    verify(PixelFormat::R16F, std::array<uint16_t,1>{0x3c00}, {188,188,188}, "R16F preview");
+    verify(PixelFormat::RG16F, std::array<uint16_t,2>{0x3c00,0x3400}, {188,124,0}, "RG16F preview");
+    verify(PixelFormat::R32F, std::array<float,1>{0.25f}, {124,124,124}, "R32F preview");
+    verify(PixelFormat::RG32F, std::array<float,2>{3.f,1.f}, {225,188,0}, "RG32F preview");
+}
+
+void redTexturePreview(Device& dev) {
+    const std::vector<uint8_t> pixels{0, 127, 255, 9, 33, 180};
+    TextureDesc desc;
+    desc.width = 3;
+    desc.height = 2;
+    desc.format = PixelFormat::R8;
+    desc.data = pixels.data();
+    const auto texture = dev.createTexture(desc);
+    check(texture.valid(), "allocate R8 preview texture");
+    if (!texture.valid()) return;
+    auto read = probe(texture, 0, 0, 3, 2, pixels, "R8 packed rows");
+    read->expectedFormat = desc.format;
+    verifyReads(dev, {read}, "Studio R8 preview");
+    const auto grid = aiverse::render::texturePreviewGrid(read->output, true);
+    std::vector<std::array<uint8_t, 3>> expected;
+    for (auto value : pixels) expected.push_back({value, value, value});
+    check(grid.colors == expected, "R8 Metal preview displays grayscale");
+    dev.destroyTexture(texture);
+}
+
+void floatTexturePreview(Device& dev) {
+    const std::array<float, 8> pixels{0.f, 1.f, 3.f, 1.f, -1.f, 0.25f, 0.f, 1.f};
+    TextureDesc desc;
+    desc.width = 2;
+    desc.height = 1;
+    desc.format = PixelFormat::RGBA32F;
+    desc.data = pixels.data();
+    const auto texture = dev.createTexture(desc);
+    check(texture.valid(), "allocate RGBA32F preview texture");
+    if (!texture.valid()) return;
+    std::vector<uint8_t> bytes(sizeof(pixels));
+    std::memcpy(bytes.data(), pixels.data(), bytes.size());
+    auto read = probe(texture, 0, 0, 2, 1, bytes, "RGBA32F authored preview colors");
+    read->expectedFormat = desc.format;
+    verifyReads(dev, {read}, "Studio RGBA32F preview");
+    const auto grid = aiverse::render::texturePreviewGrid(read->output, true);
+    const std::vector<std::array<uint8_t, 3>> expected{{0,188,225}, {0,124,0}};
+    check(grid.colors == expected, "RGBA32F Metal preview tone maps authored channels");
+    dev.destroyTexture(texture);
+}
+
 void layered(Device& dev, TextureDimension dimension,int layers,
              const char* name) {
     const auto setupStart=Clock::now();
@@ -332,7 +401,7 @@ void layered(Device& dev, TextureDimension dimension,int layers,
 
     std::printf("TIMING %s create_and_upload_ms=%.3f\n",
                 name,elapsedMs(setupStart,Clock::now()));
-    verifyReads(dev,{
+    const std::vector<std::shared_ptr<Read>> faces = {
         probe(h,0,0,4,4,solid(4,4,{10,70,33,255}),
               std::string(name)+" face/layer0"),
         probe(h,0,last,4,4,
@@ -340,7 +409,18 @@ void layered(Device& dev, TextureDimension dimension,int layers,
               std::string(name)+" last face/layer"),
         probe(h,1,last,2,2,mipData,
               std::string(name)+" authored mip1")
-    },name);
+    };
+    verifyReads(dev,faces,name);
+    for (const auto& face : faces) {
+        const auto grid = aiverse::render::texturePreviewGrid(face->output);
+        const auto& expected = face->expected;
+        const bool matches = grid.error.empty() && grid.columns == face->width &&
+            grid.rows == face->height && grid.colors.size() == expected.size()/4 &&
+            std::all_of(grid.colors.begin(),grid.colors.end(),[&](const auto& rgb){
+                return rgb[0] == expected[0] && rgb[1] == expected[1] && rgb[2] == expected[2];
+            });
+        check(matches,(face->label+" Studio preview RGB").c_str());
+    }
     dev.destroyTexture(h);
 }
 
@@ -1305,6 +1385,9 @@ int main() {
                     elapsedMs(testStart,deviceReady));
         orderedArrayReuse(*device);
         volume(*device);
+        dataTexturePreviews(*device);
+        redTexturePreview(*device);
+        floatTexturePreview(*device);
         layered(*device,TextureDimension::Texture2DArray,2,"Texture2DArray");
         layered(*device,TextureDimension::Cube,6,"Cube");
         layered(*device,TextureDimension::CubeArray,12,"CubeArray");

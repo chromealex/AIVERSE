@@ -1,3 +1,5 @@
+import { STUDIO_PANEL_TITLES, type StudioPanel } from '../nestedDock.ts';
+
 /** How a transcript line of the agent run is shown (lines come from AgentRun: prompts, texts, tool calls, status). */
 export type AgentLineKind = 'user' | 'tool' | 'done' | 'error' | 'text';
 export function agentLineKind(line: string): AgentLineKind {
@@ -8,14 +10,22 @@ export function agentLineKind(line: string): AgentLineKind {
   return 'text';
 }
 
-/** Extensions "open_window" commands name legacy window ids; map them to Studio panels (null when there is none). */
-const LEGACY_TO_PANEL: Record<string, string> = {
-  inspector: 'inspector', hierarchy: 'hierarchy', scene: 'scene', game: 'game', console: 'console', assets: 'assets', rules: 'rules',
-  terrain: 'terrain', water: 'water', roads: 'roads', tiles: 'tiles', fog: 'fog', generate: 'generate', fields: 'fields', physis: 'physis',
-  postfx: 'postfx', effects: 'effects', lightbake: 'lightbake', models: 'models', scripts: 'scripts', input: 'input', overlays: 'overlays',
-  branding: 'branding', studio_asset_audit: 'asset_audit', stats: 'stats', agent: 'agent', build: 'build', lighting: 'lighting', materials: 'materials',
-  FpsWindow: 'actor', raid: 'raid', ModelingWindow: 'modeling', spectrafx_graph: 'fx_graph', spectrafx_gpu_assets: 'fx_functions',
-  animation_assets: 'anim_assets', animation_graph: 'anim_graph', animation_rig: 'anim_rig', AnimationWindow: 'model_anim',
-  project_import: 'project_import', studio_snapshot_diff: 'snapshot_diff', studio_frame_capture: 'frame_capture', texture_resources: 'texture_resources', animation_attachments: 'attachments', studio_extensions: 'extensions',
+// For renamed windows, keep the ImGui registration id in project menu callbacks.
+const windowForPanel: Partial<Record<StudioPanel,string>> = {
+  anim_assets: 'animation_assets', anim_graph: 'animation_graph', anim_rig: 'animation_rig',
+  animation: 'animation_authoring', attachments: 'animation_attachments', asset_audit: 'studio_asset_audit',
+  extensions: 'studio_extensions', frame_capture: 'studio_frame_capture', snapshot_diff: 'studio_snapshot_diff',
+  static_geometry: 'static-geometry', fx_functions: 'spectrafx_gpu_assets', fx_graph: 'spectrafx_vfx_graph',
 };
-export function extensionPanelFor(id: string): string | null { return LEGACY_TO_PANEL[id] ?? null; }
+const panelForWindow = new Map<string,StudioPanel>([
+  ...Object.entries(windowForPanel).map(([panel,id]) => [id,panel as StudioPanel] as const),
+  ['spectrafx_graph','fx_graph'], ['lens_cameras','actor'], ['tools','scene'], ['studio_camera_bookmarks','scene'],
+  ['FpsWindow','actor'], ['ModelingWindow','modeling'], ['AnimationWindow','model_anim'],
+]);
+
+export function extensionPanelFor(id: string): StudioPanel | null {
+  return panelForWindow.get(id) ?? (Object.hasOwn(STUDIO_PANEL_TITLES,id) ? id as StudioPanel : null);
+}
+export function extensionWindowFor(panel: StudioPanel): string {
+  return windowForPanel[panel] ?? panel;
+}

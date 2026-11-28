@@ -945,3 +945,41 @@ The full `./run-tests.sh --jobs 4 --ctest-jobs 4` suite must be rerun/confirmed 
 ## Stage 65 — focused Windows CI threshold conversion (2026-11-25)
 
 In the Feature Gate integration, GitHub Actions Windows InputFlow job 139103582767 failed under MSVC /WX on the double literal passed to a float bound in engine/platform/EnhancedInputConfig.h:226 (C4305). Commit 0f840cea9 makes that literal a float. The parser already accepted a float bound. The public API, device authority, and serialized bindings are unchanged. On macOS the CI standalone build from tests/libraries compiled the core, adapter, config and RTS targets, and CTest passed 4/4. The main project's default build does not define these standalone targets. The next check is the same Windows Actions job on this revision or its integrated descendant.
+
+HTML Studio migration, 2026-11-27. Stage d59d11903045978e8e031f4847331ba265e7cd65 adds device index editing to apps/studio-web/src/panels/ProjectToolPanels.tsx using the existing control codec. The native schema and API are unchanged. npm --prefix apps/studio-web run build passed, and the detached macOS Input panel saved a gamepad button binding at index 3 after switching from touch index 31. See docs/handoff/studio-html5/captures/mac-input-device-index.png. Next transfer action and binding modifier and trigger editors from apps/editor/windows/InputWindow.cpp.
+
+### HTML Studio Input modifier editors
+
+9d2906145aca6612242480d49b797a3df91b3ae0 adds apps/studio-web/src/panels/InputModifiers.tsx, used by ProjectToolPanels.tsx with the existing codec shapes in apps/studio-web/src/types.ts. Action and mapping chains support scale, negate, deadzone, swizzle and normalize. npm --prefix apps/studio-web run build passed. Detached native Mac UI saved action scale X=2.5 and mapping swizzle [2,1,2], verified by independent JSON parse. Evidence in stats-mac-5n_9fa75/live.log and docs/handoff/studio-html5/captures/mac-input-modifiers.png. Remaining work includes trigger authoring and verification of the other modifier kinds.
+
+### Input trigger authoring in HTML Studio
+
+c583dd34bf384bba401a3e35b4392ac9d0e135b6 adds apps/studio-web/src/panels/InputTriggers.tsx with the existing input schema in apps/studio-web/src/types.ts and both authoring locations in ProjectToolPanels.tsx. Production web build passed. The detached Mac Input panel saved a 1.75 second hold on Interact and a chord referencing Action on its keyboard binding. Disk JSON verified both trigger objects. See stats-mac-t0w1d8my/live.log and docs/handoff/studio-html5/captures/mac-input-triggers.png. Remaining checks include chord reference maintenance when renaming and deleting actions, defaults and keyboard capture.
+
+### Input chord reference lifecycle
+
+920d4a271d8b4e4778ed73f0b2f5ca679c7e1f8c adds inputActionReferences.ts and updates ProjectToolPanels.tsx. Web production build passed. Detached Mac Input renamed the target to Sprint and native reload confirmed the action NotChord and binding Chord both referenced Sprint. Delete and Save preserved the unrelated binding and removed both dependent triggers, verified from disk. Initial automation retained stale DOM rows after deletion; fresh queries passed (stats-mac-ua417j84/live.log, captures/mac-input-chord-removal.png). Next transfer keyboard capture and its conflict policies.
+
+### HTML Input FPS and RTS reference presets
+
+2a6c1c0a0e02b3088a7a51f03983cbf57cce0fd4 exposes the existing engine presets via StudioSession.cpp and types.ts to ProjectToolPanels.tsx. The production web build and incremental native aiverse_studio target passed. Detached rebuilt Mac Input showed FPS LookStick without writing a file, replaced it with RTS AttackMove, saved RTS, and reverted another unsaved FPS change to the saved RTS actions. Parsed input/actions.json to verify the AttackMove mapping. Evidence: stats-mac-l08ellb5/live.log and docs/handoff/studio-html5/captures/mac-input-defaults.png. Next migrate keyboard capture and binding conflict policies.
+
+### HTML Input keyboard capture and conflict policies
+
+de4004e7ad79045d2ef1984cfb388ee964359c00 adds InputKeyCapture.tsx and updates ProjectToolPanels.tsx. Production web build passed. Detached Mac WKWebView synthetic keyboard events verified Escape cancel, rejection, swapping and allowing duplicate keys in one context. Save persisted the duplicate to the temporary project's input/actions.json, independently parsed after exit. Evidence in stats-mac-ke1djl13/live.log and docs/handoff/studio-html5/captures/mac-input-key-capture.png. Hardware input and cross-context conflict diagnostics still require acceptance.
+
+### Input context conflict diagnostics
+
+f885b73f39fe73e2108115949b92405b160dbc19 adds studio.inputConflicts in StudioSession.cpp and a draft report in ProjectToolPanels.tsx with bridge types and mock handling. EnhancedInputCore.h returns ordered bounded rows with an exact total; tests/libraries/enhanced_input_tests.cpp passed via clang++ -std=c++20 -I. Source web build passed. In detached WKWebView, priority 5 preceded priority 0, consuming the key shadowed the later binding, shared controls were reported when consumption was disabled, and disabling the context cleared the result. No input/actions.json was created. See stats-mac-dfs0ng17/live.log and captures/mac-input-context-conflicts.png. The first Mac UI check used the pre-optimization binary. Final integrated native rebuild and RPC limit check remain pending.
+
+### Input modifier chain persistence
+
+7013663eb73aa492771c133fa86c8180f375130e updates docs/studio-html5-parity.md and adds docs/handoff/studio-html5/captures/mac-input-negate-normalize-deadzone.png. Detached Mac Input saved action modifiers negate then normalize, and a keyboard binding deadzone of 0.375. Revert restored the saved action name and the independent disk check confirmed modifier order and threshold. Evidence: stats-mac-ft6i997w/live.log. The bounded native conflict query awaits the integrated rebuild.
+
+### Complete Input trigger chain persistence
+
+de00861f91bae4579a1f2b698f798661877812fb updates docs/studio-html5-parity.md and adds captures/mac-input-trigger-chain.png. A detached Mac Input window authored all ten trigger kinds on one action. The independently parsed input/actions.json matched their exact order, all five time values and both referenced action names. Evidence in stats-mac-er4xhbzh/live.log. This verifies editor persistence. Continue integrated conflict verification and remaining runtime and window acceptance.
+
+### Integrated native bounded conflict report
+
+b6e6f3b57a5f7151137574117e17a61a938c8eb9 adds docs/handoff/studio-html5/captures/mac-input-bounded-conflicts.png. The completed native rebuild is recorded in studio-input-conflicts-refresh.log on KINGSTON. The detached WKWebView queried 30 mappings over the native bridge and independently created 30 mappings via panel controls. Both checks verified 435 total conflicts with 256 returned/displayed rows. The visible table indicated truncation, and input/actions.json remained absent. Evidence: stats-mac-k2snfe2u/live.log. Continue remaining window acceptance and the integrated Mac quick gate.

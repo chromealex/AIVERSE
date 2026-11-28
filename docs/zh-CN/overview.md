@@ -39,14 +39,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ## 快速开始（macOS）
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-在编辑器中打开另一个游戏：`AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`。
+在编辑器中打开另一个游戏：`./studio_mac.command ~/.aiverse/packages/templates/mushrooms`。
 要让游戏以另一套数据启动，请传入 `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`。
 
 ### 同时运行多个编辑器
@@ -206,10 +205,17 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 
 - 它随项目一起创建（项目中心“新建项目”、MCP `create_project`）；没有它的旧项目会在编辑器中首次打开时获得一个。`templates/*/` 中的模板已经
   自带（不会被复制到新项目，新项目有自己的）。
-- 凡是编辑器接受项目路径的地方，`.aiverse` 和文件夹都可以：`aiverse_editor "My Strategy.aiverse"`、`--project`、项目中心的“打开…”
+- 凡是编辑器接受项目路径的地方，`.aiverse` 和文件夹都可以：`AiverseStudio.exe --project "My Strategy.aiverse"`、`--project`、项目中心的“打开…”
   （显示 `.aiverse` 和项目文件夹）、最近项目、MCP `open_game`、`aiversebuild --project x.aiverse`。`.aiverse` 不会进入构建。
 - 在改名为 AIVERSE 之前创建的项目保留其 `<名称>.rtsproj`：在所有地方都能同样打开，原地重写，不会被改名；
   如果文件夹中两者都有，以 `.aiverse` 为准。
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>旧版 ImGui 编辑器的文件关联</summary>
+
 - **双击。** 编辑器启动时，如果 `.aiverse` 没有关联程序或关联的是另一个编辑器实例，就会把它关联到自己（按用户，无需管理员权限）；你选择的其他
   程序不会被覆盖。手动操作：“项目 → 将编辑器设为 .aiverse 的默认程序”；状态显示在项目中心左下角。关闭：`AIVERSE_FILE_ASSOC=off`。
   - **macOS：**类型 `com.aiverse.project` 声明在 `AiverseEditor.app` 的 Info.plist 中（`platform/macos/EditorInfo.plist.in`；文档图标
@@ -221,6 +227,8 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
   - **Linux：**类型 `application/x-aiverse-project`（`~/.local/share/mime/packages/aiverse-project.xml`）、
     `~/.local/share/applications/aiverse-editor.desktop`（`Exec=<编辑器> %f`），图标在 `~/.local/share/icons/hicolor`，默认程序写在
     `~/.config/mimeapps.list`；如已安装，会调用 `update-mime-database`、`update-desktop-database`、`xdg-mime`。
+
+</details>
 
 ## 制作游戏（向导）
 

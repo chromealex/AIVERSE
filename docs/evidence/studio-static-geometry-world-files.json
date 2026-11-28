@@ -1,0 +1,10 @@
+{
+  "sha": "bb4baf51712fba8b05eb7712d9180236364cbdd3",
+  "argv": [
+    "bash",
+    "/tmp/scoped-actor-geometry-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-static-geometry-world-files.log.txt",
+  "sha256": "68fad29e07deb4d5b62f5ef4b9ec0e41c0b1cab44a2a711a3ed97f06d4d10753"
+}

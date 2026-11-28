@@ -6,12 +6,9 @@
 // started by an agent (MCP native_build) shows up here too.
 #include <algorithm>
 #include <cstdlib>
-#include <filesystem>
 #include "Editor.h"
 #include "EditorIcons.h"
 #include "EditorUtil.h"
-
-namespace fs = std::filesystem;
 
 namespace aiverse::editor {
 
@@ -76,7 +73,6 @@ void Editor::startNativeEditorBuild() {
 
 void Editor::restartIntoNativeBuild() {
     auto& n = native_;
-    std::error_code ec;
     n.existing = findNativeBuilt(ws_);
     if (n.existing.editor.empty()) {
         status = "Нет собранного редактора в " + nativeBuildDir(ws_.project.dir, nativeHost());
@@ -85,11 +81,7 @@ void Editor::restartIntoNativeBuild() {
         return;
     }
     if (playing()) stopPlay();
-    // aiversebuild / aiversemcp stay those of this (regular) build; AiverseGame comes from the project build (its modules)
-    std::string tools;
-    if (fs::path bt(opt_.buildTool); bt.is_absolute() && fs::exists(bt, ec)) tools = bt.parent_path().string();
-    const std::string arg = ws_.project.file.empty() ? ws_.project.dir : ws_.project.file;
-    const std::string cmd = nativeRestartCommand(nativeHost(), n.existing.launch, arg, tools);
+    const std::string cmd = nativeRestartCommand(nativeHost(), n.existing.launch, ws_.project.dir);
     // free the MCP port so the new editor takes the default one and agents reconnect to it
     server_.close();
     ws_.log("native", "Перезапуск в редакторе с модулями проекта: " + cmd);

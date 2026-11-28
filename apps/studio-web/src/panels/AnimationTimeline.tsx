@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pause, Play, SkipBack } from 'lucide-react';
+import { StudioSelect } from '../ui';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
 import type { StudioPanel } from '../nestedDock';
@@ -10,41 +11,78 @@ import './ProjectToolPanels.css';
 import './AnimationTimeline.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
-const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as any;
+const op = async (expectedProject: string, name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { expectedProject, op: name, params })).result as any;
 
 /** Animation: clips of the project's authoring models (modeling/*.model.json) on a timeline with a live skeleton preview. */
-export default function AnimationTimeline({ snapshot, showPanel }: { snapshot: StudioSnapshot | null; showPanel: (p: StudioPanel) => void }) {
+export default function AnimationTimeline({ snapshot, showPanel, route }: { route:import('../types').AnimationAuthoringRoute; snapshot: StudioSnapshot | null; showPanel: (p: StudioPanel) => void }) {
   const path = snapshot?.project.path ?? '';
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState('');
-  const [doc, setDoc] = useState<AnimDoc | null>(null);
+  const [loaded, setLoaded] = useState<{model:string; revision:number; document:AnimDoc} | null>(null);
+  const doc = loaded?.model === model ? loaded.document : null;
   const [clip, setClip] = useState('');
+  const [selection, setSelection] = useState<{channel:number; key:number} | null>(null);
+  useEffect(() => setSelection(null), [model, clip, path]);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [pose, setPose] = useState<SampledNode[]>([]);
   const [view, setView] = useState<'front' | 'side'>('front');
   const [error, setError] = useState('');
-  const inFlight = useRef(false);
+  const [conflict, setConflict] = useState(false);
+  const [reload, setReload] = useState(0);
+  const preferredClip = useRef('');
+  const requestPose = useRef<((time: number) => void) | null>(null);
   useEffect(() => {
     if (!path) return;
-    void op('modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
+    void op(path, 'modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
   }, [path]);
   useEffect(() => {
-    if (!model) { setDoc(null); return; }
-    void op('animation_get', { name: model }).then(r => {
-      const d = r.document as AnimDoc; setDoc(d); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
-    }).catch(e => setError(message(e)));
-  }, [model]);
+    const requestedClip = preferredClip.current;
+    preferredClip.current = '';
+    setConflict(false); setSelection(null);
+    setLoaded(null); setPlaying(false); setClip(''); setTime(0); setError('');
+    if (!model) return;
+    let live=true;
+    void op(path, 'animation_get', { name: model }).then(r => {
+      if(!live)return;
+      const d = r.document as AnimDoc; setLoaded({model,revision:r.revision,document:d}); setClip(d.clips?.find(c => c.id === requestedClip)?.id ?? d.clips?.[0]?.id ?? ''); setTime(0); setError('');
+    }).catch(e => {if(live)setError(message(e));});
+    return ()=>{live=false;};
+  }, [model, path, reload]);
+  useEffect(()=>{
+    const target=route.request;
+    if(target?.tab==='clips'&&target.project===path){
+      setModel(target.name);setPlaying(false);setTime(0);route.consume?.();
+    }
+  },[route.request,path]);
   const current = doc?.clips?.find(c => c.id === clip);
+  const channel = selection && current?.channels[selection.channel];
+  const selectedValue = channel && selection ? channel.values?.[channel.interpolation === 'cubic' ? selection.key * 3 + 1 : selection.key] : undefined;
   const duration = current ? clipDuration(current) : 0;
-  const sample = useCallback(async (t: number) => {
-    if (!model || inFlight.current) return;
-    inFlight.current = true;
-    try { setPose((await op('animation_sample', { name: model, clip, time: t })).nodes ?? []); setError(''); }
-    catch (e) { setError(message(e)); setPlaying(false); }
-    finally { inFlight.current = false; }
-  }, [model, clip]);
-  useEffect(() => { void sample(time); }, [time, sample]);
+  useEffect(() => {
+    setPose([]);
+    if (!doc || !clip) return;
+    let active = true, sampling = false;
+    let pending: number | undefined;
+    requestPose.current = async target => {
+      pending = target;
+      if (sampling) return;
+      sampling = true;
+      while (active && pending !== undefined) {
+        const sampleTime = pending;
+        pending = undefined;
+        try {
+          const result = await op(path, 'animation_sample', { name: model, clip, time: sampleTime });
+          if (active) { setPose(result.nodes ?? []); setError(''); }
+        } catch (e) {
+          if (active) { setError(message(e)); setPlaying(false); }
+        }
+      }
+      sampling = false;
+    };
+    return () => { active = false; requestPose.current = null; };
+  }, [path, model, clip, doc]);
+  useEffect(() => { requestPose.current?.(time); }, [model, clip, time, doc]);
   useEffect(() => {
     if (!playing || duration <= 0) return;
     let last = performance.now(), raf = 0;
@@ -58,12 +96,56 @@ export default function AnimationTimeline({ snapshot, showPanel }: { snapshot: S
   }, [playing, duration]);
   const skeleton = useMemo(() => projectSkeleton(doc, pose, view, 260, 200), [doc, pose, view]);
   const keys = current ? clipKeyTimes(current) : [];
+  const [saving, setSaving] = useState(false);
+  async function writeKey(action: 'save' | 'add' | 'delete', form: HTMLFormElement) {
+    if (!loaded || !current || !channel || !selection || !selectedValue || saving) return;
+    const { key } = selection;
+    const times = [...(channel.times ?? [])];
+    const values = [...(channel.values ?? [])];
+    const stride = channel.interpolation === 'cubic' ? 3 : 1;
+    let next = key;
+    if (action === 'save') {
+      const fields = new FormData(form);
+      const target = Number(fields.get('time'));
+      if ((key > 0 && target <= times[key - 1]) || (key + 1 < times.length && target >= times[key + 1])) {
+        setError('Key time must fall between its neighboring keys.'); return;
+      }
+      times[key] = target;
+      values[key * stride + (stride === 3 ? 1 : 0)] = selectedValue.map((_, i) => Number(fields.get('v' + i)));
+    } else if (action === 'add') {
+      next = times.length;
+      times.push(Number((times[next - 1] + 0.1).toFixed(6)));
+      values.push(...values.slice(key * stride, (key + 1) * stride));
+    } else {
+      if (times.length < 2) return;
+      times.splice(key, 1); values.splice(key * stride, stride);
+      next = Math.min(key, times.length - 1);
+    }
+    const channels = current.channels.map((entry, index) => index === selection.channel ? {...entry, times, values} : entry);
+    const value = {...current, channels};
+    setSaving(true); setPlaying(false); setError('');
+    try {
+      const response = await invoke('studio.op', {expectedProject:path, op:'animation_edit', params:{
+        name:model, expectedRevision:loaded.revision, commands:[{op:'put', collection:'clips', id:clip, value}]
+      }});
+      const result = response.result as {document:AnimDoc; revision:number; error?:string};
+      if (result.error) throw new Error(result.error);
+      setLoaded(previous => previous === loaded ? {model, revision:result.revision, document:result.document} : previous);
+      setSelection({channel:selection.channel, key:next}); setTime(times[next]);
+    } catch (e) {
+      if (message(e).includes('revision conflict')) setConflict(true);
+      else setError(message(e));
+    } finally { setSaving(false); }
+  }
   if (!path) return <div className="tool__empty">Open a project to preview its animations.</div>;
   return <div className="ptp anim">
     <div className="ptp__edhead">
       <div className="tbrush__chips">{models.map(m => <button key={m} type="button" className={m === model ? 'is-on' : ''} onClick={() => setModel(m)}>{m}</button>)}</div>
       {!models.length && <span className="ptp__meta">No authoring models (modeling/*.model.json) — create one in Modeling.</span>}
     </div>
+    {conflict && <div className="tool__error" role="alert">The model changed since you opened it. Reload to discard your unsaved key edit and review the latest version.{' '}
+      <button type="button" className="au-button au-button--sm" onClick={() => { preferredClip.current = clip; setReload(n => n + 1); }}>Reload model</button>
+    </div>}
     {error && <div className="tool__error" role="alert">{error}</div>}
     {doc && <div className="anim__body">
       <div className="anim__preview">
@@ -77,8 +159,11 @@ export default function AnimationTimeline({ snapshot, showPanel }: { snapshot: S
         </div>
       </div>
       <div className="anim__side">
-        <div className="tbrush__chips">{(doc.clips ?? []).map(c => <button key={c.id} type="button" className={c.id === clip ? 'is-on' : ''}
-          onClick={() => { setClip(c.id); setTime(0); }}>{c.id}</button>)}</div>
+        {!!doc.clips?.length && <label className="anim__clip-picker">Clip
+          <StudioSelect value={clip} onChange={event => {
+            setPlaying(false); setClip(event.currentTarget.value); setTime(0);
+          }}>{doc.clips.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}</StudioSelect>
+        </label>}
         {!doc.clips?.length && <p className="ptp__hint">This model has no clips yet (Animation Clips ▸ Generate).</p>}
         {current && <>
           <div className="anim__transport">
@@ -87,17 +172,65 @@ export default function AnimationTimeline({ snapshot, showPanel }: { snapshot: S
             <span className="ptp__meta">{time.toFixed(2)} / {duration.toFixed(2)} s · {current.channels.length} channels · {keys.length} keys</span>
           </div>
           <div className="anim__track">
-            <input type="range" min={0} max={Math.max(duration, 0.01)} step={0.01} value={time} onChange={e => { setPlaying(false); setTime(Number(e.target.value)); }}/>
+            <input type="range" aria-label="Clip time" aria-valuetext={time.toFixed(2)+' seconds'}
+              title="Clip time · Shift + arrow to jump between keys" min={0} max={Math.max(duration, 0.01)}
+              step={0.01} value={time}
+              onKeyDown={event => {
+                if (!event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+                event.preventDefault();
+                const next = event.key === 'ArrowRight'
+                  ? keys.find(key => key > time)
+                  : keys.slice().reverse().find(key => key < time);
+                if (next !== undefined) { setPlaying(false); setTime(next); }
+              }}
+              onChange={e => { setPlaying(false); setTime(Number(e.target.value)); }}/>
             <div className="anim__keys">{keys.map((k, i) => <i key={i} style={{ left: (duration ? k / duration : 0) * 100 + '%' }} onClick={() => { setPlaying(false); setTime(k); }}/>)}</div>
           </div>
-          <div className="anim__channels">{current.channels.slice(0, 40).map((c, i) => <div key={i} className="anim__channel">
+          <div className="anim__channels">{current.channels.map((c, i) => <div key={i} className="anim__channel">
             <span title={c.node + '.' + (c.path ?? 'rotation')}>{c.node}<small>.{c.path ?? 'rotation'}</small></span>
-            <div>{(c.times ?? []).map((t: number, k: number) => <i key={k} style={{ left: (duration ? t / duration : 0) * 100 + '%' }}/>)}</div>
+            <div className="anim__lane" onClick={event => {
+              if (event.target !== event.currentTarget || !c.times?.length) return;
+              const bounds = event.currentTarget.getBoundingClientRect();
+              if (!bounds.width) return;
+              const target = (event.clientX - bounds.left) / bounds.width * duration;
+              const key = c.times.reduce((best, t, index, times) =>
+                Math.abs(t - target) < Math.abs(times[best] - target) ? index : best, 0);
+              setPlaying(false); setTime(c.times[key]); setSelection({channel:i, key});
+            }}>{(c.times ?? []).map((t: number, k: number) => <button key={k} type="button"
+              aria-label={c.node + '.' + (c.path ?? 'rotation') + ' key ' + (k + 1) + ' at ' + t + ' s'}
+              aria-pressed={selection?.channel === i && selection.key === k}
+              style={{ left: (duration ? t / duration : 0) * 100 + '%' }}
+              title="Left or right arrow to select an adjacent key in this channel"
+              onKeyDown={event => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                const adjacent = event.key === 'ArrowLeft' ? event.currentTarget.previousElementSibling : event.currentTarget.nextElementSibling;
+                if (adjacent instanceof HTMLButtonElement) {
+                  adjacent.focus();
+                  adjacent.click();
+                }
+              }}
+              onClick={() => { setPlaying(false); setTime(t); setSelection({channel:i, key:k}); }}/>)}</div>
           </div>)}</div>
+          {channel && selection && <output className="ptp__meta">{channel.node}.{channel.path ?? 'rotation'} · Key {selection.key + 1} · {channel.times?.[selection.key]} s · {selectedValue?.join(', ') ?? '—'}</output>}
+          {channel && selection && selectedValue && <form className="anim__edit"
+            key={[model, clip, selection.channel, selection.key, loaded?.revision].join('/')}
+            onSubmit={event => {event.preventDefault(); void writeKey('save', event.currentTarget);}}>
+            <fieldset disabled={saving || conflict}><legend>Edit selected key</legend>
+              <label>Time (s)<input type="number" name="time" required min="0" step="any" defaultValue={channel.times?.[selection.key]}/></label>
+              {selectedValue.map((v,i) => <label key={i}>{['X','Y','Z','W'][i] ?? i+1}<input type="number" name={'v'+i} required step="any" defaultValue={v}/></label>)}
+              <button className="au-button au-button--sm" type="submit">Save key</button>
+              <button className="au-button au-button--sm" type="button" onClick={e => void writeKey('add', e.currentTarget.form!)}>Append key</button>
+              <button className="au-button au-button--sm" type="button" disabled={(channel.times?.length ?? 0)<2} onClick={e => void writeKey('delete', e.currentTarget.form!)}>Delete key</button>
+            </fieldset>
+          </form>}
         </>}
       </div>
     </div>}
     <div className="anim__links">
+      <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!doc}
+        onClick={() => void invoke('studio.op', {expectedProject:path, op:'animation_editor', params:{name:model,tab:'graph'}})
+          .catch(e => setError(message(e)))}>Open model graph</button>
       {(['anim_assets', 'anim_graph', 'anim_rig', 'model_anim'] as const).map(p =>
         <button key={p} type="button" className="au-button au-button--sm au-button--ghost" onClick={() => showPanel(p)}>{STUDIO_PANEL_TITLES[p]}</button>)}
     </div>

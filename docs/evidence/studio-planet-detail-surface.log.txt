@@ -1,0 +1,2 @@
+2026-11-26 07:42:00.833 AiverseStudioHTML5[77307:83336469] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:42:00.832 AiverseStudioHTML5[77307:83336469] [studio-web] JS: CROSS main VERIFIED macOS same screen point: subcell elevation 1.821901 m, base 0 m; body corners all zero, grid scale 8, unchanged history and clean document

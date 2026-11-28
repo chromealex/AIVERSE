@@ -1,0 +1,20 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/1 Test #585: studio_terrain_geometry ..........   Passed    2.09 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   2.09 sec*proc (1 test)
+
+Total Test time (real) =   2.12 sec
+2026-11-26 15:07:56.942 AiverseStudioHTML5[46858:85108705] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/scene-slope-ui-Qw8apB/Catalog.app/Contents/Resources/studio-web
+2026-11-26 15:07:57.187 AiverseStudioHTML5[46858:85108705] [studio-web] served index.html (6719 bytes)
+2026-11-26 15:07:57.194 AiverseStudioHTML5[46858:85108705] [studio-web] served assets/index-CCk_o2cQ.js (1713077 bytes)
+2026-11-26 15:07:57.229 AiverseStudioHTML5[46858:85108705] [studio-web] JS: CROSS main boot
+2026-11-26 15:07:57.238 AiverseStudioHTML5[46858:85108705] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 15:08:00.602 AiverseStudioHTML5[46858:85108705] [studio-web] JS: CROSS main FAIL value@[native code]
+@aiverse-studio://shell/index.html:106:78
+setRange@aiverse-studio://shell/index.html:104:22
+@aiverse-studio://shell/index.html:109:15 TypeError: The HTMLInputElement.value setter can only be used on instances of HTMLInputElement

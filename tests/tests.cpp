@@ -16705,25 +16705,26 @@ TEST(native_editor_build_helpers) {
     auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
     CHECK(has(p.configureArgs, "-DAIVERSE_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
     CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DAIVERSE_NATIVE_DIR="));
-    CHECK(has(p.buildArgs, "aiverse_editor") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
+    CHECK(has(p.configureArgs, "-DAIVERSE_BUILD_EDITOR=OFF") && has(p.configureArgs, "-DAIVERSE_BUILD_STUDIO_HTML5=ON") && has(p.buildArgs, "aiverse_studio") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
     // the client too (the project's modules reach "launch client"), without a content copy inside the project
     CHECK(has(p.buildArgs, "aiverse_client") && has(p.configureArgs, "-DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF") && has(p.configureArgs, "-DAIVERSE_BUILD_CLIENT=ON"));
     CHECK(fs::path(p.clientBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/AiverseGame"));
-    CHECK(fs::path(p.editorBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/aiverse_editor") && p.launchTarget == p.editorBinary);
+    CHECK(fs::path(p.editorBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/apps/studio-native/AiverseStudio") && p.launchTarget == p.editorBinary);
     const std::string cmd = nativeBuildCommand(p);
     CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '" + p.buildDir + "'", 0) == 0);
     CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
     CHECK(!has(planNativeBuild("/eng", "/g", "linux", "cmake", "/usr/bin/ninja", true, 0).configureArgs, "-G"));   // keeps the cached generator
     NativeBuildPlan mac = planNativeBuild("/eng", "/g", "macos", "/opt/homebrew/bin/cmake", "", false, 0);
-    CHECK(fs::path(mac.launchTarget) == fs::path("/g/Builds/.temp/editor-macos/AiverseEditor.app") &&
-          fs::path(mac.editorBinary) == fs::path("/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
+    CHECK(fs::path(mac.launchTarget) == fs::path("/g/Builds/.temp/editor-macos/apps/studio-native/AiverseStudioHTML5.app") &&
+          fs::path(mac.editorBinary) == fs::path("/g/Builds/.temp/editor-macos/apps/studio-native/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5"));
     CHECK(fs::path(mac.clientBinary) == fs::path("/g/Builds/.temp/editor-macos/AiverseGame.app/Contents/MacOS/AiverseGame"));
     CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
-    CHECK(has(mac.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project") && !has(p.configureArgs, "-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project"));
-    CHECK(fs::path(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary) == fs::path("/g/Builds/.temp/editor-windows/Release/aiverse_editor.exe"));
-    CHECK(nativeRestartCommand("macos", "/g/B/AiverseEditor.app", "/g/G.rtsproj", "/eng/build") ==
-          "open -n '/g/B/AiverseEditor.app' --args '/g/G.rtsproj' --native-editor --tools-from '/eng/build'");
-    CHECK(nativeRestartCommand("linux", "/g/aiverse_editor", "/g", "").find("AIVERSE_NATIVE_EDITOR=1 '/g/aiverse_editor' '/g' --native-editor") != std::string::npos);
+    CHECK(has(mac.buildArgs, "aiverse_studio") && has(mac.configureArgs, "-DAIVERSE_BUILD_EDITOR=OFF"));
+    CHECK(fs::path(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary) == fs::path("/g/Builds/.temp/editor-windows/apps/studio-native/Release/AiverseStudio.exe"));
+    CHECK(nativeRestartCommand("macos", "/g/B/AiverseStudioHTML5.app", "/g/My Game") ==
+          "open -n '/g/B/AiverseStudioHTML5.app' --args --project '/g/My Game'");
+    CHECK(nativeRestartCommand("linux", "/g/AiverseStudio", "/g/My Game") ==
+          "( '/g/AiverseStudio' --project '/g/My Game' >/dev/null 2>&1 & )");
     CHECK(isProjectBuildExe("/g/Builds/.temp/editor-linux/aiverse_editor") && isProjectBuildExe("/g/Builds/editor-linux/aiverse_editor") && isProjectBuildExe("/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
     CHECK(!isProjectBuildExe("/eng/build/lin/aiverse_editor") && !isProjectBuildExe("/Applications/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
 
@@ -16752,6 +16753,16 @@ TEST(native_editor_build_helpers) {
     fs::remove_all(root);
     fs::create_directories(root / "proj" / "native");
     fs::create_directories(root / "proj" / "Builds" / ".temp" / "editor-linux" / "gen");
+    for (const std::string host : {"macos", "windows"}) {
+        const fs::path cache = fs::path(nativeBuildDir((root / "proj").string(), host)) / "CMakeCache.txt";
+        fs::create_directories(cache.parent_path());
+        std::ofstream(cache) << "CMAKE_GENERATOR:INTERNAL=Ninja Multi-Config\n";
+        auto cached = planNativeBuild(eng, (root / "proj").string(), host, "cmake", "ninja", true, 1);
+        CHECK(fs::path(cached.launchTarget).parent_path().filename() == "Release");
+        std::ofstream(cache) << "CMAKE_GENERATOR:INTERNAL=Unix Makefiles\n";
+        cached = planNativeBuild(eng, (root / "proj").string(), host, "cmake", "", true, 1);
+        CHECK(fs::path(cached.launchTarget).parent_path().filename() == "studio-native");
+    }
     auto touch = [](const fs::path& f, int ageSec) {
         std::ofstream(f) << "x";
         fs::last_write_time(f, fs::file_time_type::clock::now() - std::chrono::seconds(ageSec));
@@ -16767,6 +16778,8 @@ TEST(native_editor_build_helpers) {
     std::ofstream(fs::path(bd) / "gen" / "NativeRegistry.cpp") << "#include \"x\"\n    result.push_back({\"income\", 1u, &::createIncomeModule});\n";
     CHECK((nativeBuildModules(bd) == std::vector<std::string>{"income"}));
     CHECK(nativeBuildHasModules(bd, {"income"}) && !nativeBuildHasModules(bd, {"income", "openwar"}, &why) && why.find("openwar") != std::string::npos);
+    std::ofstream(fs::path(bd) / "gen" / "NativeRegistry.cpp") << "    {\"income\", 1u, &::createIncomeModule},\n";
+    CHECK(nativeBuildHasModules(bd, {"income"}));
     touch(root / "proj" / "native" / "Income.cpp", 10);    // sources edited after the build
     CHECK(!nativeBuildUpToDate(bin.string(), proj, engine.string(), &why) && why.find("Income.cpp") != std::string::npos);
     touch(root / "proj" / "native" / "Income.cpp", 300);
@@ -18236,7 +18249,7 @@ TEST(game_wizard_makes_a_playable_project) {
     Json m = Json::parseFile((dir / "game.json").string());
     CHECK(m["maps"].size() == 3 + Json::parse(readSource("templates/skirmish/game.json"))["maps"].size() && m["maps"][0].getStr("file") == "maps/wiz_level_1.json" && m["maps"][2].getStr("file") == "maps/wiz_tutorial.json");
     CHECK(m.getStr("name") == "Wizard Test" && m["store"]["products"].size() == 3 && m["ads"].isObject() && m["plugins"].has("mock-ads"));
-    CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "art/key_art.png");
+    CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "content/art/key_art.png");
     Json lv = Json::parseFile((dir / "maps/wiz_level_1.json").string());
     CHECK(lv["generate"].getStr("preset") == "classic" && lv["generate"].getStr("template") == "maps/valley.json");
     // the tutorial: steps from the rules, its scripts, hidden panel commands
@@ -18257,7 +18270,7 @@ TEST(game_wizard_makes_a_playable_project) {
     Json sj = Json::parseFile((dir / "ui/screens.json").string());
     CHECK(sj.getStr("start") == "home" && sj.getStr("afterMatch") == "result");
     for (const char* f : {"ui/screens/home.rml", "ui/screens/levels.rml", "ui/screens/upgrades.rml", "ui/screens/result.rml", "ui/wizard_meta.lua",
-                          "ui/hud/wiz_tutorial.rml", "ui/hud/wiz_hint.rml", "ui/main.lua", "WIZARD.md", "art/key_art.png", "docs/gdd.md"})
+                          "ui/hud/wiz_tutorial.rml", "ui/hud/wiz_hint.rml", "ui/main.lua", "WIZARD.md", "content/art/key_art.png", "docs/gdd.md"})
         CHECK(fs::exists(dir / f));
     Json ru = Json::parseFile((dir / "lang/ru.json").string());
     CHECK(ru.getStr("game.name") == "Wizard Test" && ru.has("wiz.tut.gather") && ru.has("wiz.hint.camera") && ru.has("wiz.levels"));
@@ -19089,6 +19102,41 @@ TEST(map_projection_crop_roundtrip_and_frame) {
     const render::float3 quad[4]={{10,0,20},{20,0,20},{24,0,40},{8,0,40}};
     const auto rectangle=view::MapProjection::rectangularFrame(quad);
     CHECK(rectangle[0].x==8&&rectangle[1].x==24&&rectangle[2].z==40);
+}
+
+#include "engine/view/game/PlanarMinimap.h"
+// The game HUD and the Studio overlay preview share one minimap raster: authored
+// bounds crop it, invalid scene types are skipped and view.minimap=false hides a type.
+TEST(planar_minimap_shared_bounds_and_scene_guards) {
+    using namespace aiverse;
+    game::MapGrid grid; grid.init(40,20);
+    for (auto& f : grid.flags) f = game::kCellGround;
+    auto layout=game::minimap::resolveLayout(Json::parse(R"({"minimap":{"bounds":[10,0,30,20],"cameraFrame":"rectangle"}})"),Json::object(),40,20);
+    CHECK(layout.bounds.left==10&&layout.bounds.right==30&&layout.rectangle);
+    // The map value wins over game.json; bounds outside the grid are clipped.
+    layout=game::minimap::resolveLayout(Json::object(),Json::parse(R"({"minimap":{"bounds":[-5,0,20,50]}})"),40,20);
+    CHECK(layout.bounds.left==0&&layout.bounds.right==20&&layout.bounds.bottom==20&&!layout.rectangle);
+    bool rejected=false;
+    try { (void)game::minimap::resolveLayout(Json::parse(R"({"minimap":{"bounds":[50,0,60,10]}})"),Json::object(),40,20); }
+    catch (const std::runtime_error&) { rejected=true; }
+    CHECK(rejected);
+    rejected=false;
+    try { (void)game::minimap::resolveLayout(Json::object(),Json::object(),0,0); } catch (const std::runtime_error&) { rejected=true; }
+    CHECK(rejected);
+    const auto raster=game::minimap::build(grid,layout,{},0,0);
+    CHECK(raster.width==raster.height&&raster.width>0&&raster.base.size()==size_t(raster.width)*size_t(raster.height));
+    game::Rules rules=game::loadRules(Json::parse(R"({"types":{"hidden":{"view":{"minimap":false}},"shown":{}}})"));
+    game::GameScene scene;
+    game::SceneObject bad; bad.type=uint16_t(rules.types.size()+5); bad.pos={5,0,5}; bad.visible=true;
+    game::SceneObject hidden; hidden.type=uint16_t(rules.findType("hidden")); hidden.owner=1; hidden.pos={5,0,5}; hidden.visible=true;
+    scene.objects={bad,hidden};
+    std::vector<uint32_t> pixels;
+    game::minimap::rasterize(raster,grid,rules,scene,nullptr,nullptr,nullptr,pixels);
+    CHECK(pixels==raster.base);
+    game::SceneObject shown=hidden; shown.type=uint16_t(rules.findType("shown")); shown.pos={5,0,5};
+    scene.objects={shown};
+    game::minimap::rasterize(raster,grid,rules,scene,nullptr,nullptr,nullptr,pixels);
+    CHECK(pixels!=raster.base);
 }
 
 #include "engine/view/PortraitOptions.h"

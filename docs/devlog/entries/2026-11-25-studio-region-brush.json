@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-region-brush",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "63d0cda21",
+  "author": null,
+  "links": [],
+  "title": "Кисть регионов карты",
+  "titleEn": "Map region brush",
+  "summary": "Окно Tiles управляет кистью регионов для плоской карты.",
+  "summaryEn": "The Tiles window controls the region brush for flat maps.",
+  "body": [
+    "В разделе Regions выберите букву или ластик, задайте радиус в клетках и включите Brush. Каждый мазок по карте образует один шаг Undo."
+  ],
+  "bodyEn": [
+    "In Regions choose a letter or the eraser, set a radius in cells, enable Brush and drag in Scene. Each stroke is one Undo step."
+  ],
+  "verified": "На macOS проверены выбор буквы и ластика в отдельном окне, отмена мазка в нативном тесте и сохранение имени пустого региона. В окне macOS мазок через AppKit, Undo, Redo и Save оставили 96 клеток региона K в файле карты.",
+  "verifiedEn": "macOS checks covered letter and eraser selection in a detached window, native stroke Undo and persistence of an empty named region. An AppKit drag followed by Undo, Redo and Save left 96 region K cells in the map file.",
+  "limits": "Имена и счётчики клеток в Inspector ещё предстоит перенести.",
+  "limitsEn": "Region naming and cell counts in Inspector remain open.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-region-brush/map-regions.png",
+      "caption": "Регион K с радиусом в четыре клетки",
+      "captionEn": "Region K with a four-cell radius"
+    }
+  ]
+}

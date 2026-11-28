@@ -1,0 +1,12 @@
+In file included from /tmp/nature-pointer.mm:2:
+/private/tmp/aiverse-studio-only/engine/render/Math3D.h:5:18: warning: nested namespace definition is a C++17 extension; define each namespace separately [-Wc++17-extensions]
+    5 | namespace aiverse::render {
+      |                  ^~~~~~~~
+      |                   { namespace render
+1 warning generated.
+2026-11-26 12:30:21.196 AiverseStudioHTML5[68116:84547620] [studio-web] JS: CROSS main DONE_1
+2026-11-26 12:30:21.196 AiverseStudioHTML5[68116:84547620] [studio-web] JS: CROSS main VERIFIED unarmed click, armed drag without ignition, wheel zoom, projected world point (14,5.5,10) ignited cell (3,2) at tick zero; sampling moved from (900,900) to (3,2) with inspector selection. {"before":{"tick":0,"yaw":0.6,"pitch":0.55,"distance":21.6,"patches":4,"particles":0,"voices":1,"igniteOnClick":false,"grass":true,"flames":true,"sound":true},"rotated":{"tick":0,"yaw":0.35,"pitch":0.65,"distance":21.6,"patches":4,"particles":0,"voices":1,"igniteOnClick":true,"grass":true,"flames":true,"sound":true},"zoomed":{"tick":0,"yaw":0.35,"pitch":0.65,"distance":17.496,"patches":4,"particles":0,"voices":1,"igniteOnClick":true,"grass":true,"flames":true,"sound":true}}
+2026-11-26 12:30:15.093 AiverseStudioHTML5[68116:84547620] NATURE INPUT off {368.07797241210938, 323.65266418457031}
+2026-11-26 12:30:15.793 AiverseStudioHTML5[68116:84547620] NATURE INPUT orbit {393.07797241210938, 313.65266418457031}
+2026-11-26 12:30:16.694 AiverseStudioHTML5[68116:84547620] NATURE INPUT zoom {385.80889892578125, 320.66970825195312}
+2026-11-26 12:30:17.493 AiverseStudioHTML5[68116:84547620] NATURE INPUT ignite {394.4415283203125, 312.319091796875}

@@ -1,0 +1,10 @@
+{
+  "sha": "47e869efacecb4decd30288a760ad65d7597e876",
+  "argv": [
+    "bash",
+    "/tmp/pfx-volume-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-postfx-local-volumes.log.txt",
+  "sha256": "be65cf0326ea0aa9591cc81df9b138c23bc027a00bdaa33be2d6d5e526422ccb"
+}

@@ -1,0 +1,13 @@
+{
+  "sha": "c216efd40fa6b7e0841b61e8b07453600de79259",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-composite-area-c216efd40.log.txt",
+  "sha256": "5832ab59171fb78ce116c4680edddaeacda8a594484aab2ecea7199aa9838d52"
+}

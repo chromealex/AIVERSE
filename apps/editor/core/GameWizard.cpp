@@ -12,6 +12,8 @@
 #include <sstream>
 #include <stdexcept>
 #include "ProjectFile.h"
+#include "PackageTool.h"
+#include <chrono>
 #include "WizardAgent.h"
 #include "Projects.h"
 
@@ -441,84 +443,31 @@ Json planGame(const std::string& engineDir, const WizardSpec& s) {
 
 // ---------------------------------------------------------------------------------------------------- download
 
-namespace {
-std::string quoteArg(const std::string& s) {
-#if defined(_WIN32)
-    return "\"" + s + "\"";
-#else
-    std::string o = "'";
-    for (char c : s) { if (c == '\'') o += "'\\''"; else o += c; }
-    return o + "'";
+std::string fetchWizardArt(const std::string& engineDir, const std::string& url, const std::string& dir, std::string* err) {
+    fs::path stage;
+    try {
+        fs::create_directories(dir);
+        // Reserve a fresh directory even for concurrent imports into the same staging root.
+        const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+        for (unsigned i = 0; ; ++i) {
+            const auto candidate = fs::path(dir) / ("import-" + std::to_string(stamp) + "-" + std::to_string(i));
+            if (fs::create_directory(candidate)) { stage = candidate; break; }
+        }
+#if !defined(_WIN32)
+        fs::permissions(stage, fs::perms::owner_all);
 #endif
-}
-int run(const std::string& cmd, std::string* out) {
-#if defined(_WIN32)
-    FILE* p = _popen(("\"" + cmd + " 2>&1\"").c_str(), "r");
-#else
-    FILE* p = popen((cmd + " 2>&1").c_str(), "r");
-#endif
-    if (!p) return -1;
-    char buf[512];
-    while (std::fgets(buf, sizeof buf, p)) if (out && out->size() < 8000) *out += buf;
-#if defined(_WIN32)
-    return _pclose(p);
-#else
-    int rc = pclose(p);
-    return WIFEXITED(rc) ? WEXITSTATUS(rc) : rc;
-#endif
-}
-} // namespace
-
-std::string fetchWizardArt(const std::string& url, const std::string& dir, std::string* err) {
-    auto fail = [&](const std::string& m) { if (err) *err = m; return std::string(); };
-    if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) return fail("ссылка должна начинаться с http:// или https://");
-    for (char c : url) if (c == '\n' || c == '\r' || c == '"' || c == '`') return fail("в ссылке недопустимые символы");
-    std::error_code ec;
-    fs::create_directories(dir, ec);
-    if (ec) return fail("не удалось создать " + dir);
-    // the file name from the link (without the query); Google Drive / Dropbox share links: direct download forms
-    std::string u = url;
-    if (u.find("dropbox.com") != std::string::npos && u.find("dl=0") != std::string::npos) u.replace(u.find("dl=0"), 4, "dl=1");
-    const size_t gd = u.find("drive.google.com/file/d/");
-    if (gd != std::string::npos) {
-        const size_t a = gd + 24, b = u.find('/', a);
-        u = "https://drive.google.com/uc?export=download&id=" + u.substr(a, b == std::string::npos ? std::string::npos : b - a);
+        const auto request = stage / "request.json";
+        Json data = Json::object(); data.set("url", Json::string(url));
+        if (!writeText(request.string(), data.dump())) throw std::runtime_error("Could not prepare artwork download");
+        runPythonJsonTool(engineDir, "tools/wizard/fetch_art.py", {request.string()});
+        fs::remove(request);
+        return (stage / "content").string();
+    } catch (const std::exception& e) {
+        std::error_code ec;
+        if (!stage.empty()) fs::remove_all(stage, ec);
+        if (err) *err = e.what();
+        return {};
     }
-    std::string name = u.substr(0, u.find('?'));
-    name = name.substr(name.find_last_of('/') + 1);
-    if (name.empty() || name.find('.') == std::string::npos) name = "download";
-    for (char& c : name) if (!(std::isalnum((unsigned char)c) || c == '.' || c == '-' || c == '_')) c = '_';
-    const fs::path file = fs::path(dir) / name;
-    std::string out;
-    const int rc = run("curl -L --fail --silent --show-error --max-time 600 -o " + quoteArg(file.string()) + " " + quoteArg(u), &out);
-    if (rc != 0 || !fs::exists(file, ec)) return fail("не удалось скачать: " + (out.empty() ? "curl код " + std::to_string(rc) : out));
-    // what came: an archive, a page, a file
-    std::string head = readText(file.string()).substr(0, 512);
-    auto starts = [&](const char* m) { return head.rfind(m, 0) == 0; };
-    const std::string lname = lower(name);
-    const bool zip = starts("PK\x03\x04");
-    const bool gz = head.size() > 2 && (unsigned char)head[0] == 0x1f && (unsigned char)head[1] == 0x8b;
-    if (zip || gz || (lname.size() > 4 && (lname.rfind(".zip") == lname.size() - 4 || lname.find(".tar") != std::string::npos))) {
-        const fs::path to = fs::path(dir) / "content";
-        fs::create_directories(to, ec);
-        std::string o2;
-        int r2 = zip ? run("unzip -q -o " + quoteArg(file.string()) + " -d " + quoteArg(to.string()), &o2) : -1;
-        if (r2 != 0) { o2.clear(); r2 = run("tar -xf " + quoteArg(file.string()) + " -C " + quoteArg(to.string()), &o2); }
-        if (r2 != 0) return fail("не удалось распаковать архив: " + o2);
-        fs::remove(file, ec);
-        return to.string();
-    }
-    const std::string lh = lower(head);
-    if (lh.find("<!doctype html") != std::string::npos || lh.find("<html") != std::string::npos) {
-        fs::remove(file, ec);
-        return fail("по ссылке веб-страница, а не файл: дайте прямую ссылку на картинку или архив (.zip) — или папку на диске");
-    }
-    if (name == "download") {   // no extension in the link: guess from the bytes
-        std::string ext = starts("\x89PNG") ? ".png" : starts("\xff\xd8") ? ".jpg" : starts("OggS") ? ".ogg" : starts("RIFF") ? ".wav"
-                        : starts("ID3") ? ".mp3" : starts("glTF") ? ".glb" : "";
-        if (!ext.empty()) { fs::rename(file, fs::path(dir) / ("art" + ext), ec); }
-    }
-    return dir;
 }
 
 // ---------------------------------------------------------------------------------------------------- the maker
@@ -559,7 +508,7 @@ GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(
         Ctx& c = *ctx_;
         if (!c.spec.artUrl.empty() && c.spec.artDir.empty()) {   // the window downloads on a thread before; MCP / tests here
             std::string err;
-            c.spec.artDir = fetchWizardArt(c.spec.artUrl, (fs::path(c.spec.location) / ".wizard-download").string(), &err);
+            c.spec.artDir = fetchWizardArt(c.engineDir, c.spec.artUrl, (fs::path(c.spec.location) / ".wizard-download").string(), &err);
             if (c.spec.artDir.empty()) throw std::runtime_error(err);
         }
         c.sourceDir = c.spec.artDir;

@@ -19,6 +19,9 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+// Legacy Win16 pointer macros collide with engine distance and geometry names.
+#undef near
+#undef far
 #undef MoveFile // windows.h macro clashes with ProjectHistory::MoveFile; this header calls MoveFileExW directly
 #elif defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
@@ -134,12 +137,14 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
         trashRest.substr(0,24).find_first_not_of("0123456789abcdef")==std::string::npos;
     const auto filename=rel.filename().string();
     const std::string mapPrefix="map-history-";
+    const bool rootMapCheckpoint=rel.parent_path()==".aiverse-cache" && filename=="map-history-"+digest("map.json")+".json";
     const bool mapCheckpoint=relative.starts_with("maps/")&&rel.parent_path().filename()==".aiverse-cache"&&
         filename.size()==mapPrefix.size()+64+5&&filename.starts_with(mapPrefix)&&filename.ends_with(".json")&&
         filename.substr(mapPrefix.size(),64).find_first_not_of("0123456789abcdef")==std::string::npos;
     if(allowCreation){
         const auto ext=rel.extension().string();
-        if(relative!=".aiverse-cache/asset-history.json"&&
+        if(!rootMapCheckpoint && relative!=".aiverse-cache/asset-history.json"&&
+           !(relative.starts_with("scripts/")&&ext==".lua")&&
            (!relative.starts_with("maps/")||(ext!=".json"&&ext!=".r16"&&ext!=".splat")))
             throw std::runtime_error("Unsupported new save output");
     }
@@ -147,7 +152,7 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
     for(const auto& segment:rel){
         const auto name=segment.string();
         const bool historyCache=((relative==".aiverse-cache/project-history.json"||relative==".aiverse-cache/asset-history.json")&&p==root&&name==".aiverse-cache")||
-            (mapCheckpoint&&name==".aiverse-cache"&&p/segment==root/rel.parent_path());
+            ((rootMapCheckpoint||mapCheckpoint)&&name==".aiverse-cache"&&p/segment==root/rel.parent_path());
         if(name.empty()||name=="."||name==".."||(name==".aiverse-cache"&&!historyCache&&!(trashMeta&&p==root))||name==".git"||
            name.starts_with(".aiverse-save-")||name.find('\0')!=std::string::npos)
             throw std::runtime_error("Unsafe project document journal segment");

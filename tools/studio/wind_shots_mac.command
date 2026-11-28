@@ -19,7 +19,7 @@ cd "$ROOT/apps/studio-web" || exit 1
 ./node_modules/.bin/vite build --outDir "$OUT/web" --emptyOutDir || { echo "== FAILED web"; exit 1; }
 cd "$ROOT"
 echo "== configure"
-cmake -S "$ROOT" -B "$OUT/native" $GEN -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_EDITOR=ON \
+cmake -S "$ROOT" -B "$OUT/native" $GEN -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_EDITOR=OFF \
   -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_STUDIO_WEB_DIST="$OUT/web" || { echo "== FAILED configure"; exit 1; }
 echo "== build"
 cmake --build "$OUT/native" --target aiverse_studio aiverse_wind_rig_test aiverse_studio_session_tests --parallel 8 \

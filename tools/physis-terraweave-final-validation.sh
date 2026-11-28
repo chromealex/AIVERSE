@@ -29,13 +29,15 @@ echo '[0/4] Record disk capacity before full build (read-only)'
   du -sh "$BUILD"
 } 2>&1 | tee "$REPORT/disk-before.txt"
 
+bash "$ROOT/tools/studio/build-validation-web.sh"
+
 echo '[1/4] Configure ALL desktop test targets (Box3D required)'
 cmake -S "$ROOT" -B "$BUILD" \
   -DCMAKE_BUILD_TYPE=Debug \
   -DAIVERSE_BUILD_TESTS=ON \
   -DAIVERSE_ENABLE_PHYSICS=ON \
   -DAIVERSE_PLACE_FAST_DEBUG=ON \
-  -DAIVERSE_BUILD_EDITOR=ON \
+  -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON \
   -DAIVERSE_BUILD_TOOLS=ON \
   -DAIVERSE_BUILD_HEADLESS=ON \
   -DAIVERSE_BUILD_SERVER=ON \

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import { invoke } from '../bridge';
-import { StudioField, StudioSelect } from '../ui';
+import { StudioButton, StudioField, StudioSelect } from '../ui';
 import type { StudioRules } from '../types';
 import { RULE_GROUPS, parseRuleInput, typeValues, type RuleValue } from './rulesSchema';
 import { fuzzyScore } from '../commandSearch';
@@ -9,19 +9,43 @@ import './RulesPanel.css';
 import PlanetForestPanel from './PlanetForestPanel';
 
 /** Rules: unit types as a form of known fields (validated by the game loader on every write). */
-export default function RulesPanel({ projectPath, historyVersion, onChanged }: { projectPath: string; historyVersion?: string; onChanged: () => void }) {
+export default function RulesPanel({ projectPath, historyVersion, onChanged, openActorSettings }: { projectPath: string; openActorSettings?: () => void; historyVersion?: string; onChanged: () => void }) {
   const [forestOpen,setForestOpen]=useState(false);
   const [rules, setRules] = useState<StudioRules | null>(null);
   const [typeId, setTypeId] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [section,setSection]=useState<'types'|'triggers'|'damageTable'|'global'|'document'>(openActorSettings ? 'document' : 'types');
   const [raw, setRaw] = useState<string | null>(null);
+ const syntaxError=useMemo(()=>{
+  if(raw===null)return '';
+  try{JSON.parse(raw);return '';}catch(e){return String(e);}
+ },[raw]);
+  const typeDraftDirty = section === 'types' && raw !== null && raw !== JSON.stringify(rules?.types[typeId], null, 2);
+  const navigationLocked = busy || (section === 'types' ? typeDraftDirty : raw !== null);
+  const draftTarget = useRef<{ section: typeof section; id: string; original: string | undefined } | null>(null);
+  useEffect(() => {
+    const value = section === 'types' ? rules?.types[typeId]
+      : section === 'triggers' || section === 'damageTable' ? rules?.[section] : undefined;
+    draftTarget.current = raw === null ? null : { section, id: typeId, original: JSON.stringify(value) };
+  }, [raw, section, typeId, rules]);
   useEffect(() => {
     let live = true;
-    setRules(null); setError(''); setRaw(null);
     if (!projectPath) return;
-    void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
+    void invoke('studio.rules', {}).then(r => {
+      if (!live) return;
+      const draft = draftTarget.current;
+      if (draft && (draft.section === 'types' || draft.section === 'damageTable' || draft.section === 'triggers')) {
+        const updated = draft.section === 'types' ? r.types[draft.id] : r[draft.section];
+        if (JSON.stringify(updated) !== draft.original) {
+          setRaw(null);
+          setError('This rule changed elsewhere. The editor reloaded its latest value.');
+        }
+      }
+      setRules(r);
+      setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? '');
+    })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
     return () => { live = false; };
   }, [projectPath, historyVersion]);
@@ -33,17 +57,17 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged }: {
   }, [rules, query]);
   // Inspector → "Edit type in Rules" selects that type.
   useEffect(() => {
-    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id) { setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
-    const forest=()=>setForestOpen(true);
+    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id && !navigationLocked) { setSection('types');setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
+    const forest=()=>{if (!navigationLocked) setForestOpen(true);};
     window.addEventListener('studio:rules-type', pick);
     window.addEventListener('studio:rules-forest',forest);
     return () => {window.removeEventListener('studio:rules-type', pick);window.removeEventListener('studio:rules-forest',forest);};
-  }, []);
-  const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources) : [], [rules, typeId]);
+  }, [navigationLocked]);
+  const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources, rules.bodies?.[typeId]) : [], [rules, typeId]);
   const write = async (path: string, value: unknown) => {
     setBusy(true); setError('');
-    try { setRules(await invoke('studio.rulesSet', { path, value })); onChanged(); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { setRules(await invoke('studio.rulesSet', { path, value })); onChanged(); return true; }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); return false; }
     finally { setBusy(false); }
   };
   const commit = (v: RuleValue, input: string | boolean) => {
@@ -55,11 +79,26 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged }: {
   };
   if (!projectPath) return <div className="rules__empty">Open a project to edit its rules.</div>;
   const extendsBase = typeId && rules ? (rules.types[typeId] as { extends?: unknown })?.extends : undefined;
-  return <div className="rules">
+  return <div className="rules-container"><div className="rules">
     <aside className="rules__list">
-      <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} onClick={()=>setForestOpen(true)}>Planet forest</button>
+      {openActorSettings && <div className="rules__section">
+        <strong>Actor settings</strong>
+        <span>Simulation, movement and loadout</span>
+        <StudioButton onClick={openActorSettings}>Open Actors &amp; Cameras</StudioButton>
+      </div>}
+      <label className="rules__section">Rule section
+        <select value={section} disabled={navigationLocked} onChange={event=>{
+          setForestOpen(false);setSection(event.target.value as typeof section); setRaw(null);setError('');
+        }}>
+          <option value="types">Unit types</option><option value="triggers">Triggers</option>
+          <option value="damageTable">Damage matrix</option><option value="global">Global settings</option>
+          <option value="document">Complete rules.json</option>
+        </select>
+      </label>
+      {section==='types'&&<>
+      <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} disabled={busy||typeDraftDirty} onClick={()=>setForestOpen(true)}>Planet forest</button>
       {rules && <StudioField label="Auto-target order" htmlFor="rules-acquire-order">
-        <StudioSelect id="rules-acquire-order" value={rules.acquireOrder} disabled={busy}
+        <StudioSelect id="rules-acquire-order" value={rules.acquireOrder} disabled={busy||typeDraftDirty}
           onChange={e => void write('targeting.acquireOrder', e.target.value)}>
           <option value="nearest">Nearest</option>
           <option value="rowMajor">By map row</option>
@@ -69,28 +108,56 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged }: {
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search types" aria-label="Search unit types"/></label>
       <div role="listbox" aria-label="Unit types" className="rules__types">
         {ids.map(id => { const name = String((rules!.types[id] as { name?: unknown })?.name ?? id);
-          return <button key={id} type="button" role="option" aria-selected={id === typeId} draggable
+          return <button key={id} type="button" role="option" disabled={busy||typeDraftDirty} aria-selected={id === typeId} draggable
             title="Drag into the Scene to place a new object of this type"
             onDragStart={e => { e.dataTransfer.setData('text/plain', 'aiverse-type:' + id); e.dataTransfer.effectAllowed = 'copy'; }}
             className={'rules__type' + (id === typeId && !forestOpen ? ' is-active' : '')} onClick={() => { setForestOpen(false);setTypeId(id); setRaw(null); }}>
             <b>{name}</b>{name !== id && <small>{id}</small>}</button>; })}
         {rules && !ids.length && <p className="rules__empty">No types.</p>}
       </div>
+      </>}
     </aside>
-    {forestOpen ? <PlanetForestPanel key={projectPath} historyVersion={historyVersion} onChanged={onChanged}/> : <section className="rules__form" aria-label={'Type ' + typeId}>
+    {forestOpen ? <PlanetForestPanel key={projectPath} historyVersion={historyVersion} onChanged={onChanged}/> : <section className="rules__form" aria-label={section==='types'?'Type '+typeId:section}>
+      {syntaxError&&section!=='global'&&section!=='document'&&<div className="rules__error" role="alert">{syntaxError}</div>}
       {error && <div className="rules__error" role="alert">{error}<button type="button" aria-label="Dismiss" onClick={() => setError('')}>×</button></div>}
-      {!rules ? <p className="rules__empty">Loading rules…</p> : !typeId ? <p className="rules__empty">rules.json has no types.</p> : <>
+      {!rules ? <p className="rules__empty">Loading rules…</p> : section==='global'||section==='document' ? <RulesDocumentEditor key={projectPath+section}
+        section={section} historyVersion={historyVersion} projectPath={projectPath} syntaxError={syntaxError} raw={raw} setRaw={setRaw} onChanged={async()=>{
+          setRules(await invoke('studio.rules',{})); onChanged();
+        }}/> : section!=='types' ? <>
+        <h3>{section==='triggers'?'Triggers':'Damage matrix'}</h3>
+        {section==='damageTable'&&!!rules.armorTypes?.length&&<div className="rules__matrix"><table>
+          <thead><tr><th>Attack / armor</th>{rules.armorTypes.map(armor=><th key={armor}>{armor}</th>)}</tr></thead>
+          <tbody>{Object.entries(rules.damageTable??{}).map(([attack,row])=><tr key={attack}>
+            <th scope="row">{attack}</th>{rules.armorTypes!.map(armor=>{
+              const multiplier = typeof row?.[armor] === 'number' ? row[armor] : 1;
+              const effect = multiplier > 1.001 ? 'increased' : multiplier < 0.999 ? 'reduced' : 'normal';
+              return <td key={armor} data-effect={effect}>{multiplier}×</td>;
+            })}
+          </tr>)}</tbody>
+        </table></div>}
+        <div className="rules__rawbox">
+          <textarea disabled={busy} aria-invalid={!!syntaxError} aria-label={section==='triggers'?'Trigger definitions':'Damage multipliers'} spellCheck={false}
+            value={raw??JSON.stringify(rules[section]??(section==='triggers'?[]:{}),null,2)}
+            onChange={event=>{setError('');const saved=JSON.stringify(rules[section]??(section==='triggers'?[]:{}),null,2);setRaw(event.target.value===saved?null:event.target.value);}}/>
+          <button disabled={busy||raw===null||!!syntaxError} onClick={()=>{
+            try{const value=JSON.parse(raw!);void write(section,value).then(saved=>{if(saved)setRaw(null);});}
+            catch(e){setError(String(e));}
+          }}>Validate &amp; save</button>
+          {raw!==null&&<button disabled={busy} onClick={()=>{setRaw(null);setError('');}}>Discard changes</button>}
+        </div>
+      </> : !typeId ? <p className="rules__empty">rules.json has no types.</p> : <>
         <div className="rules__head">
           <h3>{typeId}</h3>
           {typeof extendsBase === 'string' && <span className="rules__extends">extends {extendsBase}</span>}
           <span className="rules__spacer"/>
-          <button type="button" className="rules__raw-toggle" onClick={() => setRaw(r => r === null ? JSON.stringify(rules.types[typeId], null, 2) : null)}>
+          <button type="button" className="rules__raw-toggle" disabled={busy||typeDraftDirty} onClick={() => setRaw(r => r === null ? JSON.stringify(rules.types[typeId], null, 2) : null)}>
             {raw === null ? 'Edit JSON' : 'Form'}</button>
         </div>
         <p className="rules__note">Changes are validated by the game loader and saved to rules.json at once. Blank = inherit / default.</p>
         {raw !== null ? <div className="rules__rawbox">
-          <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false} aria-label={'JSON of ' + typeId}/>
-          <button type="button" disabled={busy} onClick={() => { try { void write('types.' + typeId, JSON.parse(raw)); } catch (e) { setError('JSON: ' + (e instanceof Error ? e.message : String(e))); } }}>Validate &amp; save</button>
+          <textarea disabled={busy} aria-invalid={!!syntaxError} value={raw} onChange={e => {setError('');setRaw(e.target.value);}} spellCheck={false} aria-label={'JSON of ' + typeId}/>
+          <button type="button" disabled={busy||!typeDraftDirty||!!syntaxError} onClick={() => { try { void write('types.' + typeId, JSON.parse(raw)).then(saved=>{if(saved)setRaw(null);}); } catch (e) { setError('JSON: ' + (e instanceof Error ? e.message : String(e))); } }}>Validate &amp; save</button>
+          {typeDraftDirty&&<button type="button" disabled={busy} onClick={()=>{setRaw(null);setError('');}}>Discard changes</button>}
         </div> : RULE_GROUPS.map(group => {
           const rows = values.filter(v => v.field.group === group);
           if (!rows.length) return null;
@@ -100,7 +167,42 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged }: {
         })}
       </>}
     </section>}
-  </div>;
+  </div></div>;
+}
+
+function RulesDocumentEditor({section,historyVersion,projectPath,syntaxError,raw,setRaw,onChanged}:{
+ section:'global'|'document';historyVersion?:string;projectPath:string;syntaxError:string;raw:string|null;setRaw:(v:string|null)=>void;onChanged:()=>Promise<void>;
+}){
+ const [original,setOriginal]=useState<string|null>(null);
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState('');
+ const [revision,reload]=useState(0);
+ const editing=useRef(false);
+ useEffect(()=>{editing.current=raw!==null;},[raw]);
+ useEffect(()=>{
+  if(editing.current)return;
+  let live=true;
+  setOriginal(null);setError('');
+  invoke('studio.rulesDocument',{section}).then(r=>{if(live)setOriginal(r.text);})
+   .catch(e=>{if(live)setError(String(e));});
+  return ()=>{live=false;};
+ },[section,revision,historyVersion]);
+ async function save(){
+  if(original===null||raw===null||busy||syntaxError)return;
+  setBusy(true);setError('');
+  try{
+   const result=await invoke('studio.rulesDocumentSave',{section,projectPath,original,value:JSON.parse(raw)});
+   setOriginal(result.text);setRaw(null);await onChanged();
+  }catch(e){setError(String(e));}finally{setBusy(false);}
+ }
+ const title=section==='global'?'Global settings':'Complete rules.json';
+ return <div className="rules__rawbox"><h3>{title}</h3>
+  {(syntaxError||error)&&<div role="alert" className="rules__error">{syntaxError||error}</div>}
+  {original!==null&&<textarea value={raw??original} aria-label={title} spellCheck={false}
+   disabled={busy} aria-invalid={!!syntaxError} onChange={e=>{setError('');setRaw(e.target.value===original?null:e.target.value);}}/>}
+  <button disabled={busy||raw===null||!!syntaxError} onClick={()=>void save()}>Validate &amp; save</button>
+  <button disabled={busy} onClick={()=>{setRaw(null);reload(v=>v+1);}}>{raw===null?'Reload':'Discard & reload'}</button>
+ </div>;
 }
 
 function RuleRow({ value: v, busy, onCommit, onReset }: { value: RuleValue; busy: boolean; onCommit: (input: string | boolean) => void; onReset: () => void }) {

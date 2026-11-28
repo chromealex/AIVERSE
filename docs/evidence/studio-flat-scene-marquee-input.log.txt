@@ -1,0 +1,9 @@
+2026-11-26 11:28:18.798 AiverseStudioHTML5[20236:84196748] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-marquee-O67g3v/Catalog.app/Contents/Resources/studio-web
+2026-11-26 11:28:19.015 AiverseStudioHTML5[20236:84196748] [studio-web] served index.html (6287 bytes)
+2026-11-26 11:28:19.022 AiverseStudioHTML5[20236:84196748] [studio-web] served assets/index-BxP7M58V.js (1698205 bytes)
+2026-11-26 11:28:19.055 AiverseStudioHTML5[20236:84196748] [studio-web] JS: CROSS main boot
+2026-11-26 11:28:19.064 AiverseStudioHTML5[20236:84196748] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 11:28:25.371 AiverseStudioHTML5[20236:84196748] [studio-web] JS: CROSS main DRAG_replace
+2026-11-26 11:28:25.492 AiverseStudioHTML5[20236:84196748] APPKIT marquee replace
+2026-11-26 11:28:26.973 AiverseStudioHTML5[20236:84196748] [studio-web] JS: CROSS main replace selected [] hierarchy []
+2026-11-26 11:28:26.973 AiverseStudioHTML5[20236:84196748] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:98:122 Error: selection mismatch replace expected ["entity:0","entity:1"]

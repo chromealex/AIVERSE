@@ -1,6 +1,6 @@
 {
   "name": "World Processes: Planet and Moon",
-  "id": "org.aiverse.world-processes-planet-demo",
+  "id": "org.aiverse.world_processes.planet_demo",
   "version": "1.0",
   "module": "game",
   "rules": "rules.json",

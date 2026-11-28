@@ -6,6 +6,7 @@
 #pragma once
 #include "engine/view/game/MainCameraShake.h"
 #include "engine/view/MapProjection.h"
+#include "engine/view/game/PlanarMinimap.h"
 #include "ProjectCursors.h"
 #include "engine/view/game/GamePortrait.h"
 #include "MatchFiles.h"
@@ -83,7 +84,7 @@ struct Notice { std::string text, style; double until; };
 
 class Minimap {
 public:
-    void build(gfx::Device& dev, const GameState& gs, const std::string& background, const ::aiverse::view::MapProjection& bounds, bool rectangle);
+    void build(gfx::Device& dev, const GameState& gs, const std::string& background, const game::minimap::Layout& layout);
     void update(gfx::Device& dev, const GameState& gs, const Rules& rules, const GameScene& scene, const std::vector<uint8_t>* vision,
                 const float3 (&viewQuad)[4], bool haveQuad, const std::vector<OverlayMinimapMark>* marks = nullptr);
     void release(gfx::Device& dev);
@@ -112,6 +113,7 @@ private:
     ::aiverse::view::MapProjection bounds_;
     bool rectangle_ = false;
     std::vector<uint32_t> base_, pixels_;
+    game::minimap::Raster raster_;   // planar maps: shared with the Studio overlay preview
 };
 
 class GameClient {
@@ -162,7 +164,7 @@ public:
     void event(const platform::Event& e);
     bool canShutdown() const noexcept { return !view_.modelMutationBlocked(); }
     void shutdown();
-    void autostart(size_t i) { startMatch(i); }
+    void autostart(size_t i, std::optional<uint8_t> localSeat={}) { startMatch(i,Json(),nullptr,false,localSeat); }
     void forceLanguage(std::string tag) { forcedLanguage_ = std::move(tag); }
     void spectate() { spectator_ = true; }
     void showHowto() { howtoOpen_ = true; }
@@ -175,6 +177,8 @@ public:
     // Hosting (the editor's Game window, apps/editor/ClientHost.cpp): frames render into these textures
     // instead of the screen; the host also sets platform::setHostedView around every call.
     void setHostTarget(gfx::TextureHandle color, gfx::TextureHandle depth, int w, int h) { hostColor_ = color; hostDepth_ = depth; hostW_ = w; hostH_ = h; }
+    GameView::AssetResidencyStats assetResidencyStats() const { return view_.assetResidencyStats(); }
+    const game::ViewScripts& viewScripts() const { return viewScripts_; }
     Simulation* simulation() { return sim_.get(); }
     // Editor Play/hosted clients: update visual cave SDF without restarting
     // the current match. This is presentation-only, never a physics ACK.
@@ -185,6 +189,12 @@ public:
     void setStartCamera(float x, float z, float distance, float pitchDeg, float yawDeg) {
         startCamera_[0] = x; startCamera_[1] = z; startCamera_[2] = distance; startCamera_[3] = pitchDeg; startCamera_[4] = yawDeg;
         hasStartCamera_ = true;
+    }
+    const render::GeometryScene& staticGeometry() const { return view_.geometryScene(); }
+    const render::Prisma& prismaDiagnostics() const { return prisma_; }
+    void setHostPostQuality(render::PrismaQuality quality) {
+        hostPostQuality_=quality;
+        prisma_.setQuality(quality);
     }
     bool inMatch() const { return !mapLoading_ && sim_ != nullptr && (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over); }
     const std::string& errorText() const { return error_; }
@@ -208,6 +218,7 @@ public:
     bool hostCanStep() const;
     size_t hostMapIndex() const{return mapIndex_;}
     bool setHostPaused(bool paused);
+    double simulationSpeed() const;
     bool setHostSpeed(double speed);
     bool hostCheckpoint(bool restore);
 private:
@@ -219,11 +230,12 @@ public:
 private:
     bool appendRuntimeGraphImageRoots(const render::Model& model,
         std::vector<std::span<const render::Material>>& roots)const;
-    bool hostPaused_ = false, hostStep_ = false;
+    bool hostPaused_ = false;
+    uint32_t pendingHostSteps_ = 0;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, Move, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
 
-    bool startMatch(size_t idx, const Json& initialVars = Json(), const MatchFile* file = nullptr, bool playback = false);
+    bool startMatch(size_t idx, const Json& initialVars = Json(), const MatchFile* file = nullptr, bool playback = false, std::optional<uint8_t> localSeat = {});
     bool writeMatchFile(const std::string& slot, bool replay);
     bool openMatchFile(const std::string& slot, bool replay);
     std::vector<std::string> matchFileList(bool replay) const;
@@ -485,6 +497,7 @@ private:
     int worldRadius_ = 2;
     render::PrismaVolumeStack prismaVolumes_; // camera-local PRISMA presentation profiles, nonauthoritative
     render::Prisma prisma_;               // post-processing: game.json / map "postfx" (engine/render/Prisma.h)
+    std::optional<render::PrismaQuality> hostPostQuality_;
     render::PrismaQuality prismaBase_ = render::PrismaQuality::Medium;   // tier before the governor stepped down
     void configurePrisma(const Json& map);
     // PHYSIS nature presentation (fire/smoke, sound, vegetation + water wind, sky)

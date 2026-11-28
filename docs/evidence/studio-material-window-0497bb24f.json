@@ -1,0 +1,14 @@
+{
+  "sha": "0497bb24f630f2910f59a65f24e758b32895f666",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-material-window-0497bb24f.log.txt",
+  "sha256": "9f6e029102955800577df7a523ead3624efa2e1b48be7a46ae75a3ad357f8c9c"
+}

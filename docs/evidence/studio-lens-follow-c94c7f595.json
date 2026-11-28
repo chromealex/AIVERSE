@@ -1,0 +1,14 @@
+{
+  "sha": "c94c7f595c7740dfd93c32ff55b66ec938bbc97b",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^(studio_session|lens_ops)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-lens-follow-c94c7f595.log.txt",
+  "sha256": "d4431fe52c325b176c79552fe5334e8b2330b1c557e513017a62c5da20a75778"
+}

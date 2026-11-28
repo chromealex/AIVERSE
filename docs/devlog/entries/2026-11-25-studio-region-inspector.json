@@ -1,0 +1,33 @@
+{
+  "id": "2026-11-25-studio-region-inspector",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "2175433a6",
+  "author": null,
+  "links": [],
+  "title": "Территории в Inspector",
+  "titleEn": "Territories in Inspector",
+  "summary": "Вкладка Regions показывает имя, число клеток и схему территории.",
+  "summaryEn": "The Regions tab shows the display name, cell count and coverage of a territory.",
+  "body": [
+    "Выберите букву, чтобы увидеть территорию на плоской карте. На больших картах клетки объединяются только для обзора.",
+    "Save name сохраняет имя в документе. Paint in Scene включает кисть выбранной буквы."
+  ],
+  "bodyEn": [
+    "Choose a letter to see its extent on a flat map. Larger maps group cells in the coverage preview.",
+    "Save name updates the document. Paint in Scene arms the brush for the selected letter."
+  ],
+  "verified": "На macOS переименован регион из 164 клеток. Проверены Undo, Redo, сохранённый файл и включение кисти.",
+  "verifiedEn": "A detached macOS Inspector renamed a 164-cell region. Checks covered Undo, Redo, the saved map and brush selection.",
+  "limits": "Подсветка границ в Scene и проверка Windows ещё предстоят.",
+  "limitsEn": "Scene boundary rendering and Windows verification remain open.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-region-inspector/region-inspector.png",
+      "caption": "Территория Harbor ridge в отдельном Inspector",
+      "captionEn": "Harbor ridge territory in a detached Inspector"
+    }
+  ]
+}

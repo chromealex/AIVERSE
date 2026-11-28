@@ -1,0 +1,10 @@
+{
+  "sha": "bc191a2afe7434c442f9b351ee1615194a199a8d",
+  "argv": [
+    "bash",
+    "../build-fixes.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-atlas-fix-token.log.txt",
+  "sha256": "296ca5411c4ffb1d4c9ef47fa221873e423aa159400c6c6b1a569073121d7660"
+}

@@ -1,0 +1,10 @@
+{
+  "sha": "ce826236cdb90d06a0eaff84fa3905446a13df1a",
+  "argv": [
+    "bash",
+    "/tmp/planet-terrain-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-planet-terrain-body-edit.log.txt",
+  "sha256": "b504633064505c26389c373679a87f3c2761d4da6263ac80a39eadf9686d36ef"
+}

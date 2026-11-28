@@ -1,0 +1,10 @@
+{
+  "sha": "428d1aeea460832cee26240999bd16071794f0d6",
+  "argv": [
+    "bash",
+    "/tmp/height-stage-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-terrain-target-height.log.txt",
+  "sha256": "466b01f0d5d2e62330f3a01ac657c85a355c023384b3ad41dd36e79f89f72ce8"
+}

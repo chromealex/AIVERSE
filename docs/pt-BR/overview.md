@@ -40,14 +40,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ## Início rápido (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Outro jogo no editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Outro jogo no editor: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 Para o jogo iniciar com outro conjunto de dados, passe `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Vários editores ao mesmo tempo
@@ -230,10 +229,17 @@ informações do editor:
 - É criado junto com o projeto (hub «Novo projeto», MCP `create_project`); um projeto antigo sem ele recebe um na primeira
   abertura no editor. Os templates em `templates/*/` já têm um (ele não é copiado para um projeto novo: este recebe o seu).
 - Em todo lugar em que o editor aceita um caminho de projeto, servem tanto o `.aiverse` quanto a pasta:
-  `aiverse_editor "My Strategy.aiverse"`, `--project`, «Abrir…» no hub (mostra `.aiverse` e pastas de projeto), recentes,
+  `AiverseStudio.exe --project "My Strategy.aiverse"`, `--project`, «Abrir…» no hub (mostra `.aiverse` e pastas de projeto), recentes,
   MCP `open_game`, `aiversebuild --project x.aiverse`. O `.aiverse` não vai para o build.
 - Projetos criados antes da renomeação para AIVERSE mantêm seu `<Nome>.rtsproj`: ele abre do mesmo jeito em todo lugar,
   é regravado no lugar e nunca renomeado; se a pasta tiver os dois, vale o `.aiverse`.
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Associações de arquivos do editor ImGui antigo</summary>
+
 - **Duplo clique.** Ao iniciar, o editor associa o `.aiverse` a si mesmo (por usuário, sem direitos de administrador) se não
   houver associação ou se ela apontar para outra instância do editor; ele não substitui outro programa que você escolheu.
   Manualmente: «Projeto → Tornar o editor o app padrão para .aiverse»; o estado aparece no canto inferior esquerdo do hub.
@@ -250,6 +256,8 @@ informações do editor:
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<editor> %f`), ícones em `~/.local/share/icons/hicolor`, app
     padrão em `~/.config/mimeapps.list`; `update-mime-database`, `update-desktop-database` e `xdg-mime` são chamados se
     estiverem instalados.
+
+</details>
 
 ## Criar um jogo (assistente)
 

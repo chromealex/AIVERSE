@@ -1,0 +1,21 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/integration-verify-debug
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/integration-verify-debug
+    Start 329: spectrafx_metal_gpu
+1/4 Test #329: spectrafx_metal_gpu ..............   Passed    0.84 sec
+    Start 330: spectrafx_metal_billboard
+2/4 Test #330: spectrafx_metal_billboard ........   Passed    0.54 sec
+    Start 333: spectrafx_metal_rhi
+3/4 Test #333: spectrafx_metal_rhi ..............   Passed    1.31 sec
+    Start 334: spectrafx_preview_policy
+4/4 Test #334: spectrafx_preview_policy .........   Passed    0.31 sec
+
+100% tests passed, 0 tests failed out of 4
+
+Label Time Summary:
+Architecture    =   0.31 sec*proc (1 test)
+EDITOR          =   0.31 sec*proc (1 test)
+MetalGPU        =   2.69 sec*proc (3 tests)
+RHI             =   1.31 sec*proc (1 test)
+SpectraFX       =   3.00 sec*proc (4 tests)
+
+Total Test time (real) =   3.04 sec

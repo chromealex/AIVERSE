@@ -12,6 +12,27 @@
 
 namespace aiverse::studio {
 
+inline float studioRayMesh(render::float3 origin,render::float3 direction,const render::MeshBuilder& geometry){
+    float nearest=std::numeric_limits<float>::infinity();
+    const auto& v=geometry.vertices();const auto& idx=geometry.indices();
+    for(size_t i=0;i+2<idx.size();i+=3){
+        const auto a=v[idx[i]].pos,b=v[idx[i+1]].pos,c=v[idx[i+2]].pos;
+        const auto e=b-a,f=c-a,h=render::cross(direction,f);
+        const float det=render::dot(e,h);
+        if(std::abs(det)<1e-7f)continue;
+        const auto s=origin-a;const float u=render::dot(s,h)/det;
+        // Shared mesh vertices can round a boundary barycentric weight a few
+        // ulps outside the triangle. Include that edge on either incident face.
+        constexpr float edgeTolerance=8*std::numeric_limits<float>::epsilon();
+        if(u < -edgeTolerance || u > 1+edgeTolerance)continue;
+        const auto q=render::cross(s,e);const float w=render::dot(direction,q)/det;
+        if(w < -edgeTolerance || u+w > 1+edgeTolerance)continue;
+        const float t=render::dot(f,q)/det;
+        if(t>=0&&t<nearest)nearest=t;
+    }
+    return nearest;
+}
+
 struct StudioVisualPick {
     std::string id;
     float distance = std::numeric_limits<float>::infinity();

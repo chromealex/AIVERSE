@@ -1,0 +1,6 @@
+2026-11-25 23:36:25.266 AiverseStudioHTML5[37593:81658644] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-25 23:36:25.266 AiverseStudioHTML5[37593:81658644] [studio-web] JS: CROSS bindingproof VERIFIED map destination, pending save, undo, redo, stale target and reopen
+Shader edits left game rules unchanged.
+Second map contains the exact saved graph. First map and global settings remain byte-identical.
+map 0 central sample count 15000 magenta fraction 0.0 dominant colors [((129, 183, 94), 137), ((123, 178, 90), 134), ((120, 175, 88), 120)]
+map 1 central sample count 15000 magenta fraction 1.0 dominant colors [((255, 0, 255), 15000)]

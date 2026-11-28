@@ -1,10 +1,10 @@
 // Pure display/layout adapter. Graphs are authored by AIVERSE, not executed in the browser.
 export interface GraphNode {
- id: string; op: string; inputs?: string[]; position?: number[]; value?: number|number[]; texture?:string; srgb?:boolean;
+ id: string; op: string; inputs?: string[]; position?: number[]; value?: number|number[]; name?:string; mask?:string; texture?:string; srgb?:boolean;
 }
 export interface GraphSource {
- version?: number; domain?: string;
- nodes?: GraphNode[]; outputs?: Record<string,string>;
+ version?: number; domain?: string; minQuality?:string;
+ parameters?:Record<string,number|number[]>; nodes?: GraphNode[]; outputs?: Record<string,string>;
 }
 export interface PositionedNode { id:string; op:string; x:number; y:number; height:number; inputs:string[]; values:number[]; }
 export interface GraphEdge { key:string; from:string; to:string; x1:number; y1:number; x2:number; y2:number; }
@@ -13,7 +13,8 @@ export function layoutShaderGraph(source:GraphSource):{nodes:PositionedNode[];ed
  const nodes=(source.nodes??[]).slice(0,128).map((node,index)=>{
   const p=node.position;
   const inputs=Array.isArray(node.inputs)?node.inputs.slice(0,16).map(x=>typeof x==='string'?x:''):[];
-  const raw=Array.isArray(node.value)?node.value:[node.value];
+  const value=effectiveShaderValue(source,node);
+  const raw=Array.isArray(value)?value:[value];
   const values=raw.slice(0,4).filter((v):v is number=>typeof v==='number'&&Number.isFinite(v));
   return {id:node.id,op:node.op,x:clamp(p?.[0]??(index%5)*180),y:clamp(p?.[1]??Math.floor(index/5)*110),
    inputs,values,height:Math.max(values.length?73:54,20+9*inputs.length)};
@@ -61,6 +62,69 @@ export function removeShaderGraphNode(source:GraphSource,id:string):GraphSource 
  if(source.nodes.some(n=>n.id!==id&&n.inputs?.includes(id))||
     Object.values(source.outputs??{}).includes(id))return source;
  return {...source,nodes:source.nodes.filter(n=>n.id!==id)};
+}
+
+export function shaderOutputNames(domain?:string):string[] {
+ return domain==='material'
+  ? ['color','roughness','metallic','emission','normal','vertexOffset','vertexNormal']
+  : ['color'];
+}
+
+export function setShaderOutput(graph:GraphSource,channel:string,id:string):GraphSource {
+ if(!shaderOutputNames(graph.domain).includes(channel)&&!Object.hasOwn(graph.outputs??{},channel))return graph;
+ if((graph.outputs?.[channel]??'')===id)return graph;
+ if(id ? !graph.nodes?.some(n=>n.id===id) : channel==='color')return graph;
+ const outputs={...graph.outputs};
+ if(id)outputs[channel]=id;
+ else delete outputs[channel];
+ return {...graph,outputs};
+}
+
+export function setShaderInput(graph:GraphSource,target:string,slot:number,id:string):GraphSource {
+ const nodes=graph.nodes;
+ const inputs=nodes?.find(node=>node.id===target)?.inputs;
+ if(!nodes||!inputs||!Number.isInteger(slot)||slot<0||slot>=inputs.length)return graph;
+ const byId=new Map(nodes.map(node=>[node.id,node]));
+ if(!byId.has(id))return graph;
+ const pending=[id], visited=new Set<string>();
+ while(pending.length){
+  const source=pending.pop()!;
+  if(source===target)return graph;
+  if(visited.has(source))continue;
+  visited.add(source);
+  pending.push(...(byId.get(source)?.inputs??[]));
+ }
+ return {...graph,nodes:nodes.map(node=>node.id===target
+  ? {...node,inputs:inputs.map((old,index)=>index===slot?id:old)} : node)};
+}
+
+export function effectiveShaderValue(graph:GraphSource,node:GraphNode){
+ const key=node.name??node.id;
+ return node.op==='parameter'&&Object.hasOwn(graph.parameters??{},key)
+  ? graph.parameters?.[key] : node.value;
+}
+
+export function setShaderComponent(graph:GraphSource,id:string,component:number,value:number):GraphSource {
+ const node=graph.nodes?.find(n=>n.id===id);
+ if(!node||!['constant','parameter'].includes(node.op)||!Number.isInteger(component)||
+    component<0||component>3||!Number.isFinite(value)||Math.abs(value)>1000000)return graph;
+ const previous=effectiveShaderValue(graph,node);
+ const rgba=Array.from({length:4},(_,i)=>Array.isArray(previous)?previous[i]??0:previous??0);
+ rgba[component]=value;
+ const name=node.name??id;
+ if(node.op==='parameter'&&Object.hasOwn(graph.parameters??{},name))
+  return {...graph,parameters:{...graph.parameters,[name]:rgba}};
+ return {...graph,nodes:graph.nodes?.map(n=>n===node?{...n,value:rgba}:n)};
+}
+
+export function setShaderDomain(graph:GraphSource,domain:string):GraphSource {
+ if(domain===graph.domain||!['material','postfx','particle'].includes(domain))return graph;
+ const next={...graph,domain};
+ if(domain!=='material'){
+  delete next.minQuality;
+  next.outputs=Object.fromEntries(Object.entries(graph.outputs??{}).filter(([key])=>key==='color'));
+ }
+ return next;
 }
 
 /** Authoring edits only. Native compiler remains authoritative. */
@@ -179,8 +243,4 @@ export function shaderTintTemplate(domain:string,ops:readonly ShaderNodeOperatio
   {id:'tint',op:'constant',value:[1,1,1,1],position:[20,120]},
   {id:'result',op:'multiply',inputs:['source','tint'],position:[220,40]}
  ]};
-}
-export function setShaderOutput(source:GraphSource,key:string,node:string):GraphSource {
- if(!Object.prototype.hasOwnProperty.call(source.outputs??{},key)||!source.nodes?.some(n=>n.id===node)||source.outputs?.[key]===node)return source;
- return {...source,outputs:{...source.outputs,[key]:node}};
 }

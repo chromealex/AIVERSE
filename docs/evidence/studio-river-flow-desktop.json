@@ -1,0 +1,11 @@
+{
+  "sha": "a5f8e89446ec24fd57ca830120279a8ee4ed88bf",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_terrain_geometry$\" && bash /tmp/scene-river-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-river-flow-desktop.log.txt",
+  "sha256": "c0cc9a2660b52db0c1b10941cf1eea6e95b4cfe820236beb2cb72a6cc3e1aa62"
+}

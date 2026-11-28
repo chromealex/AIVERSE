@@ -1,0 +1,10 @@
+{
+  "sha": "7e78ced05381848040d6c11f1d8cbaa379595a0b",
+  "argv": [
+    "bash",
+    "/tmp/fx-spawn-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-spawn-speed-color.log.txt",
+  "sha256": "637f36a99f8249c7e407f6e4c9b5479ac0b514ff96e000e4cbaa359cd1726693"
+}

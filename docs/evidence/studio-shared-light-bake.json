@@ -1,0 +1,10 @@
+{
+  "sha": "5f44969e4db6b7035fddceceba7dd8b7a016e4ff",
+  "argv": [
+    "bash",
+    "/tmp/bake-shared-check.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-shared-light-bake.log.txt",
+  "sha256": "9999d0791422df7811bf7117975d81fdece5212030ebd9a333e187a7790b2fb5"
+}

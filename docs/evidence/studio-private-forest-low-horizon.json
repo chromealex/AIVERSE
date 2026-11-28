@@ -1,0 +1,10 @@
+{
+  "sha": "746a3ffaa21f73d130518ca19670373a5554c1c3",
+  "argv": [
+    "bash",
+    "/tmp/forest-horizon.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-forest-low-horizon.log.txt",
+  "sha256": "57afe363a55b2e66561419b5ca92bf66ae1d8d66ec493ffbda83763d0e7d524e"
+}

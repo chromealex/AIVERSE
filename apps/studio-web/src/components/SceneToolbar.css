@@ -18,7 +18,37 @@
 .scene-toolbar__mark button:hover:not(:disabled){background:var(--au-hover)}
 .scene-toolbar__mark button:disabled{color:var(--au-text-faint);cursor:default}
 .scene-toolbar__mark kbd{font-size:10px;color:var(--au-text-faint)}
+.scene-toolbar__target{display:block;color:var(--au-text-muted);font-variant-numeric:tabular-nums}
 .scene-toolbar__mark i{color:var(--au-text-faint)}
 .viewport-toolbar{gap:8px;overflow:visible}
 .viewport-toolbar .viewport-tools{min-width:0;flex:1 1 auto}
 .viewport-toolbar>:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.viewport-toolbar:has(.road-pick-guide){height:auto;min-height:41px;padding-block:4px}
+.viewport-tools:has(.road-pick-guide){flex-wrap:wrap}
+.viewport-toolbar:has(.road-pick-guide) .render-badge{display:none}
+.road-pick-guide{order:1;color:var(--au-text-soft);font-size:var(--au-font-xs)}
+
+.viewport-toolbar:has(.scene-toolbar__layers){position:relative}
+.scene-toolbar__marks:has(.scene-toolbar__layers){position:static}
+.scene-toolbar__layers{
+  box-sizing:border-box;left:4px;right:auto;width:min(560px,calc(100% - 8px));min-width:0;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));
+  align-items:start;gap:4px 12px;padding:8px;max-height:min(65vh,480px);overflow:auto;
+}
+.scene-toolbar__layers label{display:flex;align-items:center;gap:8px;padding:5px 8px;color:var(--au-text);cursor:pointer}
+
+.scene-toolbar__sampling {min-width:160px;margin:5px 0 0;padding:5px 8px;border:0;border-top:1px solid var(--au-line)}
+.scene-toolbar__sampling legend {color:var(--au-text-soft);font-size:11px}
+.scene-toolbar__sampling label {display:grid;grid-template-columns:1fr auto;padding:4px 0;gap:3px}
+.scene-toolbar__sampling output {font-variant-numeric:tabular-nums}
+.scene-toolbar__sampling input {grid-column:1/-1;width:100%;margin:0}
+
+.scene-toolbar__zone select{min-width:0;flex:1;width:0}
+.scene-toolbar__layers fieldset{min-inline-size:0;border:0;border-block-start:1px solid var(--au-line);margin:5px 0;padding:4px}
+.scene-toolbar__layers legend{color:var(--au-text-muted);font-weight:600;padding-inline:5px}
+.scene-toolbar__layers select{flex:1;min-width:0}
+
+.scene-toolbar__layers > input,.scene-toolbar__layers > p{grid-column:1/-1}
+.scene-toolbar__layer-groups{display:contents}
+.scene-toolbar__layer-groups label[hidden],.scene-toolbar__layer-groups > fieldset[hidden]{display:none}

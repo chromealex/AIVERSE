@@ -1,0 +1,15 @@
+{
+  "sha": "b3c967f38f9cf5c398919ad303ace3c57e244743",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "../integration-verify-debug",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^studio_(light_preview_math|shader_graph_draft|shader_graph_name|material_validation|viewport_layout|move_journal)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-cutover-native-panel-regressions.log.txt",
+  "sha256": "b50ae95b6a0845a8b3e72d2da851b0e3c76f542c3f8f694063c0cac6ae80f871"
+}

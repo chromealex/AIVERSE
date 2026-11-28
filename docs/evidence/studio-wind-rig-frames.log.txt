@@ -1,0 +1,1 @@
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/rig-ui.sh: line 8: cannot create temp file for here document: No space left on device

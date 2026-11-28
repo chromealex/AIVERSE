@@ -1,0 +1,8 @@
+DataInterface nodes
+Connect a node to ParticleProgramModule using the graph editing operations. Full visual wiring and GPU playback preview are not yet integrated into Studio.
+
+0 errors0
+Courtyard
+¬∑ saved
+edit mode
+‚óè Native host

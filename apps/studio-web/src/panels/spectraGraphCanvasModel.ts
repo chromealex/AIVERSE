@@ -6,7 +6,7 @@ import type { SpectraGraphV2, FxNode, GraphEdit } from './spectraDataInterfaceMo
 export interface GraphPoint {x:number;y:number}
 export interface VisualEdge {id:string;from:string;to:string;toPort?:string;path:string}
 const width=170;
-const finite=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=100000;
+const finite=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=200000;
 export function nodePoint(node:FxNode,index:number):GraphPoint {
   if(Array.isArray(node.position)&&node.position.length===2&&finite(node.position[0])&&finite(node.position[1]))
     return {x:node.position[0],y:node.position[1]};

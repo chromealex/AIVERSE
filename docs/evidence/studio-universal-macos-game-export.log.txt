@@ -1,0 +1,4 @@
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/mac-export-current-Z2kjP6/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/mac-export-current-Z2kjP6/Catalog.app: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/mac-export-launch.sh: line 16: 95025 Terminated: 15          "$app/Contents/MacOS/$exe" > "$r/exported-game.log" 2>&1
+[pack] mounted /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/mac-export-current-Z2kjP6/Harbor's study/Builds/macos/Watchtower_orders.app/Contents/Resources/content/content.rpak (58 files)

@@ -13,7 +13,7 @@ import type {Positioned} from './graphSelection';
 import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpoch?:string;projectPath:string}){
+export default function ModelGraphPanel({documentEpoch,projectPath,openAttachments,route}:{route?:import('../types').AnimationAuthoringRoute;documentEpoch?:string;projectPath:string;openAttachments?:()=>void}){
  const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
@@ -21,16 +21,18 @@ export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpo
  const [selection,setSelection]=useState<string[]>([]),[pending,setPending]=useState<PortRef|null>(null);
  const [positions,setPositions]=useState<Record<string,Positioned>>({}),[json,setJson]=useState('');
  const [modifierKind,setModifierKind]=useState('transform');
+ const [preview,setPreview]=useState('');
  const [showBuilding,setShowBuilding]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const history=useRef<DraftHistory<GraphObject>|null>(null),epoch=useRef(0),lock=useRef(false);
+ const [initializedEpoch,setInitializedEpoch]=useState(0);
  const dirty=!!draft&&!!original&&JSON.stringify(draft)!==JSON.stringify(original);
  const graph=draft&&object(draft.graph)?draft.graph:null;
  const view=draft?(mode==='model'?modelProjection(draft):mode==='geometry'?geometryProjection(draft):graph?animationProjection(graph,mode):{nodes:[],links:[]}):{nodes:[],links:[]};
  const active=selection.at(-1)??'';
  const rows=mode==='model'||mode==='geometry'?draft?.nodes:mode==='pose'?graph?.nodes:graph?.states;
  const entry=Array.isArray(rows)?rows.find(n=>object(n)&&n.id===active):undefined;
- const reset=(doc:GraphObject|null,rev:number)=>{setOriginal(doc);setDraft(doc);setRevision(rev);history.current=doc?new DraftHistory(doc):null;setSelection([]);setPending(null);setPositions({});};
+ const reset=(doc:GraphObject|null,rev:number)=>{setPreview('');setOriginal(doc);setDraft(doc);setRevision(rev);history.current=doc?new DraftHistory(doc):null;setSelection([]);setPending(null);setPositions({});};
  const edit=(doc:GraphObject)=>{if(history.current&&doc!==history.current.current())setDraft(history.current.push(doc));};
  const run=async(task:(live:()=>boolean)=>Promise<void>)=>{
   if(lock.current)return;lock.current=true;setBusy(true);setError('');setStatus('');
@@ -44,7 +46,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpo
    const result=await op('modeling_list');if(!live())return;
    if(!object(result)||!Array.isArray(result.models))throw new Error('Model list unavailable');
    setNames(result.models.filter((n):n is string=>typeof n==='string'));
-  });
+  }).then(()=>{if(epoch.current===token)setInitializedEpoch(token)});
   return ()=>{if(epoch.current===token)epoch.current++};
  },[projectPath,documentEpoch]);
  useEffect(()=>{setJson(entry?JSON.stringify(entry,null,2):'')},[entry]);
@@ -52,16 +54,29 @@ export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpo
   const r=modelingReply(await op('modeling_get',{name:asset}));if(!live())return;
   setName(asset);reset(r.document,r.revision);
  });
- const connect=(to:PortRef)=>{
-  if(!draft||!pending||busy)return;
+ useEffect(()=>{
+  const request=route?.request;
+  if(!request||request.tab!=='graph'||request.project!==projectPath||initializedEpoch!==epoch.current||busy||lock.current)return;
+  if(dirty&&name!==request.name){
+   setStatus('Save or discard this draft to open '+request.name+'.');return;
+  }
+  route?.consume?.();
+  if(dirty){setMode('pose');setPending(null);setSelection([]);return;}
+  void run(async live=>{
+   const r=modelingReply(await op('modeling_get',{name:request.name}));if(!live())return;
+   setName(request.name);reset(r.document,r.revision);setMode('pose');
+  });
+ },[route?.request,projectPath,initializedEpoch,busy,dirty,name]);
+ const connect=(source:PortRef,to:PortRef)=>{
+  if(!draft||busy)return;
   if(mode==='model'){
-   const next=connectModelParent(draft,pending,to);
+   const next=connectModelParent(draft,source,to);
    if(next===draft){setError('Invalid parent or cyclic hierarchy');return;}edit(next);
   }else if(mode==='geometry'){
-   const next=connectGeometryOperand(draft,pending,to);
+   const next=connectGeometryOperand(draft,source,to);
    if(next===draft){setError('Geometry operands must reference preceding mesh nodes');return;}edit(next);
   }else if(graph){
-   const next=mode==='pose'?connectAnimationPose(graph,pending,to):addAnimationTransition(graph,pending,to);
+   const next=mode==='pose'?connectAnimationPose(graph,source,to):addAnimationTransition(graph,source,to);
    if(next===graph){setError('Invalid pose dependency or state transition');return;}edit({...draft,graph:next});
   }
   setPending(null);setError('');
@@ -101,18 +116,32 @@ export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpo
     while(nodes.some(n=>object(n)&&n.id==='volume'+i))i++;
     const id='volume'+i;edit({...draft,nodes:[...nodes,{id,geometry:initialVolume()}]});setMode('geometry');setSelection([id]);setPending(null);
    }}>Add volume CSG part</StudioButton>}
+   <StudioButton size="sm" disabled={!draft||dirty||busy} onClick={()=>{
+    if(preview){setPreview('');return;}
+    void run(async live=>{
+     const image=await op('modeling_preview',{name,expectedRevision:revision});
+     if(!live())return;
+     if(!object(image)||image.revision!==revision||typeof image.png_base64!=='string')throw new Error('Model preview unavailable');
+     setPreview('data:image/png;base64,'+image.png_base64);
+    });
+   }}>{preview&&!dirty?'Hide preview':'Preview saved model'}</StudioButton>
    <StudioButton size="sm" disabled={!draft||busy} onClick={validate}>Validate</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={save}>Save</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={()=>reset(original,revision)}>Discard</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());setPending(null)}}>Undo</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());setPending(null)}}>Redo</StudioButton>
+   {draft&&Array.isArray(draft.clips)&&draft.clips.length>0&&<StudioButton size="sm" disabled={busy||dirty}
+     title={dirty?'Save or discard changes before opening the timeline':undefined}
+     onClick={()=>void run(async()=>{await op('animation_editor',{name,tab:'clips'});})}>Open timeline</StudioButton>}
+   {draft&&openAttachments&&<StudioButton size="sm" disabled={busy} onClick={openAttachments}>Attachments</StudioButton>}
    {name&&<span>Revision {revision}{dirty?' · Draft':''}</span>}
   </div>
+  {preview&&!dirty&&<img src={preview} alt={name+' · revision '+revision} width={512} height={512} style={{maxWidth:'100%',height:'auto',alignSelf:'center'}}/>}
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}
   <StudioAlert>Part hierarchy edits parent transforms. Geometry view edits native CSG operands and modifier order; operands use local geometry, not node transforms. Layout is local. Native validation governs saves.</StudioAlert>
   {draft&&(mode==='model'||mode==='geometry'||graph)?<>
    <GraphCanvas view={{...view,nodes:view.nodes.map(n=>({...n,...positions[mode+':'+n.id]}))}} selected={active} selection={selection} onSelection={setSelection}
-    label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
+    label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={to=>{if(pending)connect(pending,to)}} onConnect={connect} enhancedNavigation onCancel={()=>setPending(null)}
     onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    <GraphDiagnosticsPanel view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
    {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}

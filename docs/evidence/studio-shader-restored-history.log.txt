@@ -1,0 +1,18 @@
+2026-11-26 00:39:08.165 AiverseStudioHTML5[96536:81954588] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-retain-qa-eba46Z/Catalog.app/Contents/Resources/studio-web
+2026-11-26 00:39:08.305 AiverseStudioHTML5[96536:81954588] [studio-web] served index.html (6414 bytes)
+2026-11-26 00:39:08.308 AiverseStudioHTML5[96536:81954588] [studio-web] served assets/index-DI4-R7uA.js (1511475 bytes)
+2026-11-26 00:39:08.346 AiverseStudioHTML5[96536:81954588] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 00:39:08.715 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 00:39:08.718 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 00:39:08.755 AiverseStudioHTML5[96536:81954588] [studio-web] served index.html (6414 bytes)
+2026-11-26 00:39:08.757 AiverseStudioHTML5[96536:81954588] [studio-web] served assets/index-DI4-R7uA.js (1511475 bytes)
+2026-11-26 00:39:08.794 AiverseStudioHTML5[96536:81954588] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html?window=bindingproof&panels=shader_graph
+2026-11-26 00:39:09.404 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof before map
+2026-11-26 00:39:09.404 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof after map
+2026-11-26 00:39:09.404 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 00:39:09.404 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof document.changed {"message":""}
+2026-11-26 00:39:09.585 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof restored
+2026-11-26 00:39:09.585 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof before undo
+2026-11-26 00:39:09.951 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof CAPTURE
+2026-11-26 00:39:13.676 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof CONFLICT Graph changed or already exists; reload before saving
+2026-11-26 00:39:13.678 AiverseStudioHTML5[96536:81954588] [studio-web] JS: CROSS bindingproof FAIL Conflict lost draft or disk source

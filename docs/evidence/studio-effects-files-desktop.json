@@ -1,0 +1,10 @@
+{
+  "sha": "e4bdee2f526ec9bf9e681f120e73d4bd8a21ea08",
+  "argv": [
+    "bash",
+    "/tmp/fx-files-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effects-files-desktop.log.txt",
+  "sha256": "45caa4b567f5b058b642793d748dab7ce5c7fcc2ee929dc7605334ca464bb637"
+}

@@ -4,7 +4,7 @@
 // The PHYSIS EditorLink must resolve its connection and crypto types against
 // the engine transport namespace, independent of this shadow declaration.
 namespace aiverse::editor::net { struct PhysisNamespaceCollisionFixture {}; }
-#include "apps/editor/PhysisRemoteEdit.h"
+#include "apps/studio-native/StudioPhysisRemoteFields.h"
 #include "engine/net/Conn.h"
 #include <algorithm>
 #include <cstdio>
@@ -269,15 +269,36 @@ void editorBridge() {
     winds.at(0)=wind;
     config.set("windZones",winds);
     modified.set("physis",config);
-    CHECK(link.submit(modified,&error));
+    auto status=[&]{return studio::studioPhysisRemoteFields(link,Json::parse(R"({"action":"status"})"),4,nullptr);};
+    auto submit=status();
+    CHECK(submit.getBool("available") && submit.getStr("remoteRevision")=="0");
+    submit.set("action",Json::string("apply"));
+    for(const char* key:{"mapRevision","remoteRevision","connectionVersion"}) {
+        auto stale=submit;stale.set(key,Json::string("stale"));bool refused=false;
+        try{studio::studioPhysisRemoteFields(link,stale,4,&modified);}catch(const std::runtime_error&){refused=true;}
+        CHECK(refused);
+    }
+    const auto pending=studio::studioPhysisRemoteFields(link,submit,4,&modified);
+    CHECK(!pending.getBool("available") && !pending.getStr("requestId").empty());
+    const auto original=link.saveOutstanding();
+    // No server receipts arrive during these polls.
+    for(uint64_t ms=600;ms<40000;ms+=2000)link.poll(ms);
+    auto retry=status();CHECK(retry.getBool("canRetry") && !retry.getBool("available"));
+    retry.set("action",Json::string("retry"));
+    auto wrong=retry;wrong.set("requestId",Json::string("stale"));bool refused=false;
+    try{studio::studioPhysisRemoteFields(link,wrong,4,nullptr);}catch(const std::runtime_error&){refused=true;}
+    CHECK(refused);
+    const auto retried=studio::studioPhysisRemoteFields(link,retry,4,nullptr);
+    CHECK(retried.getStr("requestId")==pending.getStr("requestId") && link.saveOutstanding()==original);
     CHECK(!link.saveOutstanding().empty());
-    for(std::uint64_t ms=600;ms<2200;ms+=40) {
+    for(std::uint64_t ms=40000;ms<42200;ms+=40) {
         link.poll(ms);
         server.poll(*sim,*serverConn,"trusted-editor",readAcl,writeAcl,ms);
         sim->step();
         server.observe(*sim);
         link.poll(ms+1);
     }
+    CHECK(status().getStr("status")=="Applied by server" && status().getStr("remoteRevision")=="1");
     CHECK(link.client()->status()==ClientStatus::Applied);
     CHECK(registry(*sim).revision==1);
     CHECK(link.client()->remoteRevision()==1);

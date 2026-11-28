@@ -1,0 +1,10 @@
+{
+  "sha": "bb002142094ec11241162b7ec55181823cad8b81",
+  "argv": [
+    "bash",
+    "/tmp/studio-pose-canvas.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-standalone-pose-canvas.log.txt",
+  "sha256": "78d26f5eb1699c42566f89c43d20ce024f5193e7cb825631b775ff374920e514"
+}

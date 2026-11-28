@@ -1,0 +1,10 @@
+{
+  "sha": "887e6135cc257ce5aecb7f1921cbb51776d3ef3e",
+  "argv": [
+    "bash",
+    "/tmp/window-shot-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-full-window-screenshot.log.txt",
+  "sha256": "811a7cf4ffeee646ed50e00926ae2a45521e60dca79849549460dd1364ee647c"
+}

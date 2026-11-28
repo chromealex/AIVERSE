@@ -1,0 +1,10 @@
+{
+  "sha": "ecd6b4e81ea837b87249f535a37ee4efbd830e05",
+  "argv": [
+    "bash",
+    "/tmp/forest-distance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-forest-distance.log.txt",
+  "sha256": "0baa388c98c39c9b6511b5ee69d78733a9f912e575bedc3a30fea5e9e7ddaa5a"
+}

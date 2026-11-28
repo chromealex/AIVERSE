@@ -1,0 +1,10 @@
+{
+  "sha": "4ad49cb3ba92439907052137a9109bc5c3c4b1a3",
+  "argv": [
+    "bash",
+    "/tmp/forest-geometry.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-forest-geometry.log.txt",
+  "sha256": "6691c02cae4aacf90e8a59814e1d39cef2f6637d27e4b19bf9845ad705f1d878"
+}

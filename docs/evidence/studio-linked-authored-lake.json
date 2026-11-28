@@ -1,0 +1,10 @@
+{
+  "sha": "ba8339e98814082517d5e010aebaf6854ecaa51c",
+  "argv": [
+    "bash",
+    "/tmp/authored-water-test.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-authored-lake.log.txt",
+  "sha256": "9ec591df0e35612d9c1dcafb5b847ff1337cdc8091c1e7875f5ebd9b71aa1081"
+}

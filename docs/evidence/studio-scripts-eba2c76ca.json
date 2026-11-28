@@ -1,0 +1,12 @@
+{
+  "sha": "eba2c76caea5cef128cc141775f2b88a2d31cbd9",
+  "argv": [
+    "node",
+    "--experimental-strip-types",
+    "--test",
+    "apps/studio-web/tests/consoleLogic.test.mjs"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scripts-eba2c76ca.log.txt",
+  "sha256": "85532acd5bc3c6aebcbb23435c8893b05c1bf27813412bb346a86551e618a2ef"
+}

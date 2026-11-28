@@ -1,0 +1,10 @@
+{
+  "sha": "e5b245f43934e76ee9e7ca39b6f19e3cb3104a5e",
+  "argv": [
+    "bash",
+    "/tmp/fx-emitter-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-emitter-authoring.log.txt",
+  "sha256": "44f2f7d10778623e42fdbc3f23781fde80b4432fd3ad8b98b39d11df3599425b"
+}

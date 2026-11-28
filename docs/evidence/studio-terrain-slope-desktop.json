@@ -1,0 +1,11 @@
+{
+  "sha": "5709e9a604a3a0b3461895084a6461fc6a8079a7",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_terrain_geometry$\" && bash /tmp/scene-slope-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-terrain-slope-desktop.log.txt",
+  "sha256": "4e3e5b90be56fc178cfccfeaecd5d37a7b4e3d9a022f33b7b5792ce5ad01f32a"
+}

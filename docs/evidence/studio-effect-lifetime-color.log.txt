@@ -1,0 +1,6 @@
+2026-11-26 05:41:12.481 AiverseStudioHTML5[97797:82947841] [studio-web] JS: CROSS main DONE_1
+2026-11-26 05:41:12.480 AiverseStudioHTML5[97797:82947841] [studio-web] JS: CROSS main VERIFIED lifetime color stops and optional second gradient phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-color-ui-hqLDre/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-color-ui-hqLDre/Catalog.app: replacing existing signature
+2026-11-26 05:41:20.311 AiverseStudioHTML5[97966:82948719] [studio-web] JS: CROSS main DONE_2
+2026-11-26 05:41:20.311 AiverseStudioHTML5[97966:82948719] [studio-web] JS: CROSS main VERIFIED lifetime color stops and optional second gradient phase 2

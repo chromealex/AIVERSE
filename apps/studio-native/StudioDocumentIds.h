@@ -21,4 +21,14 @@ inline int studioMapEntityIndex(const std::string& id,const editor::MapDoc& map)
     size_t n=0;for(size_t i=7;i<id.size();++i){const char c=id[i];if(c<'0'||c>'9'||n>size_t(INT32_MAX)/10)return -1;n=n*10+size_t(c-'0');if(n>size_t(INT32_MAX))return -1;}
     return n<map.data.entities.size()?int(n):-1;
 }
+inline Json studioMapPickResult(const std::string& objectId,const editor::MapDoc& map) {
+    const int index=studioMapEntityIndex(objectId,map);
+    Json result=Json::object();
+    result.set("hit",Json::fromBool(index>=0));
+    result.set("index",Json::number(int64_t(index)));
+    if(index>=0)result.set("entityId",Json::string(map.data.entities[size_t(index)].id));
+    if(!objectId.empty())result.set("objectId",Json::string(objectId));
+    return result;
+}
+
 }

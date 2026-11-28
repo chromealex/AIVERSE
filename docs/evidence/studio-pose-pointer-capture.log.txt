@@ -1,0 +1,2 @@
+Group drag committed once, retaining offsets
+Trusted pointer capture, port drag and Escape cancellation passed

@@ -1,0 +1,3 @@
+2026-11-26 10:18:06.753 AiverseStudioHTML5[79344:83853352] [studio-web] JS: CROSS main DONE_1
+2026-11-26 10:18:06.753 AiverseStudioHTML5[79344:83853352] [studio-web] JS: CROSS main VERIFIED independent UI previews, graph step, dirty document, failed preview and recovery
+Isolated project switch; both linked status tools verified independent paused local translations, step delta, contact fields, unsaved graph, failed and recovered preview.

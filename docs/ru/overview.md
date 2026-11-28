@@ -40,14 +40,13 @@ platform/    шаблоны упаковки (Info.plist, Gradle-проект, H
 ## Быстрый старт (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # нужны Xcode и CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # редактор (проект ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # игра
 ./build/mac/aiverse_tests
 ```
 
-Другую игру в редакторе: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Другую игру в редакторе: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 Чтобы игра запускалась с другим набором данных, задайте `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Несколько редакторов одновременно
@@ -251,21 +250,23 @@ python3 tools/importers/ta/import.py --source "~/Games/TotalA" --out ~/AiverseGa
 - Создаётся вместе с проектом (хаб «Новый проект», MCP `create_project`); у старого проекта без
   него — при первом открытии в редакторе. У шаблонов в `templates/*/` он уже есть (и в новый проект
   не копируется: тот получает свой).
-- Везде, где редактор принимает путь проекта, подходит и `.aiverse`, и папка: `aiverse_editor "Моя
-  стратегия.aiverse"`, `--project`, «Открыть…» в хабе (показывает `.aiverse` и папки проектов),
+- Везде, где редактор принимает путь проекта, подходит и `.aiverse`, и папка: `AiverseStudio.exe --project "Моя стратегия.aiverse"`, `--project`, «Открыть…» в хабе (показывает `.aiverse` и папки проектов),
   недавние, MCP `open_game`, `aiversebuild --project x.aiverse`. В сборку `.aiverse` не попадает.
 - Проекты, созданные до переименования в AIVERSE, сохраняют свой `<Название>.rtsproj`: он открывается везде так же,
   перезаписывается на месте и не переименовывается; если в папке есть оба файла, главный — `.aiverse`.
+- **HTML5 Studio**
+  - **HTML Studio на macOS:** в Finder выберите AiverseStudioHTML5.app через «Открыть в приложении»
+    для файлов `.aiverse` и `.rtsproj`. Из терминала можно вызвать `open -a AiverseStudioHTML5 x.aiverse`.
+    Если Studio уже открыта, другой проект запускается в отдельном экземпляре. Текущий проект и его правки остаются доступны.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Файловые ассоциации старого редактора ImGui</summary>
+
 - **Двойной клик.** Редактор при запуске сам связывает `.aiverse` с собой (для пользователя, без прав
   администратора), если связи нет или она ведёт к другому экземпляру редактора; выбранную вами другую
   программу не перебивает. Вручную: «Проект → Сделать редактор программой по умолчанию для .aiverse»;
   состояние — внизу слева в хабе. Отключить: `AIVERSE_FILE_ASSOC=off`.
-  - **macOS:** тип `com.aiverse.project` объявлен в Info.plist `AiverseEditor.app`
-    (`platform/macos/EditorInfo.plist.in`; иконку документа `rtsproj.icns` рисует `aiverse_projicon` из логотипа
-    редактора `apps/editor/branding/icon_1024.png`); редактор регистрирует бандл
-    в LaunchServices (`lsregister -f`) и становится обработчиком по умолчанию. Двойной клик и
-    `open -a AiverseEditor x.aiverse` открывают проект в уже запущенном редакторе (при несохранённой
-    карте он спросит, сохранить ли её).
   - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (иконка
     `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, команда `"<aiverse_editor.exe>" "%1"`). Если в
     Windows для `.aiverse` уже выбрана другая программа, хаб подскажет «Открыть с помощью → Всегда».
@@ -273,6 +274,8 @@ python3 tools/importers/ta/import.py --source "~/Games/TotalA" --out ~/AiverseGa
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<редактор> %f`), иконки в
     `~/.local/share/icons/hicolor`, программа по умолчанию в `~/.config/mimeapps.list`;
     `update-mime-database`, `update-desktop-database`, `xdg-mime` вызываются, если установлены.
+
+</details>
 
 ## Сделать игру (мастер)
 

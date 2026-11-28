@@ -1,0 +1,25 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/integration-verify-debug
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/integration-verify-debug
+    Start 555: studio_image_codecs
+1/7 Test #555: studio_image_codecs ..............   Passed    0.31 sec
+    Start 563: studio_human_creator
+2/7 Test #563: studio_human_creator .............   Passed    0.99 sec
+    Start 564: studio_content_directory
+3/7 Test #564: studio_content_directory .........   Passed    0.32 sec
+    Start 574: studio_facial_runtime
+4/7 Test #574: studio_facial_runtime ............   Passed    0.78 sec
+    Start 582: studio_lighting_validation
+5/7 Test #582: studio_lighting_validation .......   Passed    0.31 sec
+    Start 588: studio_spectra_transfer
+6/7 Test #588: studio_spectra_transfer ..........   Passed    0.32 sec
+    Start 593: studio_owner_history
+7/7 Test #593: studio_owner_history .............   Passed    0.36 sec
+
+100% tests passed, 0 tests failed out of 7
+
+Label Time Summary:
+EDITOR       =   3.39 sec*proc (7 tests)
+SpectraFX    =   0.32 sec*proc (1 test)
+TOOLS        =   0.31 sec*proc (1 test)
+
+Total Test time (real) =   3.44 sec

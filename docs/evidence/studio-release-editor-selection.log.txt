@@ -1,0 +1,4 @@
+warning: LF will be replaced by CRLF in CMakeLists.txt.
+The file will have its original line endings in your working directory
+macos legacy-only and incomplete builds rejected; executable and HTML match native build
+windows legacy-only and incomplete builds rejected; executable and HTML match native build

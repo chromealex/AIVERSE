@@ -1,0 +1,10 @@
+{
+  "sha": "f5e85bd936bb2c6ca260cb35b8e6002f1b599bcc",
+  "argv": [
+    "bash",
+    "/tmp/preview-click.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-preview-row-activation.log.txt",
+  "sha256": "42eb96db5736619b533b61cbab398a523a5f9b3a0917e1129f934b37ff2f2f1f"
+}

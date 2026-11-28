@@ -1,0 +1,15 @@
+{
+  "sha": "e29eeaefb73aaed7d1ba47366a4c8191dfc16159",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "../integration-verify-debug",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^studio_(content_directory|image_codecs|human_creator|facial_runtime|lighting_validation|spectra_transfer|owner_history)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-cutover-content-authoring.log.txt",
+  "sha256": "b26e5b5b7a9f3266b912f29000d6fcc588faa8d0bc2bb841073a1ff24df2d7f6"
+}

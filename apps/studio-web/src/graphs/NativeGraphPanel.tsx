@@ -83,15 +83,15 @@ export default function NativeGraphPanel({documentEpoch,domain,projectPath}:{doc
   if(object(result)&&typeof result.newNodeId==='string')setSelection([result.newNodeId]);
   setStatus('Native in-memory edit applied; save explicitly.');
  });
- const connect=(to:PortRef)=>{
-  if(!pending||!draft||busy)return;
-  if(fx){const args=fxConnectArgs(pending,to);if(!args){setError('Incompatible execution/data ports');return;}nativeEdit(args);}
+ const connect=(source:PortRef,to:PortRef)=>{
+  if(!draft||busy)return;
+  if(fx){const args=fxConnectArgs(source,to);if(!args){setError('Incompatible execution/data ports');return;}nativeEdit(args);}
   else if(mode==='pose'){
-   const next=connectAnimationPose(draft,pending,to);
+   const next=connectAnimationPose(draft,source,to);
    if(next===draft){setError('Pose inputs must reference an earlier compatible pose node');return;}
    edit(next);setPending(null);
   }else{
-   const next=addAnimationTransition(draft,pending,to);
+   const next=addAnimationTransition(draft,source,to);
    if(next===draft){setError('Transition already exists or exceeds native bounds');return;}
    edit(next);setPending(null);setStatus('Added unconditional transition. Configure conditions before saving.');
   }
@@ -115,7 +115,8 @@ export default function NativeGraphPanel({documentEpoch,domain,projectPath}:{doc
  });
  const save=()=>void run(async current=>{
   if(!draft||!original||!name||!dirty)return;
-  requireOk(await op(prefix+'_validate',{graph:draft}));if(!current())return;
+  if(fx)requireOk(await op(prefix+'_validate',{graph:draft}));
+  if(!current())return;
   const result=await op(prefix+'_set',{name,graph:draft,expected:originalJson.current??original});
   requireOk(result);if(!current())return;
   await loadSaved(name,current);if(current())setStatus('Saved and read back from native asset.');
@@ -147,7 +148,7 @@ export default function NativeGraphPanel({documentEpoch,domain,projectPath}:{doc
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}
   {fx?<StudioAlert tone="warning">Published graph save checks the original document under a native write lock. If it changed, discard and reload before retrying.</StudioAlert>:<StudioAlert>Pose dependencies must point to earlier nodes; state transitions may loop. Layout is local. Connect state ports to add an unconditional transition; configure timing and conditions before saving.</StudioAlert>}
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
-   disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
+   disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={to=>{if(pending)connect(pending,to)}} onConnect={connect} enhancedNavigation onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    <GraphRuntimeProbePanel projectPath={projectPath} domain={domain} graph={draft} disabled={busy}/>
    <GraphLiveSnapshotPanel domain={domain} projectPath={projectPath}/>

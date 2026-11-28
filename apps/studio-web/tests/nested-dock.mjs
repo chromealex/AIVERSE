@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, defaultDockTree, dockStacks, findDockStack, panelStack,
-  normalizeDockTree, moveTab, closeTab, reopenTab, activateTab,
+  retainsExpandedStack, normalizeDockTree, moveTab, closeTab, reopenTab, activateTab,
   resizeDockSplit, splitDockRoot, splitDockStack, migrateDockV2
 } from '../src/nestedDock.ts';
 
@@ -19,6 +19,13 @@ test('default tree has 4 nested stacks and exactly one copy of each default pane
   assert.deepEqual(findDockStack(t,'dock-left')?.tabs,['hierarchy','project']);
   assert.deepEqual(findDockStack(t,'dock-bottom')?.tabs,['assets','console','agent','frame_capture','texture_resources','simulation_profiler']);
 });
+test('maximized stack stays expanded when switching sibling tabs and releases on layout changes',()=>{
+  const tree=defaultDockTree(), stack='dock-bottom';
+  const switched=activateTab(tree,stack,'console');
+  assert.ok(retainsExpandedStack(tree.root,switched.root,stack));
+  assert.equal(retainsExpandedStack(tree.root,closeTab(switched,'assets').root,stack),false);
+  assert.equal(retainsExpandedStack(tree.root,activateTab(switched,'dock-left','project').root,stack),false);
+});
 test('on-demand tools reopen in their registered home exactly once',()=>{
   let t=defaultDockTree();
   for(const p of onDemandPanels){
@@ -32,7 +39,7 @@ test('on-demand tools reopen in their registered home exactly once',()=>{
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
-  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff','feature_readiness']);
+  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','anim_graph','anim_rig','human_creator','human_appearance','rules','build','scripts','snapshot_diff','feature_readiness','overlays']);
   assert.equal(findDockStack(t,'dock-center').active,'animation');
 });
 test('dragging panels across stacks retains identity',()=>{
@@ -176,20 +183,20 @@ test('Add Tab drops a closed panel into the stack that was clicked',()=>{
   assert.equal(findDockStack(added,'dock-left')?.active,'assets');
 });
 
-test('character editor never stays over the Scene viewport',async()=>{
-  const {moveCharacterEditorBesideScene}=await import('../src/nestedDock.ts');
-  const covered=moveTab(defaultDockTree(),'human_creator','dock-center');
-  assert.equal(panelStack(covered,'human_creator'),'dock-center');
-  assert.equal(panelStack(moveCharacterEditorBesideScene(covered),'human_creator'),'dock-right');
-  assert.equal(panelStack(defaultDockTree(),'human_creator'),'dock-right');
+test('character authoring panels share the central workspace and can be split for comparison',()=>{
+  const tree=defaultDockTree();
+  assert.equal(panelStack(tree,'human_creator'),'dock-center');
+  assert.equal(panelStack(tree,'human_appearance'),'dock-center');
+  const split=moveTab(tree,'human_appearance','dock-right');
+  assert.equal(panelStack(normalizeDockTree(split),'human_appearance'),'dock-right');
 });
 
-test('character studio preset: editor left, Scene stage, no bottom dock',async()=>{
+test('character studio opens Creator with embedded preview in the central stack',async()=>{
   const {characterDockTree}=await import('../src/nestedDock.ts');
   const t=normalizeDockTree(characterDockTree());
-  assert.equal(panelStack(t,'human_creator'),'dock-left');
-  assert.equal(findDockStack(t,'dock-left').active,'human_creator');
-  assert.equal(findDockStack(t,'dock-center').active,'scene');
+  assert.equal(panelStack(t,'human_creator'),'dock-center');
+  assert.equal(findDockStack(t,'dock-left').active,'hierarchy');
+  assert.equal(findDockStack(t,'dock-center').active,'human_creator');
   assert.equal(findDockStack(t,'dock-bottom'),null);
   assert.equal(panelStack(t,'assets'),null);
 });

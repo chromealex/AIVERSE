@@ -3,6 +3,9 @@ import { Bot, CheckCircle2, CircleAlert, MessageSquarePlus, RotateCcw, Send, Squ
 import { invoke, onNativeEvent } from '../bridge';
 import type { StudioAgentInfo, StudioAgentChange, StudioAgentBatch, StudioSnapshot } from '../types';
 import { StudioIconButton, StudioButton, StudioAlert } from '../ui';
+import { copyText } from '../clipboard';
+import { emptyDraft, readAgentDraft, type AgentDraft } from './agentDraft';
+import WizardReport from './WizardReport';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
 import { StudioLoader } from '../ui';
@@ -16,9 +19,37 @@ const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void }) {
   const projectPath = snapshot?.project.path ?? '';
   const [info, setInfo] = useState<StudioAgentInfo | null>(null);
+  const [preferredClient, setPreferredClient] = useState<'' | 'claude-code' | 'codex'>('');
+  const client = info?.running && info.runClient ? info.runClient : preferredClient || (info?.codexCli && (info.runClient==='codex' || !info.cli) ? 'codex' : 'claude-code');
+  const cli = client === 'codex' ? info?.codexCli : info?.cli;
   const [lines, setLines] = useState<string[]>([]);
-  const [prompt, setPrompt] = useState('');
+  const draftKey = 'studio.agentDraft:' + projectPath;
+  const [draft, setDraft] = useState(() => readAgentDraft(draftKey));
+  const { text: prompt, brief: editingBrief } = draft;
+  const [copied, setCopied] = useState(false);
+  const [draftWarning, setDraftWarning] = useState('');
+  const saveDraft = (next: AgentDraft) => {
+    setDraft(next);
+    setCopied(false);
+    try {
+      if (next.text) localStorage.setItem(draftKey, JSON.stringify(next));
+      else localStorage.removeItem(draftKey);
+      setDraftWarning('');
+    } catch { setDraftWarning('Draft storage is unavailable. Copy your text before closing this window.'); }
+  };
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key === draftKey || event.key === null) {
+        setDraft(readAgentDraft(draftKey));
+        setCopied(false);
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [draftKey]);
   const [error, setError] = useState('');
+  const [report, setReport] = useState<string | null>(null);
+  const [readingReport, setReadingReport] = useState(false);
   const [busy, setBusy] = useState(false);
   const [navigating,setNavigating]=useState(false);
   const [batchReview,setBatchReview]=useState<StudioAgentBatch|null>(null);
@@ -45,11 +76,51 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   useEffect(() => onNativeEvent(event => { if (event === 'agent.changed' || event === 'document.changed') void poll(); }), [poll]);
   useEffect(() => { if(projectPath)void poll(); },[snapshot,poll,projectPath]);
   useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [lines.length]);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const promptBytes = new TextEncoder().encode(prompt.trim()).length;
+  const loadBrief = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const response = await invoke('studio.agentInfo', { from: total.current, briefForProject: projectPath });
+      if (!response.wizardBrief) throw new Error('Wizard brief unavailable');
+      saveDraft({ text: response.wizardBrief, brief: true });
+      requestAnimationFrame(() => {
+        const field = composer.current;
+        if (field) {
+          field.focus();
+          field.setSelectionRange(0, 0);
+          field.scrollTop = 0;
+        }
+      });
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  };
+  const openReport = async () => {
+    setReadingReport(true);
+    try {
+      const result = await invoke('studio.agentInfo', { from: total.current, reportForProject: projectPath });
+      if (!result.wizardReport) throw new Error('Wizard report unavailable');
+      setReport(result.wizardReport);
+    } catch (e) { setError(message(e)); }
+    finally { setReadingReport(false); }
+  };
+  const copyBrief = async () => {
+    const success = await copyText(prompt);
+    setCopied(success);
+    setError(success ? '' : 'Select the draft and copy it with the system shortcut.');
+  };
   const send = async () => {
     const text = prompt.trim();
-    if (!text || info?.running) return;
+    if (!text || busy || !cli || !info?.mcp || promptBytes > 20000 || info.running) return;
     setBusy(true);
-    try { apply(await invoke('studio.agentStart', { prompt: text, from: total.current })); setPrompt(''); setError(''); }
+    try {
+      apply(await invoke('studio.agentStart', { prompt: text, from: total.current, client: client === 'codex' ? 'codex' : 'claude-code', expectedProject: projectPath }));
+      const current = readAgentDraft(draftKey);
+      if (!current.text || (current.text === prompt && current.brief === editingBrief)) saveDraft(emptyDraft);
+      else setDraft(current);
+      setError('');
+    }
     catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
@@ -99,21 +170,27 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const changes = info?.changes ?? [];
   const edits = changes.filter(c => c.ok);
   const canUndoAll = !!info?.historyVersion && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running && !navigating;
-  return <div className="agent">
+  return <div className={editingBrief && !lines.length ? "agent agent--draft" : "agent"}>
     <div className="agent__head">
-      <Bot size={14}/>
-      <span className={'agent__pill' + (info?.cli ? ' is-ok' : ' is-warn')} title={info?.cli || 'claude CLI not found'}>
-        {info?.cli ? 'Claude Code' : 'claude not found'}</span>
+      <label className="agent__client-field"><Bot size={15}/>
+      <select className="au-input agent__client" aria-label="Agent client" value={client} disabled={busy || !!info?.running}
+        onChange={e => setPreferredClient(e.target.value === 'codex' ? 'codex' : 'claude-code')}>
+        <option value="claude-code" disabled={!info?.cli}>Claude Code{!info?.cli && ' · unavailable'}</option>
+        <option value="codex" disabled={!info?.codexCli}>Codex CLI{!info?.codexCli && ' · unavailable'}</option>
+      </select></label>
       {!!info?.port && <span className="agent__meta" title="Local agent link (aiversemcp connects here)">port {info.port}{info.clients ? ` · ${info.clients} linked` : ''}</span>}
       <span className="agent__fill"/>
+      {info?.hasWizardReport && <StudioButton size="sm" variant="ghost" disabled={readingReport} onClick={() => void openReport()}>View report</StudioButton>}
+      {(edits.length>0 || info?.batchUndo?.available || info?.batchRedo?.available) && <>
       <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchUndo?.available} title={info?.batchUndo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('undo')}><Undo2 size={13}/>Undo batch</StudioButton>
       <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchRedo?.available} title={info?.batchRedo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('redo')}><Redo2 size={13}/>Redo batch</StudioButton>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!canUndoAll}
         title="Undo the agent-only map suffix; other scopes must be undone individually" onClick={() => void navigate()}>
-        <RotateCcw size={13}/>Undo map run</button>
+        <RotateCcw size={13}/>Undo map run</button></>}
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!!info?.running} onClick={() => void reset()} title="Start a new conversation">
         <MessageSquarePlus size={13}/>New</button>
     </div>
+    {report !== null && <WizardReport text={report} close={() => setReport(null)}/>}
     {batchReview&&<div className="agent__batch-review">
       <StudioAlert tone="warning" title={batchReview.direction==='undo'?'Review batch undo':'Review batch redo'}>
         {batchReview.steps?.length??0} tracked steps. The file transaction covers saved documents and supported asset relocations. Overlapping paths or changed references are refused; map changes remain unsaved until you save the map.
@@ -123,7 +200,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
         <StudioButton size="sm" variant="primary" disabled={navigating||!!info?.running} onClick={()=>void applyBatch()}>Confirm {batchReview.direction}</StudioButton></div>
     </div>}
     {error && <div className="agent__error" role="alert">{error}</div>}
-    {lines.some(l => l.includes('Not logged in')) && !info?.running && <div className="agent__error" role="alert">
+    {info?.runClient==='claude-code' && lines.some(l => l.includes('Not logged in')) && !info?.running && <div className="agent__error" role="alert">
       Claude Code is not signed in on this Mac: open Terminal, run <code>claude</code>, type <code>/login</code>, then send again.</div>}
     <div className="agent__body">
       <div className="agent__log" ref={scroller} aria-live="polite">
@@ -160,13 +237,24 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
         </div>)}
       </aside>}
     </div>
+    {info?.hasWizardBrief && !prompt && !info.running && <div className="agent__brief">
+      <div><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>
+      <StudioButton size="sm" disabled={busy} onClick={() => void loadBrief()}>Load draft</StudioButton>
+    </div>}
+    {draftWarning && <div className="agent__error" role="status">{draftWarning}</div>}
+    {promptBytes > 20000 && <div className="agent__error" role="status">Shorten the draft to 20,000 UTF-8 bytes to send ({promptBytes.toLocaleString()} bytes).</div>}
+    {editingBrief && <div className="agent__draft-title"><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>}
     <div className="agent__composer">
-      <textarea className="au-input" rows={2} placeholder={info?.conversation ? 'Follow up… (⌘↩ to send)' : 'Ask the agent… (⌘↩ to send)'}
-        value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={onKey} disabled={!!info?.running}/>
+      <textarea ref={composer} aria-label="Agent request" className="au-input" rows={prompt.includes('\n') ? 5 : 2} placeholder={info?.conversation ? 'Follow up… (⌘↩ to send)' : 'Ask the agent… (⌘↩ to send)'}
+        value={prompt} onChange={e => saveDraft({ text: e.target.value, brief: !!e.target.value && editingBrief })} onKeyDown={onKey} disabled={busy || !!info?.running}/>
+      <div className="agent__composer-actions">
+      {editingBrief && <StudioButton size="sm" onClick={() => void copyBrief()}>{copied ? 'Copied' : 'Copy draft'}</StudioButton>}
       {info?.running
         ? <button type="button" className="au-button au-button--sm" onClick={() => void stop()}><Square size={12}/>Stop</button>
-        : <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !prompt.trim()} onClick={() => void send()}>
+        : <button type="button" className="au-button au-button--sm au-button--primary" title={!cli ? 'Selected agent CLI is unavailable' : !info?.mcp ? 'Studio MCP executable is unavailable' : undefined}
+            disabled={busy || !cli || !info?.mcp || !prompt.trim() || promptBytes > 20000} onClick={() => void send()}>
             {busy ? <StudioLoader size={16}/> : <Send size={13}/>}Send</button>}
+      </div>
     </div>
   </div>;
 }

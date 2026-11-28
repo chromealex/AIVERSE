@@ -10,6 +10,7 @@
 #include "engine/data/Json.h"
 #include "engine/gfx/Gfx.h"
 #include "engine/platform/Platform.h"
+#include "engine/platform/WindowSettings.h"
 
 using namespace aiverse;
 
@@ -41,6 +42,9 @@ void readManifest(platform::AppConfig& c) {
         return;
     }
     c.title = game.getStr("name", c.title);
+    const bool capture = std::getenv("AIVERSE_EXIT_AFTER_FRAMES") != nullptr;
+    platform::applyWindowSettings(c, game["window"], platform::name(), capture);
+    if (capture) c.windowMode = platform::AppConfig::WindowMode::Windowed;
     parseBackground(game.getStr("background", ""));
     for (int i = 0; i < 3; ++i) c.clearColor[i] = g_background[i];
 }

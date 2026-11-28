@@ -22,6 +22,7 @@ struct lua_State;
 namespace aiverse { class Simulation; struct SimEvent; }
 
 namespace aiverse::game {
+Json animationRuntimeStatus(const EntityFxStore* store);
 
 class GameCore;
 

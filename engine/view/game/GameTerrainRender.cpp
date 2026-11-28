@@ -37,28 +37,9 @@ struct Hasher {
     void add(uint64_t v) { for (int i = 0; i < 8; ++i) { h ^= (v >> (i * 8)) & 0xff; h *= 1099511628211ull; } }
 };
 
-float3 jsonColor(const Json& j, float3 def) {
-    if (!j.isArray() || j.size() < 3) return def;
-    return {float(j[0].toDouble()), float(j[1].toDouble()), float(j[2].toDouble())};
-}
-
 struct TU0 { float lod[4], mode[4], scale[4], cliff[4], fog[4], tint[4][4], cliffTint[4], fogColor[4], fogGrid[4], detail[4], rock[4], blend[4], pbr[4]; };
 
-const char* kKindNames[] = {"grass", "sand", "ramp", "rock", "blocked", "lakebed", "shallows", "dug"};
 } // namespace
-
-const char* cellKindName(int k) { return k >= 0 && k < 8 ? kKindNames[k] : "?"; }
-
-std::vector<uint8_t> parseMaterialRows(const Json& rows, int w, int h) {
-    if (!rows.isArray() || w <= 0 || h <= 0) return {};
-    std::vector<uint8_t> out(size_t(w * h), 255);
-    for (size_t y = 0; y < rows.size() && int(y) < h; ++y) {
-        std::string r = rows[y].str();
-        for (size_t x = 0; x < r.size() && int(x) < w; ++x)
-            if (r[x] >= '0' && r[x] <= '3') out[y * size_t(w) + x] = uint8_t(r[x] - '0');
-    }
-    return out;
-}
 
 // ------------------------------------------------------------------ setup
 
@@ -82,10 +63,10 @@ void TerrainRenderer::init(gfx::Device& dev, const Rules& rules, const FileReade
             }
         }catch(...) {}
         try {
-            parsed.parseLook(readComposedJson(rulesPath,
+            applyTerrainLook(parsed.look_,readComposedJson(rulesPath,
                 [&](const std::string& p,std::string& out){return read(p,out);})["terrain"]);
         }catch(...) {}
-        if(game.isObject())parsed.parseLook(game["terrain"]);
+        if(game.isObject())applyTerrainLook(parsed.look_,game["terrain"]);
     }
     std::string nextBase=contentBase;
     FileReader nextReader=read;
@@ -135,86 +116,6 @@ void TerrainRenderer::init(gfx::Device& dev, const Rules& rules, const FileReade
     texturesLoaded_=false;
     built_=false;
     ++publicationRevision_;
-}
-
-void TerrainRenderer::parseLook(const Json& t) {
-    if (!t.isObject()) return;
-    look_.render=t.getBool("render",look_.render);
-    if (t["pbr"].isObject()) {
-        const Json& p=t["pbr"];
-        look_.pbr=p.getBool("enabled",look_.pbr);
-        look_.packedPbr=p.getBool("packedMaps",look_.packedPbr);
-        look_.pbrRoughness=std::clamp(float(p["roughness"].toDouble(look_.pbrRoughness)),0.045f,1.0f);
-    }
-    if (t["layers"].isArray()) {
-        look_.layers.clear();
-        for (auto& l : t["layers"].items()) {
-            if (look_.layers.size() >= 4) break;
-            TerrainLook::Layer L;
-            L.id = l.getStr("id", "layer" + std::to_string(look_.layers.size()));
-            L.texture = l.getStr("texture");
-            L.normal = l.getStr("normal");
-            L.scale = std::max(0.05f, float(l["scale"].toDouble(4)));
-            L.tint = jsonColor(l["tint"], {1, 1, 1});
-            look_.layers.push_back(L);
-        }
-    }
-    auto layerIndex = [&](const std::string& id) {
-        for (size_t i = 0; i < look_.layers.size(); ++i) if (look_.layers[i].id == id) return int(i);
-        return -1;
-    };
-    if (t["cells"].isObject())
-        for (auto& [k, v] : t["cells"].members()) {
-            int kind = -1;
-            for (int i = 0; i < 8; ++i) if (k == kKindNames[i]) kind = i;
-            if (kind < 0) continue;
-            const Json& lj = v.isString() ? v : v["layer"];
-            if (lj.isString()) { int li = layerIndex(lj.str()); if (li >= 0) look_.cellLayer[kind] = li; }
-            else if (lj.isNumber()) look_.cellLayer[kind] = std::clamp(int(lj.integer()), 0, 3);
-            if (v.isObject() && v["color"].isArray()) { look_.hasColor[kind] = true; look_.color[kind] = jsonColor(v["color"], {1, 1, 1}); }
-        }
-    if (const Json& c = t["cliff"]; c.isObject()) {
-        look_.cliffTexture = c.getStr("texture", look_.cliffTexture);
-        look_.cliffNormal = c.getStr("normal", look_.cliffNormal);
-        look_.cliffScale = std::max(0.05f, float(c["scale"].toDouble(look_.cliffScale)));
-        look_.cliffTint = jsonColor(c["tint"], look_.cliffTint);
-        if (c["slope"].isArray() && c["slope"].size() >= 2) {
-            look_.slopeStart = float(c["slope"][0].toDouble()); look_.slopeEnd = std::max(look_.slopeStart + 0.01f, float(c["slope"][1].toDouble()));
-        }
-    }
-    if (t.has("splatStrength")) look_.splatStrength = std::clamp(float(t["splatStrength"].toDouble(1)), 0.0f, 1.0f);
-    if (const Json& w = t["water"]; w.isObject()) {
-        std::string m = w.getStr("mode", "auto");
-        look_.water = m == "sheet" ? TerrainLook::Water::Sheet : m == "bodies" ? TerrainLook::Water::Bodies : TerrainLook::Water::Auto;
-        if (w["color"].isArray() && w["color"].size() >= 3) {
-            float3 c = jsonColor(w["color"], {0.22f, 0.45f, 0.62f});
-            look_.waterColor = {c.x, c.y, c.z, w["color"].size() >= 4 ? float(w["color"][3].toDouble()) : 0.78f};
-        }
-        look_.waterOffset = float(w["offset"].toDouble(look_.waterOffset));
-        const std::string renderer = w.getStr("renderer", "legacy");
-        look_.waterRenderer = renderer == "nereid" ? TerrainLook::WaterRenderer::Nereid : TerrainLook::WaterRenderer::Legacy;
-        if (renderer != "nereid" && renderer != "legacy")
-            std::fprintf(stderr, "[water] unknown terrain.water.renderer \"%s\", using legacy\n", renderer.c_str());
-        if (w["nereid"].isObject()) look_.nereid = w["nereid"];
-    } else if (w.isString()) {
-        std::string m = w.str();
-        look_.water = m == "sheet" ? TerrainLook::Water::Sheet : m == "bodies" ? TerrainLook::Water::Bodies : TerrainLook::Water::Auto;
-    }
-    if (const Json& l = t["lod"]; l.type() == Json::Type::Bool) look_.lod = l.boolean() ? 1 : 0;
-    else if (l.isString()) look_.lod = l.str() == "on" ? 1 : l.str() == "off" ? 0 : -1;
-    if (t.has("lodRange")) look_.lodRange = std::max(16.0f, float(t["lodRange"].toDouble(128)));
-    // detail surface (docs/terrain.md "Detail surface")
-    if (t["style"].isString()) look_.smooth = t["style"].str() == "smooth";
-    if (const Json& d = t["detailLook"]; d.isObject()) {
-        look_.detailScale = std::clamp(int(d.getInt("scale", look_.detailScale)), 1, 8);
-        look_.bevel = std::clamp(float(d["bevel"].toDouble(look_.bevel)), 0.0f, 3.0f);
-        look_.wobble = std::clamp(float(d["wobble"].toDouble(look_.wobble)), 0.0f, 2.0f);
-        look_.roughness = std::clamp(float(d["roughness"].toDouble(look_.roughness)), 0.0f, 1.0f);
-        look_.blendSharpness = std::clamp(float(d["blendSharpness"].toDouble(look_.blendSharpness)), 0.0f, 1.0f);
-        look_.macro = std::clamp(float(d["macro"].toDouble(look_.macro)), 0.0f, 1.0f);
-        look_.detailRange = std::clamp(float(d["lodRange"].toDouble(look_.detailRange)), 4.0f, 1000.0f);
-        if (d["rockColor"].isArray()) { look_.rockColor = jsonColor(d["rockColor"], look_.rockColor); look_.hasRockColor = true; }
-    }
 }
 
 void TerrainRenderer::loadTextures(gfx::Device&) {
@@ -391,15 +292,7 @@ void TerrainRenderer::upload(gfx::Device& dev, const std::vector<TV>& v,
 // ------------------------------------------------------------------ cell look
 
 int TerrainRenderer::kindOf(const MapGrid& g, size_t i, bool flatDig) const {
-    const uint8_t f = g.flags[i];
-    if (!(f & kCellGround) && (f & kCellWater)) return kKindLakebed;
-    if (flatDig && g.dig[i]) return kKindDug;
-    if (!(f & kCellGround)) return kKindBlocked;
-    if (f & kCellRock) return kKindRock;
-    if (f & kCellRamp) return kKindRamp;
-    if (f & kCellWater) return kKindShallows;
-    if (f & kCellNoBuild) return kKindSand;
-    return kKindGrass;
+    return terrainCellKind(g.flags[i],flatDig && g.dig[i]);
 }
 
 // Classic cell colours without the dynamic part (fields, creep: tinted in the vertex shader).
@@ -1270,13 +1163,16 @@ void TerrainRenderer::buildApron(gfx::Device& dev, const MapGrid& g) {
 // corner, so lakes on plateaus and heightfield valleys hold water at their own level.
 // The water layout both renderers share: the legacy mesh below and the NEREID
 // conversion (GameWaterNereid.h) read the same bodies, cells and levels.
-LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flatDig) const {
+LegacyWaterLayout mapWaterLayout(const MapGrid& g, const TerrainLook& look,
+                                 bool heightfield, bool detailSurface,
+                                 const std::function<float(float,float)>& groundAt,
+                                 const std::function<float(int,int)>& cornerAt) {
     LegacyWaterLayout out;
     const int W = g.w, H = g.h;
     out.width = W; out.height = H; out.apron = float(kApron);
-    out.sheet = look_.water==TerrainLook::Water::Sheet ||
-        (look_.water==TerrainLook::Water::Auto && !heightfield_);
-    out.sheetY = look_.waterOffset;
+    out.sheet = look.water==TerrainLook::Water::Sheet ||
+        (look.water==TerrainLook::Water::Auto && !heightfield);
+    out.sheetY = look.waterOffset;
     for (auto f : g.flags) if ((f & kCellWater) && !(f & kCellGround)) { out.any = true; break; }
     if (out.sheet) return out;
     std::vector<int> body(size_t(W * H), -1);
@@ -1303,16 +1199,16 @@ LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flat
                     size_t ni = size_t(g.index(nx, ny));
                     if (isWater(nx, ny)) { if (body[ni] < 0) { body[ni] = id; stack.push_back(int(ni)); } continue; }
                     // shore: the ground of the land cell next to the water (its centre; corners dip into the lake)
-                    rim = std::min(rim, detailOn_ ? detail_.sample(float(nx) + 0.5f, float(ny) + 0.5f) : terrain::heightAt(g, lh_, float(nx) + 0.5f, float(ny) + 0.5f));
+                    rim = std::min(rim, groundAt(float(nx) + 0.5f, float(ny) + 0.5f));
                 }
-                for (int cy = 0; cy <= 1; ++cy) for (int cx = 0; cx <= 1; ++cx) top = std::max(top, terrain::gridCorner(g, lh_, x + cx, y + cy, flatDig));
+                for (int cy = 0; cy <= 1; ++cy) for (int cx = 0; cx <= 1; ++cx) top = std::max(top, cornerAt(x + cx, y + cy));
             }
-            if (!deep && look_.water == TerrainLook::Water::Auto && !heightfield_) continue; // shallows alone: no surface
+            if (!deep && look.water == TerrainLook::Water::Auto && !heightfield) continue; // shallows alone: no surface
             LegacyWaterLayout::Body b;
-            b.level = (rim < 1e8f ? rim : top) + look_.waterOffset;
+            b.level = (rim < 1e8f ? rim : top) + look.waterOffset;
             b.water = cells;
             // detail surface: the water reaches one cell under the shore, the smooth bank cuts its outline
-            if (detailOn_) {
+            if (detailSurface) {
                 std::vector<int> grown = cells;
                 std::vector<uint8_t> in(size_t(W * H), 0);
                 for (int c : cells) in[size_t(c)] = 1;
@@ -1329,6 +1225,12 @@ LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flat
             out.bodies.push_back(std::move(b));
         }
     return out;
+}
+
+LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flatDig) const {
+    return mapWaterLayout(g, look_, heightfield_, detailOn_,
+        [&](float x, float z) { return waterGroundAt(g, x, z); },
+        [&](int x, int z) { return terrain::gridCorner(g, lh_, x, z, flatDig); });
 }
 
 TerrainLook::WaterRenderer TerrainRenderer::waterRenderer() const {

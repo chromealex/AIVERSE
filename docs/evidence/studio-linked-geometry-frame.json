@@ -1,0 +1,10 @@
+{
+  "sha": "639eedc1574f725492db0c372d8414568265bea1",
+  "argv": [
+    "bash",
+    "/tmp/geometry-test.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-geometry-frame.log.txt",
+  "sha256": "141147edb63ed2d3cce515d9eb642fe04c0273a80b25f0665f22884fd174418e"
+}

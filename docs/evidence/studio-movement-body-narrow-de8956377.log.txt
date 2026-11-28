@@ -1,0 +1,7 @@
+2026-11-25 23:18:19.960 AiverseStudioHTML5[24900:81569727] [studio-web] JS: CROSS catalogproof DONE_1
+2026-11-25 23:18:19.960 AiverseStudioHTML5[24900:81569727] [studio-web] JS: CROSS catalogproof VERIFIED defaults, recomputation, override and reset
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/unit-body-qa-8daqgg/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/unit-body-qa-8daqgg/Catalog.app: replacing existing signature
+2026-11-25 23:18:34.211 AiverseStudioHTML5[25000:81571008] [studio-web] JS: CROSS catalogproof DONE_2
+2026-11-25 23:18:28.211 AiverseStudioHTML5[25000:81571008] [studio-web] JS: CROSS catalogproof VERIFIED automatic mass after restart
+Only the final radius changed on disk; automatic mass remained implicit.

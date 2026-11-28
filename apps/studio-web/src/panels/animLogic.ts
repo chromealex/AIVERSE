@@ -1,6 +1,6 @@
 /** Animation timeline helpers (authoring model documents, tools/modeling). No React. */
-export interface AnimChannel { node: string; path?: string; times?: number[]; values?: number[] }
-export interface AnimClip { id: string; channels: AnimChannel[] }
+export interface AnimChannel { node: string; path?: string; times?: number[]; interpolation?: string; values?: number[][] }
+export interface AnimClip { id: string; duration?: number; channels: AnimChannel[] }
 export interface AnimDoc { nodes?: Array<{ id: string; parent?: string }>; clips?: AnimClip[] }
 export interface SampledNode { id: string; worldPosition: [number, number, number] }
 

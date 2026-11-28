@@ -1,0 +1,10 @@
+{
+  "sha": "e4520493303ee84c14fc8a52d05991e92d7ca7d2",
+  "argv": [
+    "bash",
+    "/tmp/forest-masks.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-forest-masks.log.txt",
+  "sha256": "e3d68a3952aa4c699a241088c42f064a101b7b29d07c5612f2b4126589044a46"
+}

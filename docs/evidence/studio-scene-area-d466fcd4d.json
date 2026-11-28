@@ -1,0 +1,14 @@
+{
+  "sha": "d466fcd4d5b291487cc60b8f4093b6ef9ea4148c",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_terrain_geometry$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-area-d466fcd4d.log.txt",
+  "sha256": "04436934fccf164718448e587ae2e461da29d494b383e0d15954191098358a6c"
+}

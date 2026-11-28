@@ -1,0 +1,2 @@
+2026-11-26 09:30:26.553 AiverseStudioHTML5[45090:83675129] [studio-web] JS: CROSS main DONE_1
+2026-11-26 09:30:26.552 AiverseStudioHTML5[45090:83675129] [studio-web] JS: CROSS main VERIFIED original file from resolved game type, independent Models preview, orbit and elevation, project path guard, last good selection preserved with Scene closed

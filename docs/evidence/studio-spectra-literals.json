@@ -1,0 +1,10 @@
+{
+  "sha": "a706bf84b2301882f03c61df05b8f09d6cc5858a",
+  "argv": [
+    "bash",
+    "/tmp/studio-literals.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-spectra-literals.log.txt",
+  "sha256": "251d587b114ce68bbbe6308cf7c700c55e8af5983b6d153b251a02a76066dec9"
+}

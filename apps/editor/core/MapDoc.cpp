@@ -384,7 +384,7 @@ Json MapDoc::toJson() const {
         fields.push(f);
     }
     if (fields.size() && !d.planet()) j.set("fields", fields);
-    if (std::any_of(d.regions.begin(), d.regions.end(), [](char c) { return c != '.'; })) {
+    if (!d.regionNames.empty() || std::any_of(d.regions.begin(), d.regions.end(), [](char c) { return c != '.'; })) {
         Json rg = Json::object(), rr = Json::array();
         for (int y = 0; y < d.h; ++y) rr.push(Json::string(std::string(d.regions.begin() + y * d.w, d.regions.begin() + (y + 1) * d.w)));
         rg.set("rows", rr);
@@ -433,9 +433,11 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
     const auto root=fs::canonical(project);
     const auto targetMap=fs::absolute(file).lexically_normal();
     const auto mapRelative=targetMap.lexically_relative(root);
-    if(mapRelative.empty()||*mapRelative.begin()!="maps"||targetMap.extension()!=".json")
-        throw std::runtime_error("Choose a map within the project maps directory");
     const bool newIdentity=path.empty()||fs::absolute(path).lexically_normal()!=targetMap;
+    // Streamed world projects also ship an existing world-space map at project/map.json.
+    const bool rootMap=!newIdentity && data.worldSpace && mapRelative=="map.json";
+    if(mapRelative.empty()||(!rootMap && *mapRelative.begin()!="maps")||targetMap.extension()!=".json")
+        throw std::runtime_error("Choose a map within the project maps directory");
     if(!newIdentity&&!savedFileBaselineValid_)throw std::runtime_error("Map baseline unavailable; reopen the saved map before coordinated save");
     if(newIdentity){
         if(!allowCreation||fs::exists(fs::symlink_status(targetMap)))
@@ -455,7 +457,7 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
         const auto status=fs::symlink_status(target);
         const bool exists=fs::exists(status);
         const auto ext=target.extension().string();
-        if(rel.empty()||rel.is_absolute()||*rel.begin()!="maps"||
+        if(rel.empty()||rel.is_absolute()||(*rel.begin()!="maps" && !(rootMap && target==targetMap && exists))||
            (ext!=".json"&&ext!=".r16"&&ext!=".splat")||
            !fs::is_directory(fs::symlink_status(target.parent_path()))||
            fs::canonical(target.parent_path())!=target.parent_path()||
@@ -686,8 +688,10 @@ bool MapDoc::toggleRoad(int a, int b) {
     if (a == b || a < 0 || b < 0 || a >= int(data.entities.size()) || b >= int(data.entities.size())) return false;
     beginEdit();
     auto key = std::make_pair(std::min(a, b), std::max(a, b));
-    auto it = std::find(data.roads.begin(), data.roads.end(), key);
-    if (it != data.roads.end()) { data.roads.erase(it); return false; }
+    auto end = std::remove_if(data.roads.begin(), data.roads.end(), [&](const auto& road) {
+        return road == key || (road.first == key.second && road.second == key.first);
+    });
+    if (end != data.roads.end()) { data.roads.erase(end, data.roads.end()); return false; }
     data.roads.push_back(key);
     for (int i : {a, b}) if (data.entities[size_t(i)].id.empty()) data.entities[size_t(i)].id = uniqueId(data.entities[size_t(i)].type);
     return true;

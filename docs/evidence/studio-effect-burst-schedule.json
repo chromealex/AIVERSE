@@ -1,0 +1,10 @@
+{
+  "sha": "a22c0c9d6ef7a62187334c281582c357714ba5ec",
+  "argv": [
+    "bash",
+    "/tmp/fx-burst-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-burst-schedule.log.txt",
+  "sha256": "a58b298937f93b3b254f02b7443671fba36667b3463089a8ea23f5969041848a"
+}

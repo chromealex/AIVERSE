@@ -154,11 +154,12 @@ std::string mimeXml() {
 }
 
 std::string desktopEntry(const std::string& exe) {
-    return "[Desktop Entry]\n"
+    const bool studio = fs::path(exe).filename() == "AiverseStudio";
+    return std::string("[Desktop Entry]\n"
            "Type=Application\n"
-           "Version=1.0\n"
-           "Name=AIVERSE Editor\n"
-           "Name[ru]=Редактор AIVERSE Engine\n"
+           "Version=1.0\n") +
+           (studio ? "Name=AIVERSE Studio\nName[ru]=AIVERSE Studio\n" :
+                     "Name=AIVERSE Editor\nName[ru]=Редактор AIVERSE Engine\n") +
            "GenericName=Game Editor\n"
            "Comment=Edit AIVERSE game projects\n"
            "Comment[ru]=Редактор проектов игр AIVERSE\n"
@@ -167,7 +168,7 @@ std::string desktopEntry(const std::string& exe) {
            "Terminal=false\n"
            "Categories=Development;Game;\n"
            "MimeType=" + kProjectMimeType + ";\n"
-           "StartupWMClass=aiverse_editor\n"
+           + (studio ? "" : "StartupWMClass=aiverse_editor\n") +
            "X-AIVERSE-Exe=" + exe + "\n";
 }
 
@@ -181,15 +182,16 @@ AssocStatus statusLinux(const std::string& exe) {
     s.supported = !home().empty() && !exe.empty();
     if (!s.supported) { s.detail = "нет домашней папки (HOME)"; return s; }
     std::error_code ec;
-    const bool desk = readText(desktopFile()).find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos;
+    const std::string entry = readText(desktopFile());
+    const bool desk = entry.find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos &&
+                      (fs::path(exe).filename() != "AiverseStudio" || entry.find("\nName=AIVERSE Studio\n") != std::string::npos);
     const bool mime = readText(mimeXmlFile()).find("*.aiverse") != std::string::npos;   // installs before .aiverse re-register
     const std::string def = defaultHandler();
-    if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .aiverse не зарегистрирован";
+    s.otherDefault = !def.empty() && def != kEditorDesktopId;
+    if (s.otherDefault) s.detail = "по умолчанию .aiverse открывает " + def;
+    else if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .aiverse не зарегистрирован";
     else if (!desk) s.detail = ".aiverse открывает другой редактор: " + desktopFile().string();
-    else if (def != kEditorDesktopId) {
-        s.detail = def.empty() ? "редактор не выбран программой по умолчанию" : "по умолчанию .aiverse открывает " + def;
-        s.otherDefault = !def.empty();
-    }
+    else if (def.empty()) s.detail = "редактор не выбран программой по умолчанию";
     else {
         s.registered = true;
         s.detail = globsKnow() ? ".aiverse открывается этим редактором"
@@ -289,12 +291,12 @@ AssocStatus statusWindows() {
         const std::wstring c = regGet(L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\" + std::wstring(e) + L"\\UserChoice", L"ProgId");
         if (!c.empty() && c != progId() && choice.empty()) choice = c;
     }
-    if (!extOk || cmd.empty()) s.detail = "тип .aiverse не зарегистрирован";
-    else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".aiverse открывает другой редактор: " + wideToUtf8(cmd);
-    else if (!choice.empty() && choice != progId()) {
+    if (!choice.empty()) {
         s.otherDefault = true;
-        s.detail = "в Windows для файлов проекта выбрана другая программа (" + wideToUtf8(choice) + "): «Открыть с помощью» → AIVERSE Editor → «Всегда»";
+        s.detail = "в Windows выбрана другая программа: " + wideToUtf8(choice);
     }
+    else if (!extOk || cmd.empty()) s.detail = "тип .aiverse не зарегистрирован";
+    else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".aiverse открывает другой редактор: " + wideToUtf8(cmd);
     else { s.registered = true; s.detail = ".aiverse открывается этим редактором"; }
     return s;
 }
@@ -363,11 +365,10 @@ AssocStatus statusMac(const std::string& exe) {
     s.supported = !bundle.empty();
     if (!s.supported) { s.detail = "редактор запущен не из AiverseEditor.app: тип .aiverse объявляет Info.plist бандла"; return s; }
     const std::string h = defaultHandlerMac();
-    if (registeredBundle() != bundle) s.detail = "бандл " + bundle + " ещё не зарегистрирован в LaunchServices";
-    else if (h.empty() || h != ownBundleId()) {
-        s.detail = h.empty() ? "у .aiverse нет программы по умолчанию" : "по умолчанию .aiverse открывает " + h;
-        s.otherDefault = !h.empty();
-    }
+    s.otherDefault = !h.empty() && h != ownBundleId();
+    if (s.otherDefault) s.detail = "по умолчанию .aiverse открывает " + h;
+    else if (registeredBundle() != bundle) s.detail = "бандл " + bundle + " ещё не зарегистрирован в LaunchServices";
+    else if (h.empty()) s.detail = "у .aiverse нет программы по умолчанию";
     else { s.registered = true; s.detail = ".aiverse открывается этим редактором"; }
     return s;
 }

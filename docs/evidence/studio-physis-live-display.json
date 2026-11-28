@@ -1,0 +1,10 @@
+{
+  "sha": "80cebef08ba2a1b99111261abc4ba900088b6091",
+  "argv": [
+    "bash",
+    "/tmp/physis-layers-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-live-display.log.txt",
+  "sha256": "2d61e3e72619a510d693a641998b68f990a6cd637fd2c93c7cb997fb4780b2d5"
+}

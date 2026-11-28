@@ -1,0 +1,10 @@
+{
+  "sha": "f48e7b5633da588f7a268bb2d74236950127a920",
+  "argv": [
+    "bash",
+    "../anim-state.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-animation-state-asset.log.txt",
+  "sha256": "028048fe7be9451d179fe465cacf71b82fd4297ab85aa63a11331e0182aec7f6"
+}

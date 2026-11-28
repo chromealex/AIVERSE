@@ -1,0 +1,10 @@
+{
+  "sha": "bc17721e334ca383d5a550e0a6189a35642d4bfc",
+  "argv": [
+    "bash",
+    "/tmp/verify-game-mask.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-windows-game-frame.log.txt",
+  "sha256": "a6f8e758ec2eef1a71bb2fdb66bc0803e5db3478e17ddf5e4d0d4d2a474eb38d"
+}

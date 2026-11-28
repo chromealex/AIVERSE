@@ -1,12 +1,15 @@
+import { useLuaMenu } from './panels/useLuaMenu';
+import { extensionWindowFor } from './panels/agentLogic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { shortcutKey } from './keyboard';
+import { revealProjectAsset } from './assetNavigation';
+import { menuShortcut, shortcutKey } from './keyboard';
 import { ChevronDown, Search, Settings2 } from 'lucide-react';
 import { invoke, nativeConnected, nativeWindowAction, nativeWindowResize, onNativeEvent } from './bridge';
 import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, DOCK_PRESET_EVENT, closeTab, dockStacks, panelStack, reopenTab
 } from './nestedDock';
 import {
-  WORKSPACES, WORKSPACE_INFO, legacyWorkspace, readActiveWorkspace, readWorkspaceDock, saveActiveWorkspace,
+  WORKSPACES, WORKSPACE_INFO, readActiveWorkspace, readWorkspaceDock, saveActiveWorkspace,
   saveWorkspaceDock, workspaceDockTree, type StudioWorkspace
 } from './workspaces';
 import type { CommandEntry } from './commandSearch';
@@ -15,16 +18,14 @@ import CommandPalette from './components/CommandPalette';
 import PanelErrorBoundary from './components/PanelErrorBoundary';
 import { ProjectLoadingDialog, SceneLoadingStrip, sceneLoadingText, useProjectLoading } from './components/ProjectLoading';
 import StudioStatusBar from './components/StudioStatusBar';
-import EvolveGroupNumeric from './components/EvolveGroupNumeric';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import type { StudioPanel } from './nestedDock';
-import type { StudioAsset, StudioEntity, StudioGameState, StudioInspector, StudioSnapshot } from './types';
-import HeaderGameControls from './components/HeaderGameControls';
+import type { StudioAsset, StudioEntity, StudioInspector, StudioSnapshot } from './types';
+import HeaderGameControls, {useStudioGameState} from './components/HeaderGameControls';
 import LayoutMenu from './components/LayoutMenu';
 import engineLogo from '../../../engine/assets/branding/mark.png';
 import NestedDockWorkspace from './components/NestedDockWorkspace';
 import StudioMenuBar, { type StudioMenu } from './components/StudioMenuBar';
-import { LEGACY_WINDOWS_NOT_MIGRATED } from './legacyWindows';
 import WelcomeTour, { tourSeen } from './components/WelcomeTour';
 import ProjectHub from './components/ProjectHub';
 import ProjectSplash from './components/ProjectSplash';
@@ -39,7 +40,7 @@ import './components/FloatingShell.css';
 
 /** Menu shortcut glyph. Windows shows Ctrl; macOS keeps the command mark. */
 const windowsHost = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform + navigator.userAgent);
-const menuShortcut = (key: string) => (windowsHost ? 'Ctrl+' : '⌘') + key;
+
 
 /** Set when this WebView is a floating window (`?window=…&panels=…`), null in the main window. */
 const FLOAT = floatingParams();
@@ -61,17 +62,80 @@ function hierarchyRows(nodes: StudioEntity[], parentId?: string, depth = 0):
     .flatMap(node => [{ node, depth }, ...hierarchyRows(nodes, node.id, depth + 1)]);
 }
 
+import { modes, accents, readAppearance, applyAppearance, saveAppearance, observeAppearance, type Appearance } from './theme/appearance';
+
 export default function App() {
   const [snapshot, setSnapshot] = useState<StudioSnapshot | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [appearance, setAppearance] = useState(readAppearance);
+  const changeAppearance = (patch: Partial<Appearance>) => {
+    const next = {...readAppearance(), ...patch};
+    saveAppearance(next);
+    setAppearance(next);
+  };
+  useEffect(() => observeAppearance(setAppearance), []);
+  useEffect(() => applyAppearance(appearance), [appearance]);
+  useEffect(() => onNativeEvent((event, payload) => {
+    if (event !== 'appearance.command' || FLOAT) return;
+    const mode = modes.find(value => value === field(payload, 'mode'));
+    const accent = accents.find(value => value === field(payload, 'accent'));
+    changeAppearance({...mode && {mode}, ...accent && {accent}});
+  }), []);
   const [workspace, setWorkspace] = useState<StudioWorkspace>(readActiveWorkspace);
   const [dock, setDock] = useState(() => FLOAT ? readFloatTree(FLOAT.key, FLOAT.panels) : readWorkspaceDock(readActiveWorkspace()));
   const [floating, setFloating] = useState<FloatingWindow[]>(() => FLOAT ? [] : readFloating());
   const [palette, setPalette] = useState<string | null>(null); // null = closed, else initial query
   const [paletteAssets, setPaletteAssets] = useState<StudioAsset[]>([]);
-  const [game, setGame] = useState<StudioGameState | null>(null);
+  type GraphPanel='anim_graph'|'anim_rig';
+  type OpenGraph=import('./panels/AnimationGraphPanel').GraphOpenRequest;
+  const [graphRequests,setGraphRequests]=useState<Partial<Record<GraphPanel,OpenGraph>>>({});
+  const [natureRequest,setNatureRequest]=useState<import('./types').NatureOpenRequest>();
+  const [animationRequest,setAnimationRequest]=useState<import('./types').AnimationAuthoringRequest>();
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='game.open'){if(!FLOAT)showPanelEvent('game');return;}
+    if(event==='nature.command'){
+      const source=field(payload,'openSource'),epoch=field(payload,'epoch');
+      if((source!=='map'&&source!=='game')||epoch!==snapshot?.graphDocument?.epoch||typeof epoch!=='string')return;
+      if(FLOAT?panelStack(dock,'physis')!==null:!floatOwner(floating,'physis'))setNatureRequest({source,epoch});
+      if(!FLOAT)showPanelEvent('physis');
+      return;
+    }
+    if(event==='animation.graphOpen'){
+      const panel=field(payload,'panel'),project=field(payload,'project'),name=field(payload,'name'),graph=field(payload,'graph');
+      if((panel!=='anim_graph'&&panel!=='anim_rig')||typeof name!=='string'||typeof project!=='string'||!Array.isArray(field(graph,'nodes')))return;
+      if(FLOAT?panelStack(dock,panel)!==null:!floatOwner(floating,panel)){
+        const request={name,project,graph:graph as OpenGraph['graph'],revision:String(field(payload,'revision')??''),inline:field(payload,'inline')===true};
+        setGraphRequests(current=>({...current,[panel]:request}));
+      }
+      if(!FLOAT)showPanelEvent(panel);
+      return;
+    }
+    if(event!=='animation.authoringOpen')return;
+    const name=field(payload,'name'),project=field(payload,'project'),tab=field(payload,'tab');
+    if(typeof name!=='string'||typeof project!=='string'||(tab!=='clips'&&tab!=='graph'))return;
+    const panel=tab==='clips'?'animation':'modeling';
+    if(FLOAT?panelStack(dock,panel)!==null:!floatOwner(floating,panel))setAnimationRequest({name,project,tab});
+    if(!FLOAT)showPanelEvent(panel);
+  }),[dock,floating,snapshot?.graphDocument?.epoch]);
+  const [scriptLocation,setScriptLocation] = useState<{project:string; path:string; line:number} | null>(null);
+  const [connected] = useState(nativeConnected);
+  useEffect(() => {
+    if (!connected || FLOAT) return;
+    const windows=STUDIO_PANELS.map(id=>{
+      const group=WORKSPACES.find(key=>{
+        const {left,center,right,bottom}=WORKSPACE_INFO[key];
+        return [...left,...center,...right,...bottom].includes(id);
+      })??'service';
+      return {id,title:STUDIO_PANEL_TITLES[id],group,open:!!(panelStack(dock,id)||floatOwner(floating,id))};
+    });
+    void invoke('studio.panelInventory',{windows}).catch(console.warn);
+  },[connected,dock,floating]);
+  const panelIds = useMemo(() => treePanels(dock), [dock]);
+  const watchPlay = !FLOAT || panelIds.some(id => ['hierarchy','inspector','scripts','console'].includes(id));
+  const [game,setGame] = useStudioGameState(connected && !!snapshot?.project.path && watchPlay,
+    !FLOAT || panelIds.includes('console'), snapshot?.project.path);
   const [sceneAction, setSceneAction] = useState('');
   const [hoverId, setHoverId] = useState('');
   const [dockHover, setDockHover] = useState(false); // a floating window is dragged over the main window
@@ -79,7 +143,6 @@ export default function App() {
   // Requests answered while the native side opens a project are expected, not errors.
   useEffect(() => { if (error === 'Project is loading') setError(''); }, [error]);
   useEffect(() => { resetLive(); }, [game?.active,game?.epoch]); // live refs belong to one session
-  const [connected] = useState(nativeConnected);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(() => !tourSeen());
   const [hubOpen, setHubOpen] = useState(false);
@@ -87,6 +150,8 @@ export default function App() {
     const stored = Number(window.localStorage.getItem('aiverse.studio.uiScale'));
     return Number.isFinite(stored) && stored >= 0.75 && stored <= 2 ? stored : 1;
   });
+  const [projectRecord,setProjectRecord]=useState<{group:import("./types").ProjectRuleGroup;key:string}|null>(null);
+  const [inspectorRecord,setInspectorRecord]=useState<import('./panels/StudioPanelRenderer').InspectorRecord|null>(null);
   const [inspectorPin, setInspectorPin] = useState<{
     entity: StudioEntity; inspector: StudioInspector | null;
   } | null>(null);
@@ -183,10 +248,6 @@ export default function App() {
       if(event==='spectrafx.packageStaged'){
         showPanelEvent('fx_graph');
       } else if (event === 'material.preview') {
-        if (typeof payload === 'object' && payload !== null &&
-            'message' in payload && String(payload.message)) {
-          showPanelEvent('scene');
-        }
         void refresh();
       } else if (event === 'viewport.hover') {
         setHoverId(payload && typeof payload === 'object' && 'message' in payload ? String(payload.message) : '');
@@ -216,6 +277,18 @@ export default function App() {
       } else if (!FLOAT && (event === 'ui.showPanel' || event === 'ui.dockPanel')) {
         const panel = field(payload, 'panel');
         if (knownPanel(panel)) window.dispatchEvent(new CustomEvent(event === 'ui.dockPanel' ? 'studio:dock-panel' : 'studio:show-panel', { detail: panel }));
+      } else if (event === 'project.selection') {
+        const group=field(payload,'group'),key=field(payload,'key');
+        if ((group==='types'||group==='resources'||group==='techs'||group==='factions') && typeof key==='string') setProjectRecord({group,key});
+      } else if (event === 'inspector.selection') {
+        const slot=field(payload,'index');
+        const kind=field(payload,'kind'),key=field(payload,'key');
+        if((kind==='area' || kind==='region' || kind==='body') && typeof key==='string')setInspectorRecord({kind,key});
+        else if(kind==='block' && typeof key==='string')setInspectorRecord({kind,key,index:typeof slot==='number'?slot:undefined});
+        else if((kind==='wave'||kind==='trigger') && typeof slot==='number')setInspectorRecord({kind,index:slot});
+        else if(kind==='player' && typeof slot==='number')setInspectorRecord({kind,slot});
+        else setInspectorRecord(null);
+        setInspectorPin(null);
       } else if (event === 'workspace.changed' || event === 'selection.changed' ||
                  event === 'document.changed') void refresh();
     });
@@ -331,16 +404,28 @@ export default function App() {
   const selected = inspectorPin?.entity ??
     snapshot?.scene.entities.find(entity => entity.id === snapshot.selectedId);
   const inspector = inspectorPin ? inspectorPin.inspector : snapshot?.inspector ?? null;
+  useEffect(()=>setProjectRecord(null),[snapshot?.project.path]);
+  useEffect(()=>setInspectorRecord(null),[snapshot?.graphDocument?.epoch]);
   const toggleInspectorPin = () => setInspectorPin(current => current ? null :
     selected ? {entity: {...selected}, inspector: snapshot?.inspector ? structuredClone(snapshot.inspector) : null} : null);
   const renderPanel = (panel: StudioPanel) => <PanelErrorBoundary key={panel} name={STUDIO_PANEL_TITLES[panel]}>{renderStudioPanel(panel, {
     snapshot, busy, connected, search, setSearch, rows, selected,
-    inspector, inspectorPinned: !!inspectorPin, toggleInspectorPin,
+    inspector, projectRecord, inspectorRecord, inspectorPinned: !!inspectorPin, toggleInspectorPin,
     select, selectIds, hoverId, changeProperty, openProject, updateSnapshot: value => {
       setInspectorPin(null); // create/delete/duplicate or map replacement invalidates positional pins
       setSnapshot(value);
     }, setBusy, commitSnapshot: setSnapshot, showPanel: panel => showPanel(panel), reportError: setError,
-    playing: !!game?.active
+    graphRoute: key=>({request:graphRequests[key]?.project===snapshot?.project.path?graphRequests[key]:undefined,
+      consume:()=>setGraphRequests(current=>current[key]===graphRequests[key]?{...current,[key]:undefined}:current)}),
+    natureRoute:natureRequest&&natureRequest.epoch===snapshot?.graphDocument?.epoch?{request:natureRequest,
+      consume:()=>setNatureRequest(current=>current===natureRequest?undefined:current)}:undefined,
+    animationRoute: {request:animationRequest?.project===snapshot?.project.path?animationRequest:undefined,
+      consume:()=>setAnimationRequest(current=>current===animationRequest?undefined:current)},
+    scriptLocation: scriptLocation?.project === snapshot?.project.path ? scriptLocation : null,
+    openScript: (path,line) => { setScriptLocation({project:snapshot?.project.path ?? '',path,line}); showPanel('scripts'); },
+    consumeScriptLocation: () => setScriptLocation(null),
+    liveSelection: game?.epoch && game.selectedLiveRef ? {epoch:game.epoch,ref:game.selectedLiveRef,refs:game.selectedLiveRefs,names:game.selectedLiveNames} : null,
+    onLiveSelection: setGame, scriptErrors: game?.scriptErrors, playing: !!game?.active
   })}</PanelErrorBoundary>;
 
   const project = connected && !!snapshot?.project.path;
@@ -440,25 +525,44 @@ export default function App() {
     setDock(t => reopenTab(t, panel, STUDIO_PANEL_HOME[panel]));
   };
   useEffect(() => {
-    const run = (event: Event) => { const panel = (event as CustomEvent<unknown>).detail; if (knownPanel(panel)) showPanel(panel); };
+    const run = (event: Event) => { const panel = (event as CustomEvent<unknown>).detail; if (knownPanel(panel)) { setTourOpen(false); showPanel(panel); } };
     window.addEventListener('studio:show-panel', run);
     return () => window.removeEventListener('studio:show-panel', run);
   });
+  useEffect(() => onNativeEvent((event, payload) => {
+    if (event === 'ui.closePanel' && FLOAT) {
+      const panel = field(payload, 'panel');
+      if (knownPanel(panel)) setDock(tree => panelStack(tree, panel) !== null ? closeTab(tree, panel) : tree);
+      return;
+    }
+    if (FLOAT || event !== 'layout.command') return;
+    if (field(payload, 'resetLayout') === true) {
+      setDock(workspaceDockTree(workspace));
+      return;
+    }
+    const next = WORKSPACES.find(id => id === field(payload, 'workspace'));
+    if (next) { switchWorkspace(next); return; }
+    const panel = field(payload, 'id');
+    if (!knownPanel(panel)) return;
+    if (field(payload, 'open') !== false) showPanelEvent(panel);
+    else if (floatOwner(floating, panel)) broadcast('ui.closePanel', { panel });
+    else setDock(tree => panelStack(tree, panel) !== null ? closeTab(tree, panel) : tree);
+  }), [workspace, switchWorkspace, floating]);
   const menus: StudioMenu[] = [
     { id: 'file', label: 'File', items: () => [
       { id: 'hub', label: 'Project Hub…', disabled: !connected || busy, onSelect: () => setHubOpen(true) },
-      { id: 'open', label: 'Open Project…', shortcut: '⌘O', disabled: !connected || busy, onSelect: () => void openProject() },
+      { id: 'open', label: 'Open Project…', shortcut: menuShortcut('O'), disabled: !connected || busy, onSelect: () => void openProject() },
       { id: 'maps', label: 'New / Open Map…', separator: true, disabled: !project, onSelect: () => showPanel('project') },
-      { id: 'save', label: 'Save', shortcut: '⌘S', disabled: !project || busy || !snapshot?.project.dirty,
+      { id: 'save', label: 'Save', shortcut: menuShortcut('S'), disabled: !project || busy || !snapshot?.project.dirty,
         onSelect: () => void historyAction('studio.save') },
-      { id: 'saveas', label: 'Save As…', shortcut: '⇧⌘S', disabled: !project || busy,
+      { id: 'saveas', label: 'Save As…', shortcut: menuShortcut('S', true), disabled: !project || busy,
         onSelect: () => { setBusy(true); void invoke('studio.saveAs', {}).then(next => { if (next && 'project' in next) setSnapshot(next); })
           .catch(e => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false)); } },
     ] },
     { id: 'edit', label: 'Edit', items: () => [
-      { id: 'undo', label: 'Undo', shortcut: '⌘Z', disabled: busy || !snapshot?.history.canUndo, onSelect: () => void historyAction('studio.undo') },
-      { id: 'redo', label: 'Redo', shortcut: '⇧⌘Z', disabled: busy || !snapshot?.history.canRedo, onSelect: () => void historyAction('studio.redo') },
-      { id: 'dup', label: selection.length > 1 ? 'Duplicate ' + selection.length + ' Objects' : 'Duplicate', shortcut: '⌘D', separator: true, disabled: busy || !selection.length,
+      { id: 'undo', label: 'Undo', shortcut: menuShortcut('Z'), disabled: busy || !snapshot?.history.canUndo, onSelect: () => void historyAction('studio.undo') },
+      { id: 'redo', label: 'Redo', shortcut: menuShortcut('Z', true), disabled: busy || !snapshot?.history.canRedo, onSelect: () => void historyAction('studio.redo') },
+      { id: 'dup', label: selection.length > 1 ? 'Duplicate ' + selection.length + ' Objects' : 'Duplicate', shortcut: menuShortcut('D'), separator: true, disabled: busy || !selection.length,
         onSelect: () => entityAction('studio.entityDuplicate') },
       { id: 'del', label: selection.length > 1 ? 'Delete ' + selection.length + ' Objects' : 'Delete', shortcut: '⌫', disabled: busy || !selection.length,
         onSelect: () => entityAction('studio.entityDelete') },
@@ -484,6 +588,12 @@ export default function App() {
       { id: 'find-window', label: 'Find Window…', onSelect: () => setPalette('/ ') },
       ...openPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel],
         onSelect: () => showPanel(panel) })),
+      { id: 'appearance', label: 'Appearance', onSelect: () => {}, children: [
+        ...modes.map(mode => ({id: mode, label: mode === 'light' ? 'Light theme' : 'Dark theme',
+          checked: appearance.mode === mode, onSelect: () => changeAppearance({mode})})),
+        ...accents.map((accent, i) => ({id: accent, label: accent[0].toUpperCase() + accent.slice(1) + ' accent',
+          separator: i === 0, checked: appearance.accent === accent, onSelect: () => changeAppearance({accent})})),
+      ] },
       { id: 'ws', label: 'Workspaces', separator: true, onSelect: () => {}, children:
         WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: menuShortcut(WORKSPACE_INFO[id].key),
           checked: workspace === id, onSelect: () => switchWorkspace(id) })) },
@@ -492,11 +602,6 @@ export default function App() {
         onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
       { id: 'palette', label: 'Command Palette…', shortcut: menuShortcut('K'), onSelect: () => setPalette('') },
       { id: 'tour', label: 'Welcome Tour…', onSelect: () => setTourOpen(true) },
-      ...(LEGACY_WINDOWS_NOT_MIGRATED.length ? [{ id: 'legacy', label: 'Legacy editor — not migrated yet', caption: true, separator: true, onSelect: () => {} }] : []),
-      ...LEGACY_WINDOWS_NOT_MIGRATED.map(w => {
-        const area = legacyWorkspace(w.id);
-        return { id: 'legacy-' + w.id, label: w.title + (area ? '  ·  ' + WORKSPACE_INFO[area].title : ''), disabled: true, onSelect: () => {} };
-      }),
     ]; } },
   ];
 
@@ -516,7 +621,7 @@ export default function App() {
     out.push({ id: 'cmd:refresh', kind: 'command', title: 'Refresh from engine', hint: 'Re-read the native document', run: () => void refresh() });
     out.push({ id: 'cmd:console', kind: 'command', title: 'Show Console', run: () => showPanel('console') });
     for (const id of WORKSPACES) out.push({ id: 'ws:' + id, kind: 'workspace', title: WORKSPACE_INFO[id].title + ' workspace',
-      hint: WORKSPACE_INFO[id].purpose, shortcut: '⌘' + WORKSPACE_INFO[id].key, run: () => switchWorkspace(id) });
+      hint: WORKSPACE_INFO[id].purpose, shortcut: menuShortcut(WORKSPACE_INFO[id].key), run: () => switchWorkspace(id) });
     for (const panel of STUDIO_PANELS) out.push({ id: 'panel:' + panel, kind: 'window', title: STUDIO_PANEL_TITLES[panel],
       hint: floatOwner(floating, panel) ? 'Floating window · focus' : panelStack(dock, panel) ? 'Open · focus' : 'Open in ' + WORKSPACE_INFO[workspace].title, run: () => showPanel(panel) });
     if (connected) for (const stack of dockStacks(dock)) if (stack.active) {
@@ -524,25 +629,33 @@ export default function App() {
       out.push({ id: 'float:' + panel, kind: 'window', title: 'Open ' + STUDIO_PANEL_TITLES[panel] + ' in New Window',
         hint: 'Undock into its own window (second monitor)', run: () => floatOut(panel, false) });
     }
-    for (const w of LEGACY_WINDOWS_NOT_MIGRATED) {
-      const area = legacyWorkspace(w.id);
-      out.push({ id: 'legacy:' + w.id, kind: 'window', title: w.title, legacy: true, disabled: true,
-        hint: (area ? WORKSPACE_INFO[area].title + ' workspace · ' : '') + 'not migrated to HTML5 yet — use the legacy editor', run: () => {} });
-    }
     for (const entity of snapshot?.scene.entities ?? []) out.push({ id: 'entity:' + entity.id, kind: 'entity', title: entity.name,
       hint: entity.kind + ' · select and frame (F)', run: () => { void select(entity.id).then(() => invoke('studio.viewportInput', { kind: 'focus' })).catch(console.warn); } });
     for (const asset of paletteAssets) out.push({ id: 'asset:' + asset.path, kind: 'asset', title: asset.path.split('/').pop() ?? asset.path,
       hint: asset.path, keywords: asset.path, run: () => {
+        revealProjectAsset(snapshot?.project.path ?? '', asset.path);
         showPanel('assets');
-        window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:reveal-asset', { detail: { path: asset.path } })), 0);
       } });
     return out;
     // menus are rebuilt each render from the same state listed here
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot, paletteAssets, dock, floating, workspace, busy, connected, switchWorkspace]);
 
+  const [projectMenuStatus,setProjectMenuStatus]=useState('');
+  const projectMenu=useLuaMenu(setSnapshot,showPanel,setProjectMenuStatus,setError);
+  const openProjectMenu=(event:React.MouseEvent)=>{
+    if (!project || event.defaultPrevented || !(event.target instanceof Element)) return;
+    if (event.target.closest('input,textarea,select,[contenteditable="true"],[role=menu],canvas')) return;
+    const panel=event.target.closest<HTMLElement>('[role=tabpanel][data-panel]')?.dataset.panel;
+    if (panel && Object.hasOwn(STUDIO_PANEL_TITLES,panel) && panel!=='scene' && panel!=='hierarchy') void projectMenu.open(event,extensionWindowFor(panel as StudioPanel),'');
+  };
+  const projectMenuFeedback=<>{projectMenu.popup}{projectMenuStatus && <div className="demo-banner" role="status">
+    {projectMenuStatus} <button type="button" aria-label="Dismiss status" onClick={()=>setProjectMenuStatus('')}>×</button>
+  </div>}</>;
+
   // Floating window: its own small dock, no header, menus or workspaces.
-  if (FLOAT) return <div className={'studio compact-shell floating-shell'+(connected?' compact-shell--native':'')}>
+  if (FLOAT) return <div onContextMenu={openProjectMenu} className={'studio compact-shell floating-shell'+(connected?' compact-shell--native':'')}>
+    {projectMenuFeedback}
     {error && <div role="alert" className="error-banner">{error}
       <button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
     <NestedDockWorkspace compact tree={dock} setTree={setDock} renderPanel={renderPanel}
@@ -551,7 +664,7 @@ export default function App() {
     {palette !== null && <CommandPalette entries={paletteEntries} initial={palette} onClose={() => setPalette(null)}/>}
   </div>;
 
-  return <div className={'studio compact-shell'+(windowsHost?' compact-shell--windows':connected?' compact-shell--native':'')+(game?.active?' is-playing':'')}>
+  return <div onContextMenu={openProjectMenu} className={'studio compact-shell'+(windowsHost?' compact-shell--windows':connected?' compact-shell--native':'')+(game?.active?' is-playing':'')}>
     <header className="titlebar"
       onMouseDown={event => {
         // Empty title-bar areas move the native window. The outer pixels resize it instead.
@@ -571,13 +684,13 @@ export default function App() {
       </button>
       <div className="header-drag-space"/>
       </div>
-      <HeaderGameControls enabled={connected && !!snapshot?.project.path} onState={setGame}
+      <HeaderGameControls enabled={connected && !!snapshot?.project.path} state={game} setState={setGame}
         onPlay={()=>showPanel('game')} onError={setError}/>
       <div className="titlebar__side titlebar__side--right">
       <div className="header-drag-space"/>
       <WorkspaceTabs value={workspace} onChange={switchWorkspace}/>
-      <button type="button" className="command-search-button" onClick={() => setPalette('')} aria-label="Search or run a command (⌘K)">
-        <Search size={13}/><span>Search or run…</span><kbd>⌘K</kbd>
+      <button type="button" className="command-search-button" onClick={() => setPalette('')} aria-label={'Search or run a command (' + menuShortcut('K') + ')'}>
+        <Search size={13}/><span>Search or run…</span><kbd>{menuShortcut('K')}</kbd>
       </button>
       <SceneLoadingStrip state={loading}/>
       <div className="title-actions">
@@ -602,17 +715,16 @@ export default function App() {
     </section>}
     {!connected && <div className="demo-banner"><span>Preview mode:</span> interface and edits
       are demonstrated locally. Native C++ Workspace and GPU renderer are not connected yet.</div>}
+    {projectMenuFeedback}
     {error && <div role="alert" className="error-banner">{error}
       <button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
-    {connected && project && selection.length > 1 &&
-      <EvolveGroupNumeric ids={selection} onApplied={refresh} onError={setError}/>}
     <NestedDockWorkspace tree={dock} setTree={setDock} renderPanel={renderPanel}
       onFloat={connected ? floatOut : undefined} onAdopt={adopt}/>
     {FLOAT ? <ProjectLoadingDialog state={loading} onClose={clearLoading}/> : <ProjectSplash state={loading} onClose={clearLoading} onHub={() => setHubOpen(true)}/>}
     {dockHover && <div className="dock-drop-hint" data-native-overlay role="status">Release to dock the window's tabs here</div>}
     {tourOpen && !FLOAT && <WelcomeTour onClose={() => setTourOpen(false)}/>}
     {hubOpen && !FLOAT && <StudioDialog className="hub-modal" label="Project hub" onDismiss={() => setHubOpen(false)}>
-      <ProjectHub onOpened={next => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); }} openOther={() => { setHubOpen(false); void openProject(); }}/></StudioDialog>}
+      <ProjectHub onOpened={(next, openAgent, warning) => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); if (openAgent) showPanel('agent'); if (warning) setError(warning); }} openOther={() => { setHubOpen(false); void openProject(); }}/></StudioDialog>}
     <StudioStatusBar snapshot={snapshot} connected={connected} game={game} action={sceneAction || sceneLoadingText(loading)}
       onOpenConsole={() => { showPanel('console');
         window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:console-filter', { detail: 'error' })), 0); }}/>

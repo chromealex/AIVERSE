@@ -1,0 +1,11 @@
+{
+  "sha": "14c9603f0bfd26547b85587675f2284e9f227007",
+  "argv": [
+    "bash",
+    "-c",
+    "bash /tmp/scene-focus-ui.sh && bash /tmp/planet-focus-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-scoped-focus-verified.log.txt",
+  "sha256": "764fee98ddc4052c51bdf72a8197fcb7d6d5b0ca727d59f228abec045e13c6e7"
+}

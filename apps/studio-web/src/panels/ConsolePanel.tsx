@@ -1,15 +1,18 @@
+import type { StudioScriptMessage } from '../types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleX, Copy, Info, Search, Trash2, TriangleAlert } from 'lucide-react';
 import { invoke } from '../bridge';
 import { copyText, selectionIn } from '../clipboard';
 import type { StudioLog } from '../types';
 import { filterLogs, levelCounts, logParts, logSource, logSources, type ConsoleLevel } from './consoleLogic';
+import BuildOutput from './ConsoleBuildOutput';
 import './ConsolePanel.css';
 
 /** Console: editor/agent activity with level and source filters; entity ids and files are links. */
-export default function ConsolePanel({ logs, select }: {
-  logs: StudioLog[]; select: (id: string | null) => Promise<void>;
+export default function ConsolePanel({ logs, select, project, scriptErrors, openScript }: {
+  openScript:(path:string,line:number)=>void; scriptErrors?: StudioScriptMessage[]; project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
 }) {
+  const [mode,setMode] = useState('Activity');
   const [level, setLevel] = useState<ConsoleLevel>('all');
   const [source, setSource] = useState('');
   const [query, setQuery] = useState('');
@@ -19,14 +22,18 @@ export default function ConsolePanel({ logs, select }: {
   const follow = useRef(true);
   // The status bar's problem counter opens the Console on errors.
   useEffect(() => {
-    const open = (e: Event) => { const l = (e as CustomEvent<ConsoleLevel>).detail; if (l) setLevel(l); };
+    const open = (e: Event) => { const l = (e as CustomEvent<ConsoleLevel>).detail; if (l) { setMode('Activity'); setLevel(l); } };
     window.addEventListener('studio:console-filter', open);
     return () => window.removeEventListener('studio:console-filter', open);
   }, []);
   const visible = useMemo(() => {
     const start = cleared ? logs.lastIndexOf(cleared) + 1 : 0;
-    return logs.slice(Math.max(0, start));
-  }, [logs, cleared]);
+    const activity = logs.slice(Math.max(0, start));
+    for (const { tick, text, source } of scriptErrors ?? []) {
+      activity.push({level:'error', source:source==='view'?'Lua view':'Lua', time:String(tick), text:`Tick ${tick} · ${text}`});
+    }
+    return activity;
+  }, [logs, cleared, scriptErrors]);
   const counts = levelCounts(visible);
   const shown = filterLogs(visible, { level, source, query });
   useEffect(() => { if (follow.current && list.current) list.current.scrollTop = list.current.scrollHeight; }, [shown.length]);
@@ -53,9 +60,11 @@ export default function ConsolePanel({ logs, select }: {
   };
   const openEntity = (id: string) => void select(id).then(() => invoke('studio.viewportInput', { kind: 'focus' })).catch(console.warn);
   const levelButton = (id: ConsoleLevel, label: string, icon: React.ReactNode, count?: number) =>
-    <button type="button" className={'console__level' + (level === id ? ' is-on' : '')} aria-pressed={level === id}
+    <button type="button" className={'console__level' + (level === id ? ' is-on' : '')} aria-label={label || id} aria-pressed={level === id}
       onClick={() => setLevel(level === id && id !== 'all' ? 'all' : id)}>{icon}{label}{count !== undefined && <b>{count}</b>}</button>;
   return <div className="console">
+    <nav className="console__views" aria-label="Console views">{['Activity','Build output'].map(name => <button type="button" key={name} aria-pressed={mode === name} onClick={() => setMode(name)}>{name}</button>)}</nav>
+    {mode === 'Build output' ? <BuildOutput project={project}/> : <>
     <div className="console__bar" role="toolbar" aria-label="Console filters">
       {levelButton('all', 'All', null)}
       {levelButton('info', '', <Info size={12}/>, counts.info)}
@@ -78,12 +87,13 @@ export default function ConsolePanel({ logs, select }: {
       {shown.map((line, i) => <div className={'log-row log-' + line.level} key={i}>
         <span>{logSource(line)}</span>
         <p>{logParts(line.text).map((part, j) => part.kind === 'text' ? <span key={j} className="console__text">{part.text}</span>
-          : <button key={j} type="button" className="console__link" title={part.kind === 'entity' ? 'Select and frame' : 'Show in Assets'}
-              onClick={() => part.kind === 'entity' ? openEntity(part.id) : openFile(part.path)}>{part.text}</button>)}</p>
+          : <button key={j} type="button" className="console__link" title={part.kind === 'entity' ? 'Select and frame' : part.kind === 'script' ? 'Open in Scripts' : 'Show in Assets'}
+              onClick={() => part.kind === 'entity' ? openEntity(part.id) : part.kind === 'script' ? openScript(part.path,part.line) : openFile(part.path)}>{part.text}</button>)}</p>
         <button type="button" className="console__rowcopy" title="Copy this line" aria-label="Copy this line"
           onClick={() => copy(lineText(line), 'Line copied')}><Copy size={11}/></button>
       </div>)}
       {!shown.length && <div className="console__empty">{visible.length ? 'Nothing matches the filter.' : 'No messages.'}</div>}
     </div>
+    </>}
   </div>;
 }

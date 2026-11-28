@@ -1,0 +1,10 @@
+{
+  "sha": "f7276df917d68435bc2aa5c728c693c185de2c15",
+  "argv": [
+    "bash",
+    "../undo-read.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-agent-batch-controls.log.txt",
+  "sha256": "822f489f710f6c322a8a83305d3f445202b2475cebd357a332cf52c5424fe70e"
+}

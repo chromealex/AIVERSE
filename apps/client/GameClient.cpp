@@ -177,7 +177,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         if (render::prismaDlssCompiled() && dev.info().backend == gfx::Backend::Vulkan)
             prisma_.setExternalUpscaler(render::makePrismaDlss());
         prismaBase_ = render::Prisma::defaultQualityFor(dev, platform::isTouchDevice());
-        prisma_.setQuality(prismaBase_);
+        prisma_.setQuality(hostPostQuality_.value_or(prismaBase_));
         prisma_.setImageLoader([](const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba) {
             std::string bytes;
             return platform::readContentFile(path, bytes) && render::decodeImage(bytes, w, h, rgba);
@@ -322,7 +322,7 @@ void GameClient::toMenu() {
     pendingPings_.clear();
     pendingOrders_.clear();
     markers_.clear();
-    hostPaused_ = hostStep_ = false;
+    hostPaused_ = false; pendingHostSteps_ = 0;
     hostSpeed_=0;
     hostCheckpoint_.clear();
     mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
@@ -601,7 +601,7 @@ void GameClient::configurePrisma(const Json& map) {
     prismaVolumes_ = render::parsePrismaVolumes(manifest_["prismaVolumes"], map["prismaVolumes"], &prismaWarnings);
     for (const auto& issue : prismaWarnings)
         std::fprintf(stderr, "[prisma] %s\n", issue.c_str());
-    prisma_.setQuality(prismaBase_);
+    prisma_.setQuality(hostPostQuality_.value_or(prismaBase_));
 }
 
 std::vector<std::string> GameClient::matchFileList(bool replay) const {
@@ -666,7 +666,7 @@ bool GameClient::openMatchFile(const std::string& slot, bool replay) {
     return startMatch(size_t(map-maps_.begin()),Json(),&file,replay);
 }
 
-bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile* file, bool playback) {
+bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile* file, bool playback, std::optional<uint8_t> localSeat) {
     if (idx >= maps_.size() || netMatch_ || (file && city_)) return false;
     // A new map/game is a camera cut. Retire the old view's private
     // exposure + motion history without releasing shared render sizes.
@@ -687,6 +687,21 @@ bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile
             Json sets = Json::array();
             for (const auto& id : startRuleSets_) sets.push(Json::string(id));
             setup.set("ruleSets",std::move(sets));
+        }
+        if (localSeat) {
+            const auto& players = map["players"];
+            if (!players.isArray() || players.size()==0 || players.size()>255 || *localSeat>players.size() ||
+                (*localSeat && players[*localSeat-1].getBool("waves")))
+                throw std::runtime_error("The selected local seat is unavailable on this map");
+            Json controllers = Json::array();
+            for (size_t i=0; i<players.size(); ++i) {
+                Json row = Json::object();
+                row.set("controller", Json::string(controllerName(i+1==*localSeat ? SeatController::Human : SeatController::Computer)));
+                controllers.push(std::move(row));
+            }
+            setup.set("players",std::move(controllers));
+            setup.set("human",Json::number(int64_t(*localSeat ? *localSeat : 1)));
+            setup.set("spectator",Json::fromBool(*localSeat==0));
         }
         const int human = int(setup.getInt("human",1));
         if (human < 0 || human > 255) throw std::runtime_error("Invalid saved seat");
@@ -746,7 +761,7 @@ bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile
         matchSetup_ = std::move(setup); matchContentHash_ = content.value();
         mapCamera_ = map["camera"];
         startPlayers_ = startDeck_ = Json(); startRuleSets_.clear();
-        hostPaused_ = hostStep_ = false;
+        hostPaused_ = false; pendingHostSteps_ = 0;
         if (!file && !city_) for (const auto& seat : sim_->players()) {
             const auto& authored = map["players"][size_t(seat.slot - 1)];
             const auto controller = authored.has("controller") ? seat.controller :
@@ -1609,22 +1624,27 @@ bool GameClient::hostCheckpoint(bool restore) {
     if(hostCheckpoint_.empty())return false;
     std::string error;
     if(!sim_->deserialize(hostCheckpoint_,&error))return false;
-    hostStep_=false;
+    pendingHostSteps_=0;
     return true;
 }
+double GameClient::simulationSpeed() const {
+    static const double defaultSimSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
+    return hostCanControl()&&hostSpeed_>0?hostSpeed_:defaultSimSpeed;
+}
 bool GameClient::setHostSpeed(double speed) {
-    if(!hostCanControl()||!(speed>=1&&speed<=100))return false;
+    if(!hostCanControl()||!(speed>=0.25&&speed<=100))return false;
     hostSpeed_=speed;return true;
 }
 bool GameClient::setHostPaused(bool paused) {
     if (!hostCanControl()) return false;
-    hostPaused_ = paused; hostStep_ = false;
+    if (!paused) pendingHostSteps_ = 0;
+    hostPaused_ = paused;
     if (!paused && screen_ == Screen::Paused) setScreen(Screen::Playing);
     return true;
 }
 bool GameClient::requestHostStep() {
-    if (!hostCanStep()) return false;
-    hostStep_ = true;
+    if (!hostCanStep() || pendingHostSteps_ == UINT32_MAX) return false;
+    ++pendingHostSteps_;
     return true;
 }
 
@@ -1722,8 +1742,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     g_stages.start();
     lensCameras_.collectRetiredTargets();
     const bool hostFrozen = hostCanControl() && hostPaused_;
-    const bool singleStep = hostFrozen && hostCanStep() && hostStep_;
-    hostStep_ = false;
+    const bool singleStep = hostFrozen && hostCanStep() && pendingHostSteps_ > 0;
+    if (singleStep) --pendingHostSteps_;
+    else pendingHostSteps_ = 0;
     if (hostFrozen) dt = 0;
     // Even on menus/loading screens there may be previous per-view motion
     // textures awaiting the GPU completion fence from an old match.
@@ -1847,7 +1868,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             r3d_.lights.setQuality(aiverse::render::LightQuality(quality_.lights()));
             shadowQuality_ = boundShadowQuality_ = quality_.shadows();
             // post effects follow: one tier down per governor step, but keep the cheap look (low)
-            if (prismaBase_ != render::PrismaQuality::Off)
+            if (!hostPostQuality_ && prismaBase_ != render::PrismaQuality::Off)
                 prisma_.setQuality(render::PrismaQuality(std::max(1, int(prismaBase_) - quality_.stepsDown())));
         }
 
@@ -1871,8 +1892,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         }
         else if (!netMatch_ && !topDownPaused() && (!hostFrozen || singleStep)) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
-            static const double defaultSimSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
-            const double simSpeed=hostCanControl()&&hostSpeed_>0?hostSpeed_:defaultSimSpeed;
+            const double simSpeed = simulationSpeed();
             if (singleStep) sim_->step();
             else if (simSpeed == 1.0) sim_->advance(dt);
             else sim_->advance(dt * simSpeed, int(8 * simSpeed + .5));   // testing: match time faster than real time

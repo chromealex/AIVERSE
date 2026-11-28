@@ -1,0 +1,9 @@
+2026-11-26 00:02:53.771 AiverseStudioHTML5[60320:81777607] [studio-web] JS: CROSS main DONE_1
+2026-11-26 00:02:53.771 AiverseStudioHTML5[60320:81777607] [studio-web] JS: CROSS main VERIFIED selected in Hierarchy, connected pair, preserved selection, rejected stale remove, undo/redo/save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/scene-road-visible-qa-T3VSmU/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/scene-road-visible-qa-T3VSmU/Catalog.app: replacing existing signature
+2026-11-26 00:03:06.808 AiverseStudioHTML5[60592:81779053] [studio-web] JS: CROSS main DONE_2
+2026-11-26 00:03:06.808 AiverseStudioHTML5[60592:81779053] [studio-web] JS: CROSS main VERIFIED reopened, removed through Inspector and saved
+Saved endpoint IDs: ['outpost_1', 'outpost_2'] ; removal preserved entities and game settings.
+Scene amber pixels before/connected/removed: 213 1072 213 exclusive: 870
+Largest connected mark: 720 pixels; 98 by 95

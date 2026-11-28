@@ -1,0 +1,14 @@
+{
+  "sha": "41d3c94ccdd1e588f9d012a5ae5c3d7c826159ab",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^(studio_session|studio_wizard_art_download)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wizard-art-41d3c94cc.log.txt",
+  "sha256": "7826300d998d8bd2e6256de6a3c06d3dcd5c5a6863b33560bfe8591c851faba0"
+}

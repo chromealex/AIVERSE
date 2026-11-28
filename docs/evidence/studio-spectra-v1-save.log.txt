@@ -1,0 +1,11 @@
+2026-11-26 08:59:36.880 AiverseStudioHTML5[25045:83573602] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-graph-migrate-h1Xk3I/Catalog.app/Contents/Resources/studio-web
+2026-11-26 08:59:37.006 AiverseStudioHTML5[25045:83573602] [studio-web] served index.html (7263 bytes)
+2026-11-26 08:59:37.012 AiverseStudioHTML5[25045:83573602] [studio-web] served assets/index-D3mw5dgq.js (1665900 bytes)
+2026-11-26 08:59:37.042 AiverseStudioHTML5[25045:83573602] [studio-web] JS: CROSS main boot
+2026-11-26 08:59:37.050 AiverseStudioHTML5[25045:83573602] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 08:59:37.413 AiverseStudioHTML5[25045:83573602] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:37.776 AiverseStudioHTML5[25045:83573602] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:37.966 AiverseStudioHTML5[25045:83573602] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:38.145 AiverseStudioHTML5[25045:83573602] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:38.146 AiverseStudioHTML5[25045:83573602] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:74:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Graph changed or already exists; reload before saving

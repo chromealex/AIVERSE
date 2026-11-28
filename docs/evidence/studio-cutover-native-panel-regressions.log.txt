@@ -1,0 +1,21 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/integration-verify-debug
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/integration-verify-debug
+    Start 566: studio_move_journal
+1/6 Test #566: studio_move_journal ..............   Passed    2.56 sec
+    Start 570: studio_light_preview_math
+2/6 Test #570: studio_light_preview_math ........   Passed    0.15 sec
+    Start 577: studio_shader_graph_draft
+3/6 Test #577: studio_shader_graph_draft ........   Passed    0.17 sec
+    Start 578: studio_shader_graph_name
+4/6 Test #578: studio_shader_graph_name .........   Passed    0.15 sec
+    Start 579: studio_material_validation
+5/6 Test #579: studio_material_validation .......   Passed    0.15 sec
+    Start 589: studio_viewport_layout
+6/6 Test #589: studio_viewport_layout ...........   Passed    0.15 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Label Time Summary:
+EDITOR    =   3.33 sec*proc (6 tests)
+
+Total Test time (real) =   3.36 sec

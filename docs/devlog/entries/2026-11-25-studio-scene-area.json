@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-studio-scene-area",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "d466fcd4d",
+  "author": null,
+  "links": [],
+  "title": "Рисование зон в Scene",
+  "titleEn": "Draw map areas in Scene",
+  "summary": "Протяните прямоугольник между клетками плоской карты.",
+  "summaryEn": "Drag between two flat-map cells to define an area.",
+  "body": [
+    "В Inspector → Areas выберите Draw in Scene. После отпускания мыши проверьте размеры и сохраните зону в форме."
+  ],
+  "bodyEn": [
+    "Choose Draw in Scene in the Areas Inspector. Release the pointer to review the rectangle, then apply the draft."
+  ],
+  "verified": "В обычном режиме и с HTML-слоем на macOS проверены отмена рисования, создание зоны, Undo, Redo и координаты в файле карты.",
+  "verifiedEn": "Both native-surface and HTML composite macOS verification covered cancelling, creating an area, Undo, Redo and the coordinates in the saved map.",
+  "limits": "Инструмент работает на клеточных плоских картах. Проверка Windows предстоит.",
+  "limitsEn": "The tool supports flat grid maps. Windows verification is pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-scene-area/scene-area-drag.png",
+      "caption": "Контур зоны во время перетаскивания",
+      "captionEn": "Area outline while dragging"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-scene-area/scene-area-inspector.png",
+      "caption": "Сохранённая зона в Inspector",
+      "captionEn": "Saved area in Inspector"
+    }
+  ]
+}

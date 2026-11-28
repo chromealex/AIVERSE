@@ -11,12 +11,14 @@ namespace aiverse::studio {
 struct StudioGameLaunch {
     std::string project; std::optional<size_t> map;
     bool actorSession=false;
+    double startSpeed=1;
+    std::optional<uint8_t> localSeat;
     std::string sourceMap;
     uint64_t sourceRevision=0;
     // "Play from here": first match camera (target x, z; distance; pitch, yaw in degrees), Scene view's.
     std::optional<std::array<float,5>> camera;
 };
-inline StudioGameLaunch studioGameLaunch(const editor::Workspace& ws,bool currentMap) {
+inline StudioGameLaunch studioGameLaunch(const editor::Workspace& ws,bool currentMap,std::optional<uint8_t> localSeat={}) {
     if (ws.project.dir.empty()) throw std::runtime_error("Open a project before Play");
     if (ws.map.dirty || ws.project.rulesDirty || ws.project.manifestDirty)
         throw std::runtime_error("Save changes before Play");
@@ -25,6 +27,12 @@ inline StudioGameLaunch studioGameLaunch(const editor::Workspace& ws,bool curren
     StudioGameLaunch plan{};
     plan.actorSession=ws.project.actorSession();
     plan.project=ws.project.dir;
+    if (localSeat) {
+        const auto& players=ws.map.data.players;
+        if (!currentMap || plan.actorSession || players.empty() || players.size()>255 || *localSeat>players.size() ||
+            (*localSeat && players[*localSeat-1].waves)) throw std::runtime_error("Choose a playable seat on the current map");
+        plan.localSeat=localSeat;
+    }
     if (currentMap) {
         if (ws.map.path.empty()) throw std::runtime_error("Save the current map before Play");
         const auto path=std::filesystem::weakly_canonical(ws.map.path);

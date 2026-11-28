@@ -1,0 +1,9 @@
+2026-11-26 08:48:44.851 AiverseStudioHTML5[14682:83531826] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-emitter-preview-u2kkrC/Catalog.app/Contents/Resources/studio-web
+2026-11-26 08:48:44.978 AiverseStudioHTML5[14682:83531826] [studio-web] served index.html (8017 bytes)
+2026-11-26 08:48:44.983 AiverseStudioHTML5[14682:83531826] [studio-web] served assets/index-DBkwR8Gl.js (1664433 bytes)
+2026-11-26 08:48:45.014 AiverseStudioHTML5[14682:83531826] [studio-web] JS: CROSS main boot
+2026-11-26 08:48:45.022 AiverseStudioHTML5[14682:83531826] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 08:48:45.708 AiverseStudioHTML5[14682:83531826] [studio-web] JS: CROSS main rectangle {"x":334.484375,"y":302,"width":808.390625,"height":180,"top":302,"right":1142.875,"bottom":482,"left":334.484375}
+2026-11-26 08:48:46.421 AiverseStudioHTML5[14682:83531826] [studio-web] JS: CROSS main playing {"paused":false,"time":0.303,"error":"","distance":9,"yaw":0.7,"pitch":0.45,"gpu":1,"cpu":0}
+2026-11-26 08:48:47.047 AiverseStudioHTML5[14682:83531826] [studio-web] JS: CROSS main SHOT_paused
+2026-11-26 08:48:48.609 AiverseStudioHTML5[14682:83531826] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:106:79 Error: step delta {"paused":true,"time":0.32,"error":"","distance":9,"yaw":0.7,"pitch":0.45,"gpu":1,"cpu":0}

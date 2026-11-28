@@ -1,8 +1,7 @@
 import { copyText } from '../../clipboard';
 // Character Creator (MetaHuman-style): a category rail (Presets & Blend, Face,
 // Sculpt, Skin, Eyes, Hair, Body, Clothing, Pose & Light), camera framing
-// (face / torso / full), a one-click "character studio" layout with the Scene
-// viewport as the stage, and the procedural VIVID DNA source. Every write is
+// (face / torso / full), a responsive character workspace and the procedural VIVID DNA source. Every write is
 // an allowlisted native StudioSession call; React never touches files.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Brush, Eye, Lightbulb, PersonStanding, Redo2, ScanFace, Scissors, Shirt, Sparkles, Undo2,
@@ -26,6 +25,7 @@ import HumanMetaHumanControls from '../HumanMetaHumanControls';
 import { useOutfit } from '../useOutfit';
 import HumanFaceBlend from '../HumanFaceBlend';
 import { HcCard, HcHeader, HcSlider, HcSwitch } from '../HumanCreatorUi';
+import CharacterViewport from '../CharacterViewport';
 import HumanDnaCreator from '../HumanDnaCreator';
 import { useHumanLook, type Snapshot } from '../useHumanLook';
 import { ageLook, lookAge, FACE_ARCHETYPES, FACE_REGIONS, LOOK_PARTS, agentLookPrompt, archetypePoint, blendFace, blendLooks, describeToLook, guessFaceMeshes, randomHandle, randomLook, type LookPart } from '../humanCreatorSchema';
@@ -264,7 +264,7 @@ export default function HumanCreatorPanel({ snapshot }: { snapshot: StudioSnapsh
   return <StudioPanel className="studio-panel-human_creator" title="Character Creator" eyebrow="VIVID"
     actions={<div className="hc-row">
       <StudioTabs label="Источник" items={[{ id: 'model', label: 'Модель' }, { id: 'dna', label: 'VIVID DNA' }]} selected={source} onChange={setSource}/>
-      <StudioButton size="sm" title="Студия персонажа: редактор слева, вьюпорт по центру"
+      <StudioButton size="sm" title="Открыть рабочее пространство персонажа"
         onClick={() => window.dispatchEvent(new CustomEvent(DOCK_PRESET_EVENT, { detail: 'character' }))}><LayoutDashboard size={14}/></StudioButton>
     </div>}
     footer={source === 'model' ? <div className={'hc-status' + (h.error ? ' hc-status--error' : '')} role="status" title={h.error || h.status || pv?.reason || ''}>
@@ -285,7 +285,10 @@ export default function HumanCreatorPanel({ snapshot }: { snapshot: StudioSnapsh
           <StudioButton size="sm" aria-label="Отменить (⌘Z)" title="Отменить (⌘Z)" disabled={h.busy || !h.undo.length} onClick={undo}><Undo2 size={14}/></StudioButton>
           <StudioButton size="sm" aria-label="Повторить (⇧⌘Z)" title="Повторить (⇧⌘Z)" disabled={h.busy || !h.redo.length} onClick={redo}><Redo2 size={14}/></StudioButton>
         </div>
+        <div className="character-page">
+        {bound&&<CharacterViewport id="character" label="Character model preview"/>}
         <div className="hc-content" onPointerUp={() => { if (['skin', 'makeup', 'eyes', 'hair', 'body'].includes(category)) commit(); }}>{content()}</div>
+        </div>
       </div>
     </div>}
   </StudioPanel>;

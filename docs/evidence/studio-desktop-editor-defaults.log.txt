@@ -1,0 +1,27 @@
+-- AIVERSE platform: macos
+-- Configuring done (2.6s)
+-- Generating done (2.6s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-no-web-default-check
+mac web bundle: False studio: False legacy editor: absent, headless: present
+-- AIVERSE platform: macos
+-- The OBJCXX compiler identification is AppleClang 17.0.0.17000604
+-- Detecting OBJCXX compiler ABI info
+-- Detecting OBJCXX compiler ABI info - done
+-- Check for working OBJCXX compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++ - skipped
+-- Found SQLite3: /Library/Frameworks/Mono.framework/Headers (found version "3.26.0") 
+-- Configuring done (5.7s)
+-- Generating done (1.7s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-no-web-default-check
+mac web bundle: True studio: True legacy editor: absent, headless: present
+-- AIVERSE platform: windows
+-- No build type selected, default to Debug
+-- Configuring done (3.0s)
+-- Generating done (1.0s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-win-no-web-default-check
+win web bundle: False studio: False legacy editor: absent, headless: present
+-- AIVERSE platform: windows
+-- No build type selected, default to Debug
+-- Configuring done (3.1s)
+-- Generating done (1.0s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-win-no-web-default-check
+win web bundle: True studio: True legacy editor: absent, headless: present

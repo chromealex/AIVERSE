@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include "imgui.h"
 #include "apps/client/GameClient.h"
+#include "engine/render/PrismaReportJson.h"
+#include "engine/render/StaticGeometryReport.h"
 
 namespace aiverse::client {
 
@@ -65,7 +67,7 @@ HostedClient::~HostedClient() {
 }
 
 void HostedClient::start(gfx::Device& dev, const std::string& projectDir, const std::string& engineAssets,
-                       render::RenderDeviceLifetime::Lease deviceLease, std::optional<size_t> initialMap) {
+                       render::RenderDeviceLifetime::Lease deviceLease, std::optional<size_t> initialMap, std::optional<uint8_t> localSeat) {
     if(deviceLease.device() && !deviceLease.validFor(dev))
         throw std::logic_error("HostedClient GPU device generation mismatch");
     const bool pending=client_ || !retired_.empty();
@@ -86,6 +88,7 @@ void HostedClient::start(gfx::Device& dev, const std::string& projectDir, const 
     stop();
     dev_ = &dev;
     initialMap_ = initialMap;
+    initialSeat_ = localSeat;
     view_ = {};
     view_.contentRoot = projectDir;
     view_.engineAssets = engineAssets;
@@ -228,7 +231,7 @@ void HostedClient::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle
         client_->initStep(*dev_, step_++);
         // AIVERSE_HOSTED_MAP=<index>: straight into a match of that map (automated tests / profiling, like the client's --map)
         if (step_ == kSteps) {
-            if (initialMap_) client_->autostart(*initialMap_);
+            if (initialMap_) client_->autostart(*initialMap_,initialSeat_);
             else if (const char* m = std::getenv("AIVERSE_HOSTED_MAP"); m && *m) client_->autostart(size_t(std::atoi(m)));
         }
         return;
@@ -302,6 +305,9 @@ void HostedClient::event(const Event& in) {
     client_->event(e);
 }
 
+const game::ViewScripts* HostedClient::viewScripts() const {
+    return inMatch() ? &client_->viewScripts() : nullptr;
+}
 Simulation* HostedClient::simulation() { return client_ && step_ >= kSteps ? client_->simulation() : nullptr; }
 bool HostedClient::loading() const { return client_ && (step_ < kSteps || client_->mapLoading()); }
 std::string HostedClient::errorText() const { return client_ ? client_->errorText() : std::string(); }
@@ -312,6 +318,7 @@ bool HostedClient::checkpoint(bool restore) {
     if(!canStep())return false;
     Scope scope(*this);return client_->hostCheckpoint(restore);
 }
+double HostedClient::simulationSpeed() const { return canControl() ? client_->simulationSpeed() : 1.0; }
 bool HostedClient::setSpeed(double speed) {
     if(!canControl())return false;
     Scope scope(*this);return client_->setHostSpeed(speed);
@@ -330,6 +337,40 @@ bool HostedClient::updateCavernsVisual(const Json& authored) {
     return client_->updateCavernsVisual(authored);
 }
 
+Json HostedClient::assetResidencyReport() const {
+    if (!currentEpochValid() || !inMatch()) return Json{};
+    const auto stats = client_->assetResidencyStats();
+    Json report = Json::object();
+    report.set("loadedTypes", Json::number(int64_t(stats.loadedTypes)));
+    report.set("cachedModels", Json::number(int64_t(stats.cachedModels)));
+    report.set("gpuTextures", Json::number(int64_t(stats.gpuTextures)));
+    report.set("decodedCpuBytes", Json::number(int64_t(stats.decodedCpuBytes)));
+    report.set("residentModelKnownBytes", Json::number(int64_t(stats.residentModelKnownBytes)));
+    report.set("retiredModels", Json::number(int64_t(stats.retiredModels)));
+    report.set("retirementBatches", Json::number(int64_t(stats.retirementBatches)));
+    report.set("retirementPeak", Json::number(int64_t(stats.retirementPeak)));
+    report.set("estimatedRetiredGpuBytes", Json::number(int64_t(stats.estimatedRetiredGpuBytes)));
+    report.set("unresolvedFailedFences", Json::number(int64_t(stats.unresolvedFailedFences)));
+    report.set("publicationBackpressured", Json::fromBool(stats.publicationBackpressured));
+    return report;
+}
+
+Json HostedClient::staticGeometryReport() const {
+    if (!currentEpochValid() || !inMatch()) return Json{};
+    const auto& scene = client_->staticGeometry();
+    return render::staticGeometryReport(scene);
+}
+
+void HostedClient::setPostQuality(render::PrismaQuality quality) {
+    if (client_ && currentEpochValid()) client_->setHostPostQuality(quality);
+}
+Json HostedClient::prismaFrameReports() const {
+    if (!currentEpochValid() || !inMatch()) return Json::array();
+    const auto& pipeline=client_->prismaDiagnostics();
+    // Off bypasses resolve, so its last completed view report belongs to the previous tier.
+    if (pipeline.quality()==render::PrismaQuality::Off) return Json::array();
+    return render::prismaViewReports(pipeline);
+}
 bool HostedClient::inMatch() const { return client_ && step_ >= kSteps && client_->inMatch(); }
 std::optional<size_t> HostedClient::currentMapIndex() const {
     return inMatch()?std::optional<size_t>(client_->hostMapIndex()):std::nullopt;

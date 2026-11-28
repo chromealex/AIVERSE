@@ -201,6 +201,8 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         shared=(ROOT/"apps/studio-native/StudioHost.cpp").read_text(encoding="utf-8")
         self.assertIn('ws.project.rulesJson',shared)
         self.assertIn('in.rules = rulesSnapshot_',shared)
+        self.assertIn('in.project = ws.project.dir',shared)
+        self.assertIn('in.levelHeight, in.project, *in.rules, nullptr',shared)
 
     def test_rigid_cpu_model_triangle_picking_adapter(self):
         adapter=(ROOT/"apps/studio-native/StudioModelPicking.h").read_text(encoding="utf-8")

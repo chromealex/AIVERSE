@@ -1,0 +1,8 @@
+2026-11-26 04:50:23.323 AiverseStudioHTML5[67799:82793147] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/generate-ui-cYU0Zi/Catalog.app/Contents/Resources/studio-web
+2026-11-26 04:50:23.452 AiverseStudioHTML5[67799:82793147] [studio-web] served index.html (6735 bytes)
+2026-11-26 04:50:23.457 AiverseStudioHTML5[67799:82793147] [studio-web] served assets/index-DliY9j5y.js (1560021 bytes)
+2026-11-26 04:50:23.488 AiverseStudioHTML5[67799:82793147] [studio-web] JS: CROSS main boot
+2026-11-26 04:50:23.495 AiverseStudioHTML5[67799:82793147] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 04:50:24.893 AiverseStudioHTML5[67799:82793147] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 04:50:25.196 AiverseStudioHTML5[67799:82793147] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Map baseline unavailable; reopen the saved map before coordinated save

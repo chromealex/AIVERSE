@@ -161,7 +161,7 @@ if (( ! SKIP_BUILD )); then
     if ! stage configure cmake -S "$ROOT" -B "$BUILD_DIR" \
         -DCMAKE_BUILD_TYPE=Debug \
         -DAIVERSE_BUILD_TESTS=ON \
-        -DAIVERSE_BUILD_EDITOR=ON \
+        -DAIVERSE_BUILD_EDITOR=OFF \
         -DAIVERSE_BUILD_TOOLS=ON \
         -DAIVERSE_BUILD_HEADLESS=ON \
         -DAIVERSE_BUILD_SERVER=ON \

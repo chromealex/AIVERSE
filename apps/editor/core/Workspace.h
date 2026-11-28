@@ -41,7 +41,7 @@ struct Project {
     bool rulesDirty = false, manifestDirty = false;
 
     bool load(const std::string& dir, std::string* err);
-    bool saveRules(std::string* err,const std::string& historyLabel={});
+    bool saveRules(std::string* err,const std::string& historyLabel={},const ProjectFileEdit* newFile=nullptr);
     bool saveManifest(std::string* err,const std::string& historyLabel={});
     // Detached owner: prepare both dirty documents and the history checkpoint.
     // The caller publishes the returned existing-file plan before swapping owners.
@@ -83,11 +83,13 @@ struct Change {
 
 struct Activity { double time = 0; std::string source, text; bool error = false; };
 
+class AnimationPreviewSessions;
 class Workspace {
 public:
     using OpFn = std::function<Json(const Json& params)>;
     struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; bool studioLinkOnly = false; };
 
+    std::shared_ptr<AnimationPreviewSessions> animationPreviews;
     Workspace();
     ~Workspace();
     std::string engineDir;        // engine checkout (templates/, docs/, aiversebuild)
@@ -145,9 +147,10 @@ public:
     // background build (aiversebuild)
     bool building() const { return building_; }
     std::string logsDir() const;   // <engine>/logs, created on demand
+    Json buildLogChunk(int64_t from, int64_t expectedRun = -1);
     std::string buildLog() { std::lock_guard<std::mutex> lk(buildMutex_); return buildLog_; }
     // extraArgs: more aiversebuild flags (Build window: --estimate --out ..., --audio, --no-atlas, ...)
-    void startBuild(const std::string& target, const std::string& config, const std::string& extraArgs = "");
+    void startBuild(const std::string& target, const std::string& config, const std::string& extraArgs = "", const std::string& outputDir = "");
     int buildResult() { std::lock_guard<std::mutex> lk(buildMutex_); return buildRc_; }
     // Any aiversebuild run streamed into the same log (Build window / MCP): args after the executable;
     // `label` names the log file (logs/<label>-<time>.log); withProject adds --project / --engine.

@@ -32,6 +32,26 @@ std::string quoteFor(const std::string& host, const std::string& s) {
     return o + "'";
 }
 
+bool usesConfigurationDirectory(const fs::path& build, const std::string& host, const std::string& ninja, bool configured) {
+    std::string generator;
+    if (configured) {
+        std::ifstream cache(build / "CMakeCache.txt");
+        const std::string key = "CMAKE_GENERATOR:INTERNAL=";
+        for (std::string line; std::getline(cache, line);) {
+            if (line.rfind(key, 0) != 0) continue;
+            generator = line.substr(key.size());
+            if (!generator.empty() && generator.back() == '\r') generator.pop_back();
+            break;
+        }
+    }
+    if (generator.empty()) {
+        if (!ninja.empty()) return false;
+        if (const char* value = std::getenv("CMAKE_GENERATOR")) generator = value;
+    }
+    if (generator.empty()) return host == "windows";
+    return generator == "Xcode" || generator == "Ninja Multi-Config" || generator.rfind("Visual Studio ", 0) == 0;
+}
+
 fs::path normal(const std::string& p) {
     std::error_code ec;
     fs::path a = fs::weakly_canonical(fs::absolute(p, ec), ec);
@@ -120,25 +140,25 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
         "-DAIVERSE_BUILD_TESTS=OFF", "-DAIVERSE_BUILD_SERVER=OFF",
         // the client with the project's modules: run on the project folder (AIVERSE_CONTENT), no content copy
         "-DAIVERSE_BUILD_CLIENT=ON", "-DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF", "-DAIVERSE_GAME_EXECUTABLE=AiverseGame"});
-    // macOS picks the .aiverse handler by bundle id: the project's AiverseEditor.app must not share the regular one's
-    if (host == "macos") p.configureArgs.push_back("-DAIVERSE_EDITOR_BUNDLE_ID=com.aiverse.editor.project");
-    p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "aiverse_editor", "aiverse_headless", "aiverse_client"};
+    p.configureArgs.insert(p.configureArgs.end(), {"-DAIVERSE_BUILD_STUDIO_HTML5=ON", "-DAIVERSE_BUILD_EDITOR=OFF"});
+    if (host == "macos") p.configureArgs.push_back("-DAIVERSE_STUDIO_BUNDLE_ID=com.aiverse.studio.html5.project");
+    p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "aiverse_studio", "aiverse_headless", "aiverse_client"};
     if (jobs > 0) p.buildArgs.insert(p.buildArgs.end(), {"--parallel", std::to_string(jobs)});
     const fs::path bd(p.buildDir);
-    // multi-config generators (Visual Studio) put binaries in Release/; Ninja / Makefiles in the dir itself
-    const bool multiConfig = host == "windows" && ninja.empty();
+    const bool multiConfig = usesConfigurationDirectory(bd, host, ninja, cacheExists);
+    const fs::path studioBin = bd / "apps/studio-native" / (multiConfig ? "Release" : "");
     const fs::path bin = multiConfig ? bd / "Release" : bd;
     if (host == "macos") {
-        p.launchTarget = (bin / "AiverseEditor.app").string();
-        p.editorBinary = (bin / "AiverseEditor.app" / "Contents" / "MacOS" / "AiverseEditor").string();
+        p.launchTarget = (studioBin / "AiverseStudioHTML5.app").string();
+        p.editorBinary = (fs::path(p.launchTarget) / "Contents/MacOS/AiverseStudioHTML5").string();
         p.headlessBinary = (bin / "aiverse_headless").string();
         p.clientBinary = (bin / "AiverseGame.app" / "Contents" / "MacOS" / "AiverseGame").string();
     } else if (host == "windows") {
-        p.editorBinary = p.launchTarget = (bin / "aiverse_editor.exe").string();
+        p.editorBinary = p.launchTarget = (studioBin / "AiverseStudio.exe").string();
         p.headlessBinary = (bin / "aiverse_headless.exe").string();
         p.clientBinary = (bin / "AiverseGame.exe").string();
     } else {
-        p.editorBinary = p.launchTarget = (bin / "aiverse_editor").string();
+        p.editorBinary = p.launchTarget = (studioBin / "AiverseStudio").string();
         p.headlessBinary = (bin / "aiverse_headless").string();
         p.clientBinary = (bin / "AiverseGame").string();
     }
@@ -230,7 +250,8 @@ std::vector<std::string> nativeBuildModules(const std::string& buildDir) {
     std::vector<std::string> ids;
     std::ifstream f(fs::path(buildDir) / "gen" / "NativeRegistry.cpp");
     std::string line;
-    const std::string key = "result.push_back({\"";
+    // Both NativeRegistrar initializer rows and older push_back rows begin their entry here.
+    const std::string key = "{\"";
     while (std::getline(f, line)) {
         size_t a = line.find(key);
         if (a == std::string::npos) continue;
@@ -256,14 +277,11 @@ NativeOpenAction nativeOpenAction(bool modulesMissing, bool buildReady, bool nat
     return NativeOpenAction::Offer;
 }
 
-std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg, const std::string& toolsDir) {
+std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg) {
     auto q = [&](const std::string& s) { return quoteFor(host, s); };
-    std::string args = q(projectArg) + " --native-editor";
-    if (!toolsDir.empty()) args += " --tools-from " + q(toolsDir);
-    if (host == "macos") return "open -n " + q(launchTarget) + " --args " + args;
-    if (host == "windows") return "start \"\" " + q(launchTarget) + " " + args;
-    // double fork: the new editor is not a child of this one (survives its exit, no zombie)
-    return "( AIVERSE_NATIVE_EDITOR=1 " + q(launchTarget) + " " + args + " >/dev/null 2>&1 & )";
+    if (host == "macos") return "open -n " + q(launchTarget) + " --args --project " + q(projectArg);
+    if (host == "windows") return "start \"\" " + q(launchTarget) + " --project " + q(projectArg);
+    return "( " + q(launchTarget) + " --project " + q(projectArg) + " >/dev/null 2>&1 & )";
 }
 
 bool isProjectBuildExe(const std::string& exe) {

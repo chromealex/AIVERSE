@@ -1,0 +1,10 @@
+{
+  "sha": "8ce956a83118052653cb114748aab9fa8ae7370c",
+  "argv": [
+    "bash",
+    "/tmp/physis-play-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-physis-playback.log.txt",
+  "sha256": "0e76469526ea01f1b39e49cea014ae8d4ece8e16de913cc00cdd3915bb4b78e4"
+}

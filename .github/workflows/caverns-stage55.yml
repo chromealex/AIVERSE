@@ -20,7 +20,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev libvulkan-dev xvfb xauth mesa-utils libgl1-mesa-dri
       - name: Enable optional physics and record build configuration
         run: |
-          cmake -S . -B build/caverns-stage55 -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_ENABLE_PHYSICS=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_FETCH_TEMPLATES=OFF -DAIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON -DAIVERSE_CAVERNS_PLANET_DEMO_SMOKE=ON
+          cmake -S . -B build/caverns-stage55 -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_ENABLE_PHYSICS=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_FETCH_TEMPLATES=OFF -DAIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON -DAIVERSE_CAVERNS_PLANET_DEMO_SMOKE=ON
           ctest --test-dir build/caverns-stage55 -N > build/caverns-stage55/inventory.txt
           grep -q 'terraweave_caverns_planet_collision' build/caverns-stage55/inventory.txt
           grep -q 'terraweave_caverns_editor_test' build/caverns-stage55/inventory.txt

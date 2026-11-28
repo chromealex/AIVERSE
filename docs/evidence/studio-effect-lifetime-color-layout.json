@@ -1,0 +1,10 @@
+{
+  "sha": "11dcc3abd668c137a320f14d5b93e831a4af0b1e",
+  "argv": [
+    "bash",
+    "/tmp/fx-color-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-lifetime-color-layout.log.txt",
+  "sha256": "9fca1b2ecd3b352515388cff376120e795a8940c7dbc08b1a3d6c53406594408"
+}

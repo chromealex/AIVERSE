@@ -26,7 +26,7 @@ sock = connect(); buf = b""; seq = 0
 def _hello():
     # Agent link v2: authenticate with the token the editor writes per port.
     global buf
-    path = os.path.expanduser("~/.aiverse/agent-link/%d.token" % port)
+    path = os.path.join(os.environ.get("AIVERSE_AGENT_LINK_DIR", os.path.expanduser("~/.aiverse/agent-link")), f"{port}.token")
     for _ in range(120):
         if os.path.exists(path): break
         time.sleep(1)
@@ -74,7 +74,17 @@ def height(x, z):
 
 import math, copy
 call("map_open", file=os.environ.get("LOD_MAP", "maps/valley.json"))
-call("view_focus", x=256, z=256, distance=90)
+if os.environ.get("STRATA_STUDIO_CAPTURE"):
+    deadline = time.monotonic() + 90
+    while True:
+        opened = call("editor_window", id="scene", open=True)
+        if opened.get("ok") and "error" not in call("view_focus", x=256, z=256, distance=90):
+            break
+        if time.monotonic() >= deadline:
+            sys.exit("HTML Studio Scene did not become ready")
+        time.sleep(1)
+else:
+    call("view_focus", x=256, z=256, distance=90)
 time.sleep(15)
 proj = os.environ["TERRA_PROJECT"]
 mapdoc = json.load(open(os.path.join(proj, "maps", "valley.json")))
@@ -98,6 +108,7 @@ def shot2(tag, w=1920, h=1080, **cam):
         if "png_base64" in r:
             open(os.path.join(out, tag + ".png"), "wb").write(base64.b64decode(r["png_base64"])); return
         time.sleep(0.5)
+    raise RuntimeError(f"Scene screenshot {tag} failed: {r}")
 def beauty(tag, **cam):
     shot2(tag, **cam); time.sleep(2.5); shot2(tag, **cam)
 def river_dist(x, z):
@@ -116,6 +127,8 @@ res = {}
 def stats(tag, **cam):
     shot2(tag, 1280, 720, **cam); time.sleep(1.5); shot2(tag, 1280, 720, **cam)
     st = call("geometry_stats")
+    if not isinstance(st.get("strata"), dict) or not isinstance(st.get("drawCalls"), int):
+        raise RuntimeError(f"Scene geometry statistics unavailable: {st}")
     res[tag] = {k: st.get(k) for k in ("drawCalls", "frameIntervalMs", "cameraModelTriangles", "cameraMeshTriangles", "sunShadowModelTriangles", "cameraLodNodes", "lodChains", "completedGpuFrameMs", "strata", "lodBlocked", "shadowLimitedLod")}
     print("STATS", tag, json.dumps(res[tag]), flush=True)
 idx = 10; x, z, half = centre[idx]; (nx, nz), (fx, fz) = side(idx)

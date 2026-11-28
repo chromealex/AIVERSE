@@ -1,0 +1,10 @@
+{
+  "sha": "0770114ef4ba669dbeacffd7354a53dafc761da8",
+  "argv": [
+    "node",
+    "../shader-wire.cjs"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-shader-wire.log.txt",
+  "sha256": "757a294df171e455aac2a356a1dfe51b07f2b43adaa99e511c10ec3c9c3a4fa7"
+}

@@ -1,5 +1,6 @@
 // World tree: generic reading of the RTS module's ECS for the editor (see WorldInspect.h).
 #include "WorldInspect.h"
+#include "engine/actor/ActorComponents.h"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -479,6 +480,26 @@ std::vector<uint64_t> linkMapEntities(Simulation& sim, GameCore& mod, const MapD
     return out;
 }
 
+std::string runtimeEntityName(const World& w, Entity e, const char** category) {
+    if (const auto* character = w.tryGetConst<actor::CharacterId>(e)) {
+        if (category) *category = "Runtime Actors";
+        return "Actor #" + std::to_string(character->slot);
+    }
+    if (const auto* projectile = w.tryGetConst<actor::Projectile>(e)) {
+        if (category) *category = "Projectiles";
+        return "Projectile #" + std::to_string(projectile->id);
+    }
+    if (const auto* loot = w.tryGetConst<actor::Loot>(e)) {
+        if (category) *category = "Loot";
+        return "Loot #" + std::to_string(loot->id);
+    }
+    if (const auto* vehicle = w.tryGetConst<actor::Vehicle>(e)) {
+        if (category) *category = "Vehicles";
+        return "Vehicle #" + std::to_string(vehicle->id);
+    }
+    return {};
+}
+
 namespace {
 // The row fields of one alive entity into r (reused: clears what it sets).
 void fillRow(Simulation& sim, GameCore& mod, const WorldConfig& cfg, const GameState* gs, Entity e, WorldRow& r, const WorldReadOptions& opt) {
@@ -524,6 +545,7 @@ void fillRow(Simulation& sim, GameCore& mod, const WorldConfig& cfg, const GameS
             for (size_t ti = 0; ti < R.tagNames.size() && ti < 64 && !has; ++ti) has = R.tagNames[ti] == tag && (ut->tags >> ti & 1);
             if (has) { category = tag.c_str(); break; }
         }
+    r.runtimeName = runtimeEntityName(w, e, &category);
     r.category = category;
     r.label.clear();
     r.data.clear();
@@ -598,6 +620,8 @@ Json inspectEntity(Simulation& sim, GameCore& mod, Entity e, const Json& rulesJs
     Json r = Json::object();
     if (!w.alive(e)) { r.set("error", Json::string("object is gone")); return r; }
     const Rules& R = mod.rules();
+    const auto runtimeName = runtimeEntityName(w, e);
+    if (!runtimeName.empty()) r.set("runtimeName", Json::string(runtimeName));
     Json comps = Json::object();
     for (auto& d : descs()) {
         if (!d.has(w, e)) continue;
@@ -626,6 +650,7 @@ Json inspectEntity(Simulation& sim, GameCore& mod, Entity e, const Json& rulesJs
     if (moduleSchemas.size() > 0) r.set("componentSchemas", moduleSchemas);
     if (auto* u = w.tryGet<Unit>(e); u && size_t(u->type) < R.types.size()) {
         const UnitType& t = R.types[u->type];
+        r.set("typeName", Json::string(t.name));
         // effective values (techs, levels, buffs, statuses) next to the type's base
         struct S { const char* id; Stat s; Fixed base; };
         const S stats[] = {{"maxHp", Stat::MaxHp, t.maxHp}, {"armor", Stat::Armor, t.armor}, {"speed", Stat::Speed, t.speed}, {"sight", Stat::Sight, t.sight},
@@ -674,6 +699,67 @@ std::string worldGroupValue(const WorldModel& m, const Rules& R, const WorldRow&
     return {};
 }
 
+Json listWorldRows(const WorldModel& world,const game::Rules& rules,const MapData* doc,const Json& p,const char* mode) {
+    const std::string filter = p.getStr("filter");
+    const int64_t limit = std::clamp<int64_t>(p["limit"].integer(200), 0, 5000);
+    std::vector<std::string> keys;
+    for (auto& k : p["group"].items()) keys.push_back(k.str());
+    Json groups = Json::object(), list = Json::array();
+    int64_t total = 0;
+    for (auto& r : world.rows) {
+        if (!filter.empty() && !worldRowMatches(world, rules, doc, r, filter)) continue;
+        ++total;
+        if (int64_t(list.size()) < limit) list.push(worldRowJson(world,rules,doc,r));
+        Json* g = &groups;
+        for (size_t k = 0; k < keys.size(); ++k) {
+            const std::string v = worldGroupValue(world, rules, r, keys[k]);
+            if (k + 1 == keys.size()) g->set(v, Json::number((*g)[v].integer() + 1));
+            else g = &g->member(v);
+        }
+    }
+    Json r = Json::object();
+    r.set("mode", Json::string(mode));
+    r.set("tick", Json::number(int64_t(world.tick)));
+    r.set("total", Json::number(total));
+    if (!keys.empty()) r.set("groups", groups);
+    r.set("entities", list);
+    return r;
+}
+Json inspectWorldRow(Simulation& sim, game::GameCore& module,const WorldModel& world,const Json& rulesJson,const MapData* doc,const Json& params) {
+    const WorldRow* row=nullptr;
+    if(params.has("ref")){
+        const auto& value=params["ref"];
+        const auto ref=value.integer(0);
+        if(value.isNumber() && ref>0 && value.toDouble()==double(ref))row=world.find(uint64_t(ref));
+    }else{
+        const double index=params["doc"].toDouble(-1);
+        if(params["doc"].isNumber() && index>=0 && index<world.byDoc.size() && std::floor(index)==index)
+            row=world.findDoc(int(index));
+    }
+    if(!row)throw std::runtime_error("No such object in the world tree");
+    auto details=inspectEntity(sim,module,row->e,rulesJson);
+    details.set("row",worldRowJson(world,module.rules(),doc,*row));
+    return details;
+}
+Json worldRowJson(const WorldModel& m, const Rules& rules, const MapData* doc, const WorldRow& r) {
+        Json j = Json::object();
+        j.set("ref", Json::number(int64_t(r.ref)));
+        j.set("index", Json::number(int64_t(r.e.index)));
+        if (r.doc >= 0) j.set("doc", Json::number(int64_t(r.doc)));
+        j.set("name", Json::string(worldRowName(m, rules, doc, r)));
+        if (r.type >= 0) j.set("type", Json::string(rules.types[size_t(r.type)].id));
+        j.set("owner", Json::number(int64_t(r.owner)));
+        j.set("kind", Json::string(worldKindId(r.kind)));
+        j.set("origin", Json::string(r.origin == WorldOrigin::Map ? "map" : r.origin == WorldOrigin::Setup ? "setup" : "runtime"));
+        if (r.hasPos) { Json p = Json::array(); p.push(Json::number(double(r.x), 2)); p.push(Json::number(double(r.z), 2)); j.set("pos", p); }
+        if (r.maxHp > 0) { j.set("hp", Json::number(double(r.hp), 1)); j.set("maxHp", Json::number(double(r.maxHp), 1)); }
+        if (r.parent) { j.set("parent", Json::number(int64_t(r.parent))); j.set("parentRelation", Json::string(r.parentRel)); }
+        if (!r.label.empty()) j.set("label", Json::string(r.label));
+        Json c = Json::array();
+        r.eachComp([&](int k) { c.push(Json::string(worldComponents()[size_t(k)].id)); });
+        j.set("components", c);
+        return j;
+}
 std::string worldRowName(const WorldModel& m, const Rules& R, const MapData* doc, const WorldRow& r) {
     (void)m;
     // Author-provided display names are metadata, not fabricated ECS fields.
@@ -684,6 +770,7 @@ std::string worldRowName(const WorldModel& m, const Rules& R, const MapData* doc
             doc->entities[size_t(r.doc)].extra.getStr("displayName", "");
         if (!displayName.empty()) return displayName;
     }
+    if (!r.runtimeName.empty()) return r.runtimeName;
     std::string n = r.type >= 0 && size_t(r.type) < R.types.size() ? R.types[size_t(r.type)].name
                   : r.kind == WorldKind::Projectile ? "Снаряд" : r.kind == WorldKind::Effect ? "Эффект" : "Объект";
     if (doc && r.doc >= 0 && size_t(r.doc) < doc->entities.size() && !doc->entities[size_t(r.doc)].id.empty()) n += "  #" + doc->entities[size_t(r.doc)].id;
@@ -699,6 +786,18 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
         std::string tok = lower(query.substr(i, j - i));
         i = j;
         if (tok.empty()) continue;
+        if (!r.runtimeName.empty() && lower(r.runtimeName).starts_with(tok + " #")) {
+            const auto hash = query.find_first_not_of(' ', i);
+            if (hash != std::string::npos && query[hash] == '#') {
+                const auto end = query.find_first_not_of("0123456789", hash + 1);
+                if (end != hash + 1 && (end == std::string::npos || query[end] == ' ')) {
+                    const auto name = tok + " " + query.substr(hash, end - hash);
+                    if (lower(r.runtimeName) != name) return false;
+                    i = end == std::string::npos ? query.size() : end;
+                    continue;
+                }
+            }
+        }
         auto has = [](const std::string& hay, const std::string& needle) { return lower(hay).find(needle) != std::string::npos; };
         std::string prefix, v = tok;
         if (size_t c = tok.find(':'); c != std::string::npos && c > 0 && c <= 2) { prefix = tok.substr(0, c); v = tok.substr(c + 1); }
@@ -706,7 +805,7 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
         if (v.empty()) continue;
         const std::string typeId = r.type >= 0 && size_t(r.type) < R.types.size() ? R.types[size_t(r.type)].id : "";
         const std::string mapId = doc && r.doc >= 0 && size_t(r.doc) < doc->entities.size() ? doc->entities[size_t(r.doc)].id : "";
-        auto typeOk = [&] { return has(typeId, v) || has(worldGroupValue(m, R, r, "type"), v) || has(r.label, v) || has(r.category, v); };
+        auto typeOk = [&] { return has(typeId, v) || has(worldGroupValue(m, R, r, "type"), v) || has(r.label, v) || has(r.runtimeName, v) || has(r.category, v); };
         auto ownerOk = [&] { return has(ownerName(m, r.owner), v) || v == std::to_string(r.owner); };
         auto compOk = [&] {
             bool any = false;
@@ -718,7 +817,7 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
             for (auto& [k, val] : r.data) if (has(k, v) || has(val, v)) return true;
             return false;
         };
-        auto idOk = [&] { return v == std::to_string(r.e.index) || has(mapId, v); };
+        auto idOk = [&] { return v == std::to_string(r.e.index) || has(mapId, v) || r.runtimeName.ends_with(" #" + v); };
         bool ok;
         if (prefix == "t") ok = typeOk();
         else if (prefix == "p") ok = ownerOk();

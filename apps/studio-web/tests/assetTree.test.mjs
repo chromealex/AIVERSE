@@ -33,6 +33,7 @@ test('file categories are stable and do not fake thumbnails',()=>{
   assert.equal(assetKind('tree.glb'),'model');
   assert.equal(assetKind('sound.ogg'),'audio');
   assert.equal(assetKind('game.json'),'code');
+  assert.equal(assetKind('materials/sg_brass.material.json'),'material');
   assert.equal(assetKind('unknown.xyz'),'document');
 });
 test('breadcrumbs are derived without new filesystem access',()=>{

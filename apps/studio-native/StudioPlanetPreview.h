@@ -3,6 +3,8 @@
 #pragma once
 #include "apps/studio-native/StudioVisualPicking.h"
 #include "engine/game/Sphere.h"
+#include "engine/view/game/GamePlanet.h"
+#include "engine/view/game/GameTerrainRender.h"
 #include "apps/studio-native/StudioModelPicking.h"
 #include <optional>
 #include <array>
@@ -24,11 +26,20 @@ struct StudioPlanetPreview {
     std::vector<Link> links;
     static render::float3 f3(Vec3 v){return {float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};}
     static Fixed fixed(float v){return Fixed::fromRaw(int64_t(std::llround(double(v)*Fixed::kOne)));}
-    static float height(const editor::DocBody& body,int face,float a,float b){
-        const int n=body.faceSize;
+    static int detailScale(const editor::DocBody& body){
+        if(body.faceSize<1 || body.faceSize>512 || body.detailScale<1 || body.detailScale>16)return 0;
+        const size_t width=size_t(body.detailSide())+1;
+        return body.detail.size()==6*width*width ? body.detailScale : 0;
+    }
+    static float height(const editor::DocBody& body,int face,float a,float b,bool baseGrid=false){
+        const int detail=baseGrid?0:detailScale(body);
+        const int scale=std::max(1,detail),n=body.faceSize*scale;
+        a=std::clamp(a*scale,0.f,float(n));b=std::clamp(b*scale,0.f,float(n));
         const int x=std::min(n-1,int(std::floor(a))),y=std::min(n-1,int(std::floor(b)));
         const float u=a-x,v=b-y;
-        const auto h=[&](int i,int j){return float(body.corners[body.cornerIndex(face,i,j)])/16.f;};
+        const auto h=[&](int i,int j){
+            if(detail)return float(body.detail[body.detailIndex(face,i,j)])/game::kPlanetDetailUnit;
+            return float(body.corners[body.cornerIndex(face,i,j)])/16.f;};
         return (h(x,y)*(1-u)+h(x+1,y)*u)*(1-v)+(h(x,y+1)*(1-u)+h(x+1,y+1)*u)*v;
     }
     // Surface yaw about radial up. The model basis must be orthonormal:
@@ -58,7 +69,7 @@ struct StudioPlanetPreview {
         }
         return render::mat4::translate(ground)*basis*local;
     }
-    static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi){
+    static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi,bool baseGrid=false,const game::TerrainLook* look=nullptr){
         if(bi<0||size_t(bi)>=doc.data.bodies.size())return {};
         const auto& body=doc.data.bodies[size_t(bi)];
         const int n=body.faceSize;
@@ -68,24 +79,49 @@ struct StudioPlanetPreview {
         StudioPlanetPreview out;out.bodyId=body.id;out.faceSize=n;out.radius=float(r);out.extent=out.radius;
         game::CubeSphere cube(n);
         // Coarse authoring preview, same face boundaries on all sides.
-        const int step=std::max(1,(n+63)/64);
+        const int detail=baseGrid?0:detailScale(body);
+        const int scale=std::max(1,detail),side=n*scale;
+        const int budget=detail?128:64;
+        // A cube seam can reverse the parameter direction. Uniformly spaced
+        // face vertices still coincide there when the preview is decimated.
+        const int segments=std::min(side,budget);
         const auto point=[&](int face,float x,float y){
             const auto dir=f3(cube.dirFromFace(face,fixed(x),fixed(y)));
-            return dir*(out.radius+height(body,face,x,y));
+            return dir*(out.radius+height(body,face,x,y,baseGrid));
         };
-        for(int f=0;f<6;++f)for(int y=0;y<n;y+=step)for(int x=0;x<n;x+=step){
-            const int xx=std::min(n,x+step),yy=std::min(n,y+step);
-            std::array<render::float3,4> p{point(f,float(x),float(y)),point(f,float(xx),float(y)),point(f,float(xx),float(yy)),point(f,float(x),float(yy))};
+        std::array<std::vector<uint8_t>,6> overrides;
+        if(look && look->materials())
+            for(size_t f=0;f<std::min(overrides.size(),body.faceExtra.size());++f)
+                overrides[f]=game::parseMaterialRows(body.faceExtra[f]["material"],n,n);
+        for(int f=0;f<6;++f)for(int sy=0;sy<segments;++sy)for(int sx=0;sx<segments;++sx){
+            const float x=float(sx*n)/segments,y=float(sy*n)/segments;
+            const float xx=float((sx+1)*n)/segments,yy=float((sy+1)*n)/segments;
+            std::array<render::float3,4> p{point(f,x,y),point(f,xx,y),point(f,xx,yy),point(f,x,yy)};
             auto normal=render::cross(p[1]-p[0],p[2]-p[0]);
-            if(render::dot(normal,p[0])<0)std::swap(p[1],p[3]);
+            if(render::dot(normal,p[0])<0){std::swap(p[1],p[3]);normal=normal*-1.f;}
+            const auto slope=detail && render::dot(normal,normal)>1e-12f ?
+                render::normalize(normal)-render::normalize(p[0]+p[1]+p[2]+p[3]) : render::float3{};
             const auto offset=uint32_t(out.mesh.vertexCount());
-            const size_t ci=body.cellIndex(f,x,y);
-            const auto color=terrainPreviewColor(ci<body.cells.size()?body.cells[ci]:'.');
+            const size_t ci=body.cellIndex(f,int(x),int(y));
+            const char cell=ci<body.cells.size()?body.cells[ci]:'.';
+            auto color=terrainPreviewColor(cell);
+            if(look){
+                const int kind=game::terrainCellKind(game::cellFlagsFromChar(cell));
+                const auto& rows=overrides[size_t(f)];
+                const size_t index=size_t(int(y))*n+int(x);
+                const int layer=index<rows.size() && rows[index]<4 ? rows[index] : look->cellLayer[kind];
+                render::float3 tint=look->hasColor[kind]?look->color[kind]:render::float3{1,1,1};
+                if(layer>=0 && size_t(layer)<look->layers.size()){
+                    const auto l=look->layers[size_t(layer)].tint;
+                    tint={tint.x*l.x,tint.y*l.y,tint.z*l.z};
+                    color=render::rgbaf({tint.x,tint.y,tint.z,1});
+                }else if(look->hasColor[kind])color=render::rgbaf({tint.x,tint.y,tint.z,1});
+            }
             for(const auto& v:p){
                 const float length=std::sqrt(render::dot(v,v));
                 if(!std::isfinite(length)||length<.01f)return {};
                 out.extent=std::max(out.extent,length);
-                out.mesh.addVertex(v,v*(1.f/length),color);
+                out.mesh.addVertex(v,render::normalize(v*(1.f/length)+slope),color);
             }
             out.mesh.addTriangle(offset,offset+1,offset+2);
             out.mesh.addTriangle(offset,offset+2,offset+3);
@@ -132,22 +168,7 @@ struct StudioPlanetPreview {
     }
     // Ray intersects the exact preview mesh triangles, including occlusion.
     float terrainHit(render::float3 origin,render::float3 direction,const render::MeshBuilder* renderedTerrain=nullptr)const{
-        float nearest=std::numeric_limits<float>::infinity();
-        const auto& geometry=renderedTerrain?*renderedTerrain:mesh;
-        const auto& v=geometry.vertices();const auto& idx=geometry.indices();
-        for(size_t i=0;i+2<idx.size();i+=3){
-            const auto a=v[idx[i]].pos,b=v[idx[i+1]].pos,c=v[idx[i+2]].pos;
-            const auto e=b-a,f=c-a,h=render::cross(direction,f);
-            const float det=render::dot(e,h);
-            if(std::abs(det)<1e-7f)continue;
-            const auto s=origin-a;const float u=render::dot(s,h)/det;
-            if(u<0||u>1)continue;
-            const auto q=render::cross(s,e);const float w=render::dot(direction,q)/det;
-            if(w<0||u+w>1)continue;
-            const float t=render::dot(f,q)/det;
-            if(t>=0&&t<nearest)nearest=t;
-        }
-        return nearest;
+        return studioRayMesh(origin,direction,renderedTerrain?*renderedTerrain:mesh);
     }
     std::optional<Json> groundPlacement(render::float3 origin,render::float3 direction,const render::MeshBuilder* renderedTerrain=nullptr)const{
         const float t=terrainHit(origin,direction,renderedTerrain);

@@ -30,13 +30,13 @@ def binary_arch(head):
     """CPU of an executable from its first bytes: x86_64, arm64, universal (Mach-O fat) or None."""
     if head[:2] == b"MZ" and len(head) >= 0x40:   # PE: machine after the PE signature
         off = struct.unpack_from("<I", head, 0x3C)[0]
-        if head[off:off + 4] == b"PE\0\0":
+        if off + 6 <= len(head) and head[off:off + 4] == b"PE\0\0":
             return {0x8664: "x86_64", 0xAA64: "arm64", 0x14C: "x86"}.get(struct.unpack_from("<H", head, off + 4)[0])
-    if head[:4] == b"\x7fELF":
+    if head[:4] == b"\x7fELF" and len(head) >= 20:
         return {62: "x86_64", 183: "arm64"}.get(struct.unpack_from("<H", head, 18)[0])
     if head[:4] == b"\xca\xfe\xba\xbe":
         return "universal"
-    if head[:4] == b"\xcf\xfa\xed\xfe":
+    if head[:4] == b"\xcf\xfa\xed\xfe" and len(head) >= 8:
         return {0x01000007: "x86_64", 0x0100000C: "arm64"}.get(struct.unpack_from("<I", head, 4)[0])
     return None
 
@@ -57,14 +57,27 @@ def package_entry(work, rel, repo, branch):
     found, arch = {}, None
     with zipfile.ZipFile(path) as z:
         listed = set(z.namelist())
+        if plat == "macos" and "AIVERSE/bin/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5" in listed:
+            names["editor"] = "AiverseStudioHTML5.app"
+        if plat == "windows" and "AIVERSE/bin/AiverseStudio.exe" in listed:
+            names["editor"] = "AiverseStudio.exe"
+        if plat == "linux" and "AIVERSE/bin/AiverseStudio" in listed:
+            names["editor"] = "AiverseStudio"
         for key, exe in names.items():
             inner = package_root + "/bin/" + exe
             if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):
                 found[key] = inner
-        for key in ("rtsmcp", "headless"):   # arch from a plain executable (the editor may be an .app)
-            if key in found and arch is None:
-                with z.open(found[key]) as f:
+        candidates = [found.get("rtsmcp"), found.get("headless")]
+        editor = found.get("editor", "")
+        if editor.endswith(".app"):
+            editor += "/Contents/MacOS/" + os.path.basename(editor)[:-4]
+        candidates.append(editor)
+        for executable in candidates:
+            if executable in listed:
+                with z.open(executable) as f:
                     arch = binary_arch(f.read(4096))
+                if arch is not None:
+                    break
     return {"platform": plat, "arch": arch, "version": ver, "commit": commit, "file": rel,
             "url": f"https://raw.githubusercontent.com/{repo}/{branch}/{rel}",
             "size": os.path.getsize(path), "sha256": h.hexdigest(),
@@ -142,8 +155,7 @@ def main():
     new = [NAME.match(os.path.basename(z)).group(3) + "/" + os.path.basename(z) for z in a.zips]
     order = new + [o for o in order if o and o not in new and present(o)]
     lines = ["# AIVERSE builds", "",
-             "Ready-to-run editor + tools. Unpack the zip anywhere and start `AIVERSE/bin/aiverse_editor.exe` (Windows), "
-             "`AIVERSE/bin/AiverseEditor.app` (macOS) or `AIVERSE/bin/aiverse_editor` (Linux, when the package has it). "
+             "Ready-to-run editor + tools. Unpack the zip anywhere and launch the editor at the path listed in index.json for your package. "
              "The folder also holds the engine sources at that commit, which aiversebuild and the MCP server "
              "(`AIVERSE/bin/aiversemcp`) use.", "",
              "Programs that download a build read [index.json](index.json): every package with platform, arch, "

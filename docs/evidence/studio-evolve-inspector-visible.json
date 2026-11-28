@@ -1,0 +1,10 @@
+{
+  "sha": "5ff410b7cc848d10247aa529e74379c701afb232",
+  "argv": [
+    "bash",
+    "/tmp/evolve-group-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-evolve-inspector-visible.log.txt",
+  "sha256": "ec822770f2bed1ca8cb3d55e4c1ab3d0440219033b0199c8d87c9964abfd9bd8"
+}

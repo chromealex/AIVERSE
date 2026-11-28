@@ -1,0 +1,10 @@
+{
+  "sha": "75f83a3817cc07e80f3d5b3e08fcaf9328fe877a",
+  "argv": [
+    "bash",
+    "/tmp/physis-open.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-open-panel.log.txt",
+  "sha256": "1d769176b12665dfbfc8a2bbaa8f6093a9b335e93868e64e558f31bf3825f4a5"
+}

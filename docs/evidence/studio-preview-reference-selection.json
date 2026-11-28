@@ -1,0 +1,10 @@
+{
+  "sha": "81bb305147f047b5c2f95f46e320e7c48b0ceeab",
+  "argv": [
+    "bash",
+    "/tmp/preview-select.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-preview-reference-selection.log.txt",
+  "sha256": "a956026dbda4843638d1e9a1710c588ef902b57c8c57ea2685a562b12efd207e"
+}

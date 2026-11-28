@@ -32,7 +32,8 @@ int main(){
     using aiverse::studio::studioAgentHistoryPolicy;
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("fake_get"))=="unverified");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("heightmap_export"))=="unverified");
-    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("rules_get"))=="read");
+    for(const auto* op:{"world_entity","world_entities","world_regions_status","rules_get"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_move_commit"))=="assets");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_owner_history"))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_history_reset_review"))=="read");
@@ -41,11 +42,11 @@ int main(){
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("planet_forest_get"))=="read");
     for(const auto* op:{"planet_forest_set","planet_forest_plant","planet_forest_move","planet_forest_remove"})
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="map");
-    for(const auto* op:{"studio_planet_forest_live","studio_planet_scene_get"})
-        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read"&&aiverse::studio::studioPlanetViewAgentOperation(op));
-    for(const auto* op:{"studio_planet_scene_body_set","studio_planet_scene_camera_set"})
-        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="view"&&aiverse::studio::studioPlanetViewAgentOperation(op));
-    AIVERSE_TEST_CHECK(!aiverse::studio::studioPlanetViewAgentOperation("studio.planetForestSet"));
+    for(const auto* op:{"view_ground","view_pick","studio_planet_forest_live","studio_planet_scene_get"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read"&&aiverse::studio::studioSceneViewAgentOperation(op));
+    for(const auto* op:{"view_gizmos","view_focus","studio_planet_scene_body_set","studio_planet_scene_camera_set"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="view"&&aiverse::studio::studioSceneViewAgentOperation(op));
+    AIVERSE_TEST_CHECK(!aiverse::studio::studioSceneViewAgentOperation("studio.planetForestSet"));
     std::cout<<"PASS explicit agent policy\n";
     using namespace aiverse::studio;
     std::map<std::string,HistoryBatchOwner> owners={

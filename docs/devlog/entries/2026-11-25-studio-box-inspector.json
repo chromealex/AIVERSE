@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-box-inspector",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "0d83a2888",
+  "author": null,
+  "links": [],
+  "title": "Границы коллайдера в Inspector",
+  "titleEn": "Collider bounds in Inspector",
+  "summary": "Inspector позволяет редактировать минимальные и максимальные координаты прямоугольного коллайдера без поворота.",
+  "summaryEn": "Inspector exposes minimum and maximum coordinates for axis-aligned world colliders.",
+  "body": [
+    "Выберите коллайдер в Hierarchy, затем измените координаты в Box Collider. Минимум должен быть меньше максимума на каждой оси. Изменения можно отменить через Undo."
+  ],
+  "bodyEn": [
+    "Select a collider in Hierarchy and edit the Box Collider fields. The minimum must be below the maximum on each axis. Undo restores the previous bounds."
+  ],
+  "verified": "На карте Arena изменена верхняя граница. Проверены Undo, Redo, сохранение и отказ при устаревшем редактировании.",
+  "verifiedEn": "Edited an Arena collider in a detached Inspector. Verified Undo, Redo, Save and stale write rejection.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-box-inspector/box-inspector.png",
+      "caption": "Коллайдер на карте Arena",
+      "captionEn": "Arena box collider"
+    }
+  ]
+}

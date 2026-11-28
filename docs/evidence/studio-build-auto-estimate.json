@@ -1,0 +1,10 @@
+{
+  "sha": "3b87bf2c83d8a92d2384bdc596abf1a216e96b62",
+  "argv": [
+    "bash",
+    "../auto-estimate.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-auto-estimate.log.txt",
+  "sha256": "866b8e41c8d1ee61a76ffbc6203ec327b811427bab3b798628fdcf762487b1d3"
+}

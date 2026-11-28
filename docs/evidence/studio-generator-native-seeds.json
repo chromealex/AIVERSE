@@ -1,0 +1,10 @@
+{
+  "sha": "8841a41bed486d9eae02dc846efbdb76eb9a2da8",
+  "argv": [
+    "bash",
+    "/tmp/gen-native-regression.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-generator-native-seeds.log.txt",
+  "sha256": "e57221305872a68f4c99b745a36439ab3c193d9d46313d074c49d439f5515886"
+}

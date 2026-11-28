@@ -1,0 +1,11 @@
+2026-11-26 13:50:02.492 AiverseStudioHTML5[13609:84843103] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/pfx-tier-ui-Sn4Z3S/Catalog.app/Contents/Resources/studio-web
+2026-11-26 13:50:02.700 AiverseStudioHTML5[13609:84843103] [studio-web] served index.html (7200 bytes)
+2026-11-26 13:50:02.704 AiverseStudioHTML5[13609:84843103] [studio-web] served assets/index-X2HIlOPu.js (1712202 bytes)
+2026-11-26 13:50:02.738 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main boot
+2026-11-26 13:50:02.748 AiverseStudioHTML5[13609:84843103] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 13:50:14.259 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main LINK_PORT 47321
+2026-11-26 13:50:16.320 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 13:50:16.337 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 13:50:17.234 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main SCENE_HIDDEN
+2026-11-26 13:50:17.287 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 13:50:44.462 AiverseStudioHTML5[13609:84843103] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:96:197 Error: off [null,{"id":"3","sequence":"251","quality":"low","width":515,"height":85,"compositorPasses":0,"shaderGraphTextures":0,"autoExposureTextureSlot":-1,"hdr":false,"sceneReady":true,"shaderGraphFallback":false,"manualExposureEncoded":false,"autoExposureFrozen":false,"autoExposureRegionMetered":false,"autoExposureBoxMetered":false,"reactiveInputSupplied":false,"reactiveInputAccepted":false,"objectVelocityInputAccepted":false,"reactiveWithoutObjectVelocity":false,"motionBlurReactiveEdgesEnabled":false,"manualExposureEV":0,"autoExposureHighlightRejection":0,"effects":[{"type":"bloom","requested":false,"pipelinePrepared":false,"encoded":false,"degraded":false,"reason":"effect disabled in camera profile"},{"type":"colorGrade","requested":true,"pipelinePrepared":true,"encoded":true,"degraded":false,"reason":""}]}]

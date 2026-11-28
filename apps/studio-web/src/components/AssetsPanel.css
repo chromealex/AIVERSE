@@ -65,6 +65,9 @@
 .studio-assets-items--list .studio-assets-meta{flex:none}
 .studio-assets-empty,.studio-assets-state{display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:8px;min-height:155px;color:var(--au-text-muted);text-align:center;padding:20px}
+.studio-assets-empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:4px}
+.studio-assets-empty-action{color:var(--au-accent);background:transparent;border:0;cursor:pointer;padding:4px 8px;font:inherit}
+.studio-assets-empty-action:hover{text-decoration:underline}
 .studio-assets-empty svg{color:var(--au-accent)}
 .studio-assets-empty strong{color:var(--au-text);font-size:var(--au-font-lg)}
 .studio-assets-empty p{margin:0;max-width:360px;font-size:var(--au-font-sm)}
@@ -200,6 +203,7 @@
 .studio-assets-item.active{box-shadow:none;border-color:var(--au-accent);background:var(--au-active)}
 .studio-assets-items--list{gap:0}
 .studio-assets-items--list .studio-assets-item{height:20px;padding:0 6px;gap:6px;border:0;border-radius:0;background:transparent}
+.studio-assets-items .studio-assets-item.active{background:var(--au-active);box-shadow:inset 3px 0 var(--au-accent)}
 .studio-assets-items--list .studio-assets-icon{width:16px;height:16px;border:0;background:transparent}
 .studio-assets-items--list .studio-assets-icon svg{width:14px;height:14px}
 .studio-assets-empty,.studio-assets-state{min-height:80px;padding:10px;gap:4px}
@@ -234,3 +238,34 @@
 .studio-assets-dependency-tabs button,.studio-assets-dependency-body li button{background:var(--au-panel);color:var(--au-text);border:1px solid var(--au-line);border-radius:4px;padding:3px 7px;cursor:pointer;overflow-wrap:anywhere;text-align:left;min-width:0}
 .studio-assets-dependency-tabs button[aria-pressed=true]{background:var(--au-active)}
 .studio-assets-dependency-tabs button:disabled{opacity:.45;cursor:default}
+
+.studio-assets-items--grid:has([data-kind="material"]){grid-template-columns:repeat(auto-fill,minmax(min(100%,112px),1fr))}
+.studio-assets-item[data-kind="material"] .studio-assets-icon{color:var(--au-accent-secondary)}
+.studio-assets-items--grid .studio-assets-item[data-kind="material"] .studio-assets-name{white-space:normal;overflow-wrap:anywhere}
+.studio-assets-type{font-size:var(--au-font-xs);color:var(--au-text-muted)}
+
+.project-directory{container:project-directory / inline-size}
+.project-directory .studio-assets-toolbar{flex-wrap:wrap}
+@container project-directory (max-width:340px){
+  .project-directory .studio-assets-toolbar{justify-content:flex-end}
+  .project-directory .studio-assets-breadcrumb{flex:1 0 100%}
+}
+.project-directory .studio-assets-breadcrumb{min-width:70px}
+.project-directory>.studio-assets-search{margin:6px 8px;width:auto}
+.project-directory-content,.project-directory footer button{font:inherit;background:var(--au-field);color:var(--au-text);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);padding:4px 8px}
+.project-directory-list{min-height:0;flex:1;overflow:auto;padding:0 8px}
+.project-directory-list ul{list-style:none;margin:0;padding:0}
+.project-directory-list li{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--au-line)}
+.project-directory-entry{flex:1;display:flex;align-items:center;gap:8px;min-width:0;padding:7px 4px;text-align:start;color:var(--au-text);font:inherit;background:none;border:0}
+.project-directory-entry svg{flex:none;color:var(--au-text-muted)}
+.project-directory-entry span{overflow-wrap:anywhere}
+.project-directory-list li.is-selected{background:var(--au-active)}
+button.project-directory-entry:hover{background:var(--au-hover);cursor:pointer}
+.project-directory footer{display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--au-line);color:var(--au-text-muted);flex-wrap:wrap;overflow-wrap:anywhere}
+
+.studio-assets-material-form{display:grid;align-items:start;gap:8px;max-height:60%;overflow:auto;padding:8px 12px}
+.studio-assets-material-form header,.studio-assets-material-form footer{display:flex;align-items:center;gap:6px}
+.studio-assets-material-form footer{justify-content:flex-end}
+.studio-assets-material-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px}
+.studio-assets-material-fields>label,.studio-assets-material-fields>.property-row{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;align-content:start;min-width:0}
+.studio-assets-material-fields input,.studio-assets-material-fields select{box-sizing:border-box;width:100%;min-width:0;max-width:none}

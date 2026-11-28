@@ -1,0 +1,10 @@
+{
+  "sha": "43b96c86297eb6d542bdb79f32a95b40aed20939",
+  "argv": [
+    "bash",
+    "/tmp/studio-subgraph.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-animation-subgraph-authoring.log.txt",
+  "sha256": "77553f1f7d2462e20e2a4adfe8d372a529a9cb08fddf3f82d15ba98cafefa5b7"
+}

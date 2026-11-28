@@ -1,0 +1,10 @@
+{
+  "sha": "97eeb49bce268c797282d6e6ae3e216d51eacdc8",
+  "argv": [
+    "bash",
+    "/tmp/physis-shore-detached.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-shore-detached.log.txt",
+  "sha256": "80d67b6402beaa96f0698c7604c51c7807fcbdb906ea635a2cede0f7e4529261"
+}

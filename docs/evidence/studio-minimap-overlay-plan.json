@@ -1,0 +1,10 @@
+{
+  "sha": "02caa5eb6c187f2c3c64f5f75835109ac5766041",
+  "argv": [
+    "bash",
+    "/tmp/studio-minimap-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-minimap-overlay-plan.log.txt",
+  "sha256": "8cf71057dbd547624107909cefd7fbd2c1258e7c0a084b21b08a5f140ce56d6a"
+}

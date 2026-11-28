@@ -240,6 +240,15 @@ Quality tiers (`MaterialQuality`, chosen per GPU like shadows, `AIVERSE_MATERIAL
 
 ### Material library (`materials.json`)
 
+Each material authored in Studio or through `material_set` has its own JSON file
+under `content/materials/`. For example, `content/materials/steel.material.json`
+contains the PBR object, and the project index records
+`{"materials":{"steel":"content/materials/steel.material.json"}}`.
+References in rules and model assignments continue to use the material name.
+Studio reads legacy inline entries. **Convert library to material files** in
+Materials converts them explicitly. Saving a library edit also converts its
+remaining inline entries. Double-click a material file in Assets to edit it.
+
 `shadowDiffusion` adds receiver-side sun-shadow smoothing to a model material.
 Set it through the library, `material_set`, Studio's **Shadow diffusion (world units)**
 field, or native `render::Material::shadowDiffusion`. Zero preserves the old lookup.

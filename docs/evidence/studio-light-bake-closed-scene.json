@@ -1,0 +1,10 @@
+{
+  "sha": "bb1320f5a186b52a605c6c84ed4d31011bbc6ad0",
+  "argv": [
+    "bash",
+    "/tmp/cold-scene-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-bake-closed-scene.log.txt",
+  "sha256": "f1c946c62d0049533088ba1f8306daade8f7ea94d03b9d39e93103e7bb7da3c0"
+}

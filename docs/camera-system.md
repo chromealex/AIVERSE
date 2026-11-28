@@ -74,6 +74,16 @@ The sections below retain the original design and staged implementation
 history. Their older “planned / NOT RUN” labels describe those checkpoints;
 use the dated validation handoff for the current tested status.
 
+## Cameras in HTML5 Studio
+
+Open **Actors & Cameras → Cameras**. The project camera list becomes a picker in a narrow dock. Edit a camera's projection, clipping planes, position, optics, rig, refresh policy and output. **Save cameras** validates the draft using the LENS loader and checks the revision of `cameras.json`. **Discard edits** restores the loaded document.
+
+**New from Scene** creates a draft with the live Scene camera position, orientation, projection, vertical FOV, orthographic half-height and clip planes. **New camera** also works before opening Scene. Under **Physical lens**, EV100 and exposure are calculated by the native camera model. The sharp range and hyperfocal distance are in metres. An infinite far limit is displayed with the infinity sign.
+
+Enable **Use Follow body** to put the rig in Follow mode. Select a native follow preset and adjust its framing, smoothing and velocity lead. **Use in Scene** takes the editable Scene camera to the selected draft and opens Scene. Returning to the camera tab restores unsaved edits during the current Studio session.
+
+**Preview camera** draws the selected view of the current map inside the camera panel. **Copy Scene pose** copies the position and orientation of an initialized Scene camera into the draft. After changing settings, click **Update preview**, then **Capture PNG**. The capture has the dimensions of the displayed preview. Studio shows the resulting project-relative path under `captures/lens/`.
+
 ## Engine skills and MCP authoring
 
 Use [LENS authoring](../skills/visuals/aiverse-lens/SKILL.md) for project data and
@@ -86,7 +96,7 @@ The existing aiversemcp server and native editor share these Workspace operation
 | Tool | Arguments | Result |
 |---|---|---|
 | `lens_scene_get` | none; project must be open | scene, revision, exists, validation, normalizedScene, clientEnabled |
-| `lens_scene_validate` | scene | native loader validation, normalizedScene, count, clientCompatible |
+| `lens_scene_validate` | scene, optional opticsId | native loader validation, normalizedScene, count, clientCompatible, selected lens optics |
 | `lens_scene_set` | scene, expectedRevision or expectedScene | validated complete asset replacement |
 | `lens_camera_set` | camera, expectedRevision or expectedScene | create/replace one complete record by stable id |
 | `lens_camera_delete` | id, expectedRevision or expectedScene | remove one existing record |

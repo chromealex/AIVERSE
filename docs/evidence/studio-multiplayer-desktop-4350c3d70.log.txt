@@ -1,0 +1,10 @@
+2026-11-25 22:54:22.102 AiverseStudioHTML5[3545:81468173] [studio-web] JS: CROSS networkplayproof Rejected Open the actor project again before starting network play.
+2026-11-25 22:54:22.103 AiverseStudioHTML5[3545:81468173] [studio-web] JS: CROSS networkplayproof Rejected Enter a server address without spaces.
+2026-11-25 22:54:22.103 AiverseStudioHTML5[3545:81468173] [studio-web] JS: CROSS networkplayproof Rejected Use a server port from 1 to 65535.
+2026-11-25 22:54:22.284 AiverseStudioHTML5[3545:81468173] [studio-web] JS: CROSS networkplayproof HOST_STARTED
+2026-11-25 22:54:30.911 AiverseStudioHTML5[3545:81468173] [studio-web] JS: CROSS networkplayproof READY_FOR_CAPTURE
+COMMAND    PID          USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+AiverseGa 3579 aleksandrfeer    5u  IPv6 0xab024ec27540fc71      0t0  TCP 127.0.0.1:27101->127.0.0.1:61100 (ESTABLISHED)
+COMMAND    PID          USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+AiverseGa 3672 aleksandrfeer    3u  IPv4 0xce0f7c204f8bd8a9      0t0  TCP 127.0.0.1:61100->127.0.0.1:27101 (ESTABLISHED)
+could not create image from window

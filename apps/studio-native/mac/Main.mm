@@ -3,12 +3,17 @@
 // (shared with the Windows shell, win/Main.cpp).
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
+#import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/CATransaction.h>
 #import "StudioAssetSchemeHandler.h"
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "apps/editor/core/FileAssoc.h"
+#include "apps/editor/core/ProjectFile.h"
+#include "engine/platform/EngineDir.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -48,19 +53,33 @@ namespace studio = aiverse::studio;
 - (BOOL)isOpaque { return NO; }
 @end
 @interface StudioMetalView : NSView {
-    NSPoint press_;
-    BOOL dragged_;
-    BOOL moveDrag_;
-    BOOL terrainStroke_; // Scene brush stroke in progress
-    BOOL splineDrag_;    // dragging a road node / river point
-    BOOL marquee_;       // plain LMB drag on empty space: rectangle selection
     NSTrackingArea* hoverTracking_;
     NSTimeInterval lastHover_;
+    BOOL sceneMenuPress_;
 }
 @property(nonatomic, assign) StudioShell* shell;
 @end
 
 @interface StudioFxView : StudioMetalView
+@property(nonatomic) studio::StudioSurface surface;
+@property(nonatomic) NSPoint pressPoint;
+@property(nonatomic) BOOL clickPending;
+@end
+@interface StudioCharacterSurface : NSView
+@property(nonatomic,strong) CALayer* photo;
+@property(nonatomic,strong) CALayer* brushRing;
+@property(nonatomic) CGFloat photoAspect,photoScale,photoX,photoY;
+@property(nonatomic) BOOL photoMirror;
+@end
+@implementation StudioCharacterSurface
+- (NSView*)hitTest:(NSPoint)point { (void)point;return nil; }
+- (void)layout {
+    [super layout];
+    CGFloat h=self.bounds.size.height*self.photoScale,w=h*self.photoAspect;
+    self.photo.bounds=CGRectMake(0,0,w,h);
+    self.photo.position=CGPointMake(NSMidX(self.bounds)+w*self.photoX*.5,NSMidY(self.bounds)-h*self.photoY*.5);
+    self.photo.transform=CATransform3DMakeScale(self.photoMirror?-1:1,1,1);
+}
 @end
 @interface StudioGameView : StudioMetalView { NSTrackingArea* tracking_; }
 @end
@@ -86,28 +105,32 @@ namespace studio = aiverse::studio;
         [p appendBezierPath:[NSBezierPath bezierPathWithRoundedRect:b xRadius:self.corner yRadius:self.corner]];
         p.windingRule=NSWindingRuleEvenOdd;[bezel setFill];[p fill];
     }
+    const NSEdgeInsets in=self.safe;
+    if (self.showSafe && (in.left>0 || in.top>0 || in.right>0 || in.bottom>0)) {
+        [NSGraphicsContext saveGraphicsState];
+        [[NSBezierPath bezierPathWithRoundedRect:b xRadius:self.corner yRadius:self.corner] addClip];
+        const NSRect inner=NSMakeRect(in.left,in.top,b.size.width-in.left-in.right,b.size.height-in.top-in.bottom);
+        NSBezierPath* shade=[NSBezierPath bezierPathWithRect:b];
+        [shade appendBezierPath:[NSBezierPath bezierPathWithRect:inner]];
+        shade.windingRule=NSWindingRuleEvenOdd;
+        [[NSColor colorWithSRGBRed:1 green:70/255.0 blue:60/255.0 alpha:70/255.0] setFill];[shade fill];
+        NSBezierPath* edge=[NSBezierPath bezierPathWithRect:NSInsetRect(inner,.75,.75)];
+        edge.lineWidth=1.5;[[NSColor colorWithSRGBRed:1 green:210/255.0 blue:80/255.0 alpha:.9] setStroke];[edge stroke];
+        [NSGraphicsContext restoreGraphicsState];
+    }
     if (self.cutout.size.width>0 && self.cutout.size.height>0) {
         [[NSColor blackColor] setFill];
         [[NSBezierPath bezierPathWithRoundedRect:self.cutout xRadius:self.cutoutRadius yRadius:self.cutoutRadius] fill];
     }
-    if (!self.showSafe) return;
-    const NSEdgeInsets in=self.safe;
-    if (in.left<=0 && in.top<=0 && in.right<=0 && in.bottom<=0) return;
-    const NSRect inner=NSMakeRect(in.left,in.top,b.size.width-in.left-in.right,b.size.height-in.top-in.bottom);
-    NSBezierPath* shade=[NSBezierPath bezierPathWithRect:b];
-    [shade appendBezierPath:[NSBezierPath bezierPathWithRect:inner]];
-    shade.windingRule=NSWindingRuleEvenOdd;
-    [[NSColor colorWithSRGBRed:1 green:70/255.0 blue:60/255.0 alpha:70/255.0] setFill];[shade fill];
-    NSBezierPath* edge=[NSBezierPath bezierPathWithRect:NSInsetRect(inner,.75,.75)];
-    edge.lineWidth=1.5;[[NSColor colorWithSRGBRed:1 green:210/255.0 blue:80/255.0 alpha:.9] setStroke];[edge stroke];
 }
 @end
 
-@interface StudioShell : NSObject <NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate> {
+@interface StudioShell : NSObject <NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate> {
 @public
     NSWindow* window_;
     WKWebView* web_;
     StudioMetalView* viewport_;
+    NSView* assetViews_[int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material)];
     StudioFxView* fxViewport_;
     StudioGameView* gameViewport_;
     StudioDeviceChromeView* gameChrome_;
@@ -118,16 +141,19 @@ namespace studio = aiverse::studio;
     std::unique_ptr<studio::StudioHostPlatform> platform_;
     std::unique_ptr<studio::StudioHost> core_;
     BOOL htmlComposite_;
+    BOOL mainWebReady_;
+    BOOL hasFinderProject_;
     BOOL closeApproved_;
     // Floating panel windows (Unity-style undocked tabs), one panel per window.
     NSMutableDictionary<NSString*,NSWindow*>* floatWindows_;
     NSMutableDictionary<NSString*,WKWebView*>* floatWebs_;
+    __weak WKWebView* dictationWeb_;
     __unsafe_unretained WKWebView* currentWeb_; // sender of the bridge message being handled
     BOOL closingFloats_;            // main window closes: keep the float list for next launch
     NSTimer* dockWatch_;            // a floating window is being dragged: dock it when dropped over the main window
     BOOL dockHover_;
 }
-- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite;
+- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite listenPort:(int)listenPort;
 - (studio::StudioHost*)core;
 - (WKWebView*)makeWebViewWithFrame:(NSRect)frame;
 - (void)evaluateInAllWebs:(NSString*)js;
@@ -155,10 +181,12 @@ public:
     }
     // The Scene's device is made on its render thread: the layers were captured on the main thread.
     void setLayers(void* scene, void* game, void* fx) {
+        for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i)assetLayers_[i]=(__bridge void*)shell_->assetViews_[i].layer;
         sceneLayer_=scene;gameLayer_=game;fxLayer_=fx;
     }
     std::unique_ptr<aiverse::gfx::Device> createDevice(studio::StudioSurface surface) override {
         return aiverse::gfx::createMetalDevice(
+            surface>=studio::StudioSurface::Material?assetLayers_[int(surface)-int(studio::StudioSurface::Material)]:
             surface==studio::StudioSurface::Scene?sceneLayer_:
             surface==studio::StudioSurface::Fx?fxLayer_:gameLayer_);
     }
@@ -172,10 +200,75 @@ public:
         }
     }
     bool surfaceDrawable(studio::StudioSurface surface) override {
-        NSView* view=surface==studio::StudioSurface::Scene?(NSView*)shell_->viewport_:
+        NSView* view=surface>=studio::StudioSurface::Material?shell_->assetViews_[int(surface)-int(studio::StudioSurface::Material)]:surface==studio::StudioSurface::Scene?(NSView*)shell_->viewport_:
             surface==studio::StudioSurface::Fx?(NSView*)shell_->fxViewport_:(NSView*)shell_->gameViewport_;
         NSWindow* window=view.window ?: shell_->window_;
         return !view.hidden && !window.isMiniaturized && window.visible;
+    }
+    void humanReference(studio::StudioSurface surface,const aiverse::Json& input) override {
+        auto* view=(StudioCharacterSurface*)shell_->assetViews_[int(surface)-int(studio::StudioSurface::Material)];
+        if(input.getStr("kind")=="brushCursor"){
+            CGFloat radius=std::clamp(input["radius"].toDouble(),0.,view.bounds.size.height);
+            [CATransaction begin];[CATransaction setDisableActions:YES];
+            view.brushRing.hidden=radius<=0;
+            view.brushRing.bounds=CGRectMake(0,0,2*radius,2*radius);
+            view.brushRing.cornerRadius=radius;
+            view.brushRing.position=CGPointMake(input["x"].toDouble()*view.bounds.size.width,(1-input["y"].toDouble())*view.bounds.size.height);
+            [CATransaction commit];
+            return;
+        }
+        if(input.has("image")){
+            const auto src=input.getStr("image");
+            NSImage* image=nil;
+            if(src.size()<32*1024*1024 && src.rfind("data:image/png;base64,",0)==0){
+                NSString* content=[NSString stringWithUTF8String:src.c_str()+22];
+                NSData* bytes=[[NSData alloc] initWithBase64EncodedString:content options:0];
+                if(bytes)image=[[NSImage alloc] initWithData:bytes];
+            }
+            view.photo.contents=image?(__bridge id)[image CGImageForProposedRect:nil context:nil hints:nil]:nil;
+            view.photoAspect=image&&image.size.height>0?image.size.width/image.size.height:1;
+        }
+        view.photo.opacity=std::clamp(input["opacity"].toDouble(),0.,1.);
+        view.photo.hidden=!input.getBool("visible")||!view.photo.contents;
+        view.photoScale=std::clamp(input["scale"].toDouble(),.1,2.);
+        view.photoX=std::clamp(input["x"].toDouble(),-1.,1.);
+        view.photoY=std::clamp(input["y"].toDouble(),-1.,1.);
+        view.photoMirror=input.getBool("mirror");
+        view.needsLayout=YES;
+    }
+    void captureStudioWindow(aiverse::gfx::Device::CaptureFn done) override {
+        NSWindow* window=shell_->window_;
+        if (!window.isVisible || window.isMiniaturized) { done(0,0,{});return; }
+        const CGWindowID target=CGWindowID(window.windowNumber);
+        if (@available(macOS 14.4,*)) {
+            [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:^(SCShareableContent* content,NSError* error){
+                SCWindow* selected=nil;
+                for (SCWindow* candidate in content.windows) if (candidate.windowID==target) {selected=candidate;break;}
+                if (error || !selected) {done(0,0,{});return;}
+                SCContentFilter* filter=[[SCContentFilter alloc] initWithDesktopIndependentWindow:selected];
+                SCStreamConfiguration* config=[[SCStreamConfiguration alloc] init];
+                const CGRect rect=filter.contentRect;
+                if (rect.size.width<1 || rect.size.height<1) {done(0,0,{});return;}
+                const double scale=std::min({double(filter.pointPixelScale),1280./rect.size.width,2560./rect.size.height});
+                config.width=std::max(1,int(std::round(rect.size.width*scale)));
+                config.height=std::max(1,int(std::round(rect.size.height*scale)));
+                config.showsCursor=NO;config.ignoreShadowsSingleWindow=YES;
+                [SCScreenshotManager captureImageWithFilter:filter configuration:config completionHandler:^(CGImageRef image,NSError* captureError){
+                    if (captureError || !image) {done(0,0,{});return;}
+                    const size_t w=CGImageGetWidth(image),h=CGImageGetHeight(image);
+                    if (!w || !h || w>4096 || h>4096) {done(0,0,{});return;}
+                    std::vector<uint8_t> pixels(w*h*4);
+                    CGColorSpaceRef space=CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+                    CGContextRef context=CGBitmapContextCreate(pixels.data(),w,h,8,w*4,space,
+                        CGBitmapInfo(kCGImageAlphaPremultipliedLast)|CGBitmapInfo(kCGBitmapByteOrder32Big));
+                    CGColorSpaceRelease(space);
+                    if (!context) {done(0,0,{});return;}
+                    CGContextDrawImage(context,CGRectMake(0,0,w,h),image);
+                    CGContextRelease(context);
+                    done(int(w),int(h),std::move(pixels));
+                }];
+            }];
+        } else done(0,0,{});
     }
     bool gameFocused() override {
         NSWindow* window=shell_->gameViewport_.window ?: shell_->window_;
@@ -212,10 +305,11 @@ public:
             (*cb)(result==NSModalResponseOK && panel.URL.path.length ? std::string(panel.URL.path.UTF8String) : std::string());
         }];
     }
+    void dictationStarted() override { shell_->dictationWeb_ = shell_->currentWeb_; }
     void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) override {
         NSOpenPanel* panel=[NSOpenPanel openPanel];
         panel.canChooseFiles=NO;panel.canChooseDirectories=YES;panel.canCreateDirectories=YES;panel.allowsMultipleSelection=NO;
-        panel.prompt=@"Create Here";
+        panel.prompt=@"Choose Folder";
         panel.message=ns(message);
         if (!startDir.empty()) panel.directoryURL=[NSURL fileURLWithPath:ns(startDir)];
         auto cb=std::make_shared<std::function<void(std::string)>>(std::move(done));
@@ -246,8 +340,37 @@ public:
             (*cb)(std::move(sources));
         }];
     }
-    void revealInFileManager(const std::filesystem::path& path) override {
+    PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
+        const std::filesystem::path bundle=NSBundle.mainBundle.bundlePath.UTF8String;
+        const auto player=std::filesystem::path("AiverseGame.app/Contents/MacOS/AiverseGame");
+        const auto embedded=bundle/"Contents/Helpers"/player;
+        const auto exe=studio::studioNetworkPlayer(std::filesystem::is_regular_file(embedded)?embedded:bundle.parent_path()/player);
+        return launchExecutable(exe,args);
+    }
+    void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
+        launchExecutable(executable, {"--project", project});
+    }
+    static PlayerExitStatus launchExecutable(const std::filesystem::path& exe, const std::vector<std::string>& args) {
+        NSTask* task=[[NSTask alloc] init];
+        task.executableURL=[NSURL fileURLWithPath:ns(exe.string())];
+        NSMutableArray<NSString*>* argv=[NSMutableArray array];
+        for(const auto& arg:args)[argv addObject:ns(arg)];
+        task.arguments=argv;
+        NSError* error=nil;
+        if(![task launchAndReturnError:&error])throw std::runtime_error(error.localizedDescription.UTF8String);
+        return [task]() -> std::optional<int> {
+            if(task.running)return std::nullopt;
+            return task.terminationStatus;
+        };
+    }
+    void revealInFileManager(const std::filesystem::path& path, bool openFolder) override {
+        if(openFolder){[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:ns(path.string()) isDirectory:YES]];return;}
         [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:ns(path.string())]]];
+    }
+    std::filesystem::path legacyEditorSettingsDir() override {
+        NSString* dir = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+        if (!dir) return {};
+        return std::filesystem::path(dir.fileSystemRepresentation) / "AIVERSE Editor";
     }
     std::filesystem::path cacheDir() override {
         NSString* caches=NSSearchPathForDirectoriesInDomains(NSCachesDirectory,NSUserDomainMask,YES).firstObject ?: NSTemporaryDirectory();
@@ -280,6 +403,7 @@ private:
     __unsafe_unretained StudioShell* shell_;
     void* sceneLayer_=nullptr;
     void* gameLayer_=nullptr;
+    void* assetLayers_[int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material)]={};
     void* fxLayer_=nullptr;
 };
 
@@ -440,71 +564,54 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         return [self core]->placeType([asset substringFromIndex:kStudioTypeDragPrefix.length].UTF8String,point.x,point.y,[self w],[self h]);
     return [self core]->placeAsset(asset.UTF8String,point.x,point.y,[self w],[self h]);
 }
+- (BOOL)acceptsFirstMouse:(NSEvent*)event {
+    if ([self isMemberOfClass:[StudioMetalView class]] && [self core] && ([self core]->scenePickerArmed() || [self core]->brushArmed())) return YES;
+    return [super acceptsFirstMouse:event];
+}
+- (void)primaryMouse:(NSEvent*)event phase:(int)phase {
+    auto* core=[self core];
+    if (!core) return;
+    const NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
+    const auto flags=event.modifierFlags;
+    studio::StudioSceneMods mods;
+    mods.shift=(flags & NSEventModifierFlagShift)!=0; mods.ctrl=(flags & NSEventModifierFlagControl)!=0;
+    mods.alt=(flags & NSEventModifierFlagOption)!=0; mods.command=(flags & NSEventModifierFlagCommand)!=0;
+    core->sceneMouse(phase,0,point.x,point.y,event.deltaX,event.deltaY,[self w],[self h],mods);
+}
 - (void)mouseDown:(NSEvent*)event {
-    press_=[self convertPoint:event.locationInWindow fromView:nil];
-    dragged_=NO;marquee_=NO;terrainStroke_=NO;splineDrag_=NO;
     [self.window makeFirstResponder:self];
-    auto* core=[self core];
-    if (!core) return;
-    const BOOL alt=(event.modifierFlags & NSEventModifierFlagOption)!=0;
-    // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
-    if (!alt && core->splineDrag(0,press_.x,press_.y,[self w],[self h])) { splineDrag_=YES; return; }
-    // Scene brush armed: plain LMB paints; Alt still orbits.
-    if (!alt && core->brushArmed()) {
-        terrainStroke_=core->terrainStroke(0,press_.x,press_.y,[self w],[self h]);
-        if (terrainStroke_) return;
-    }
-    // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
-    moveDrag_=!alt && core->moveBegin(press_.x,press_.y,[self w],[self h]);
+    [self primaryMouse:event phase:0];
 }
-// Unity Scene view mapping, shared with the HTML composite path
-// (apps/studio-web/src/panels/sceneCamera.ts) and StudioHost::sceneMouse (Windows):
-// LMB select, Alt+LMB orbit, Alt+Cmd+LMB / MMB pan, RMB flythrough (WASD/QE), Alt+RMB zoom.
-- (void)mouseDragged:(NSEvent*)event {
-    auto* core=[self core];
-    if (!core) return;
-    const NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
-    if (splineDrag_) { core->splineDrag(1,point.x,point.y,[self w],[self h]); return; }
-    if (terrainStroke_) { core->terrainStroke(1,point.x,point.y,[self w],[self h]); return; }
-    if (moveDrag_) {
-        dragged_=YES;
-        // Ctrl/Cmd held while dragging inverts the snap setting (Unity: Ctrl snaps).
-        const BOOL invert=(event.modifierFlags & (NSEventModifierFlagControl|NSEventModifierFlagCommand))!=0;
-        core->moveUpdate(point.x,point.y,[self w],[self h],invert);
-        return;
-    }
-    const NSEventModifierFlags flags=event.modifierFlags;
-    // Hand tool (Q): plain LMB drag pans the view.
-    if (!(flags & NSEventModifierFlagOption) && core->tool()==0) { dragged_=YES; core->pan(event.deltaX,event.deltaY); return; }
-    if (!(flags & NSEventModifierFlagOption)) {
-        // Plain LMB drag on empty space: rectangle (marquee) selection.
-        if (!marquee_ && std::hypot(double(point.x-press_.x),double(point.y-press_.y))<5.0) return;
-        marquee_=YES;dragged_=YES;
-        core->marquee(press_.x,press_.y,point.x,point.y,[self w],[self h]);
-        return;
-    }
-    dragged_=YES;
-    if (flags & NSEventModifierFlagCommand) core->pan(event.deltaX,event.deltaY);
-    else core->orbit(event.deltaX,event.deltaY);
+- (void)mouseDragged:(NSEvent*)event { [self primaryMouse:event phase:1]; }
+- (void)mouseUp:(NSEvent*)event { [self primaryMouse:event phase:2]; }
+- (void)rightMouseDown:(NSEvent*)event {
+    [self.window makeFirstResponder:self];
+    sceneMenuPress_ = (event.modifierFlags & NSEventModifierFlagShift) != 0;
 }
-- (void)mouseUp:(NSEvent*)event {
-    auto* core=[self core];
-    if (!core) return;
-    if (splineDrag_) { splineDrag_=NO; core->splineDrag(2,0,0,[self w],[self h]); return; }
-    if (terrainStroke_) { terrainStroke_=NO; core->terrainStroke(2,0,0,[self w],[self h]); return; }
-    if (moveDrag_) { moveDrag_=NO; core->moveEnd(); return; }
-    const NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
-    // Shift adds to the selection, Cmd toggles (Unity / Finder convention).
-    const std::string mode=(event.modifierFlags & NSEventModifierFlagCommand)?"toggle":
-        (event.modifierFlags & NSEventModifierFlagShift)?"add":"replace";
-    if (marquee_) { marquee_=NO; core->marqueeEnd(press_.x,press_.y,point.x,point.y,[self w],[self h],mode); return; }
-    if (dragged_ || std::hypot(double(point.x-press_.x), double(point.y-press_.y)) >= 5.0) return;
-    if (core->gizmoAt(point.x,point.y,[self w],[self h])) return;
-    core->select(point.x,point.y,[self w],[self h],mode);
+- (void)rightMouseUp:(NSEvent*)event {
+    if (!sceneMenuPress_) return;
+    sceneMenuPress_ = NO;
+    StudioShell* shell = self.shell;
+    if (!shell || self != shell->viewport_ || !self.window) return;
+    WKWebView* web = shell->web_;
+    if (web.window != self.window) {
+        web = nil;
+        for (WKWebView* candidate in shell->floatWebs_.allValues) {
+            if (candidate.window == self.window) { web = candidate; break; }
+        }
+    }
+    if (!web) return;
+    const NSPoint point = [web convertPoint:event.locationInWindow fromView:nil];
+    const double x = point.x, y = web.isFlipped ? point.y : web.bounds.size.height - point.y;
+    if (!std::isfinite(x) || !std::isfinite(y)) return;
+    [self.window makeFirstResponder:web];
+    NSString* js = [NSString stringWithFormat:
+        @"document.elementFromPoint(%f,%f)?.closest('.viewport')?.dispatchEvent(new MouseEvent('contextmenu',"
+         "{bubbles:true,cancelable:true,shiftKey:true,button:2,clientX:%f,clientY:%f}))", x,y,x,y];
+    [web evaluateJavaScript:js completionHandler:nil];
 }
-- (void)rightMouseDown:(NSEvent*)event { [self.window makeFirstResponder:self]; (void)event; }
 - (void)rightMouseDragged:(NSEvent*)event {
-    if (![self core]) return;
+    if (sceneMenuPress_ || ![self core]) return;
     if (event.modifierFlags & NSEventModifierFlagOption) [self core]->zoom((event.deltaX+event.deltaY)*0.6);
     else [self core]->look(event.deltaX,event.deltaY);
 }
@@ -544,24 +651,35 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 @implementation StudioFxView
 // A dedicated VFX render target is never a map editor. Mouse gestures can
 // only manipulate its isolated camera; no pick, brush or asset drop.
-- (void)mouseDown:(NSEvent*)event { (void)event; [self.window makeFirstResponder:self]; }
-- (void)mouseUp:(NSEvent*)event {(void)event;} // never select a map entity
+- (void)mouseDown:(NSEvent*)event {
+    self.pressPoint=event.locationInWindow;self.clickPending=self.surface==studio::StudioSurface::Nature;
+    [self.window makeFirstResponder:self];
+}
+- (void)mouseUp:(NSEvent*)event {
+    if(self.clickPending && NSPointInRect(event.locationInWindow,NSInsetRect(NSMakeRect(self.pressPoint.x,self.pressPoint.y,0,0),-3,-3))){
+        const NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];
+        if(auto* core=[self core])core->natureClick(p.x,p.y,self.bounds.size.width,self.bounds.size.height);
+    }
+    self.clickPending=NO;
+}
 - (void)rightMouseDown:(NSEvent*)event {(void)event;}
 - (void)rightMouseUp:(NSEvent*)event {(void)event;}
 - (void)otherMouseDown:(NSEvent*)event {(void)event;}
 - (void)otherMouseUp:(NSEvent*)event {(void)event;}
 - (void)mouseDragged:(NSEvent*)event {
-    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+    if(self.clickPending && hypot(event.locationInWindow.x-self.pressPoint.x,event.locationInWindow.y-self.pressPoint.y)<3)return;
+    self.clickPending=NO;
+    if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)rightMouseDragged:(NSEvent*)event {
-    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+    if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)otherMouseDragged:(NSEvent*)event {
-    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+    if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)scrollWheel:(NSEvent*)event {
     const CGFloat wheel=event.scrollingDeltaY*(event.hasPreciseScrollingDeltas?.12:1.0);
-    if(auto* core=[self core])core->fxCameraZoom(wheel);
+    if(auto* core=[self core])core->fxCameraZoom(self.surface,wheel);
 }
 - (void)mouseMoved:(NSEvent*)event {(void)event;}
 - (void)mouseExited:(NSEvent*)event {(void)event;}
@@ -666,23 +784,20 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 @end
 
 @implementation StudioShell
-- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite {
+- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite listenPort:(int)listenPort {
     if ((self=[super init])) {
-        htmlComposite_=composite;
-        const std::string root=AIVERSE_STUDIO_SOURCE_DIR;
+        // The Metal-under-HTML path requires WebKit to leave its page canvas unpainted.
+        htmlComposite_=composite && [WKWebView instancesRespondToSelector:NSSelectorFromString(@"_setDrawsBackground:")];
+        if(composite && !htmlComposite_) NSLog(@"[studio-web] Transparent page canvas unavailable; using native Scene input");
+        const std::string root=aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,nullptr);
+        aiverse::platform::setEngineAssetsDir([[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"engine"].UTF8String);
         platform_=std::make_unique<MacPlatform>(self);
-        core_=std::make_unique<studio::StudioHost>(*platform_,root,composite);
+        core_=std::make_unique<studio::StudioHost>(*platform_,root,htmlComposite_);
+        if (listenPort && !core_->session().listenForAgent(listenPort))
+            throw std::runtime_error("Could not start the authenticated Studio agent listener");
         const std::string exeDir=[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent].UTF8String;
-#ifdef AIVERSE_STUDIO_BUILD_TOOL
-        core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
-#else
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exeDir,root));
-#endif
-#ifdef AIVERSE_STUDIO_MCP_TOOL
-        core_->session().setMcpTool(AIVERSE_STUDIO_MCP_TOOL);
-#else
         core_->session().setMcpTool(exeDir+"/aiversemcp");
-#endif
         core_->setPendingProject(project);
         NSURL* bundled=[[NSBundle mainBundle] URLForResource:@"index" withExtension:@"html" subdirectory:@"studio-web"];
         dist_=bundled ? [[[bundled URLByDeletingLastPathComponent] path] stringByStandardizingPath]
@@ -692,6 +807,20 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     return self;
 }
 - (studio::StudioHost*)core { return core_.get(); }
+- (void)webView:(WKWebView*)webView runOpenPanelWithParameters:(WKOpenPanelParameters*)parameters
+ initiatedByFrame:(WKFrameInfo*)frame completionHandler:(void (^)(NSArray<NSURL*>*))completionHandler {
+    if (!frame.mainFrame || ![self trusted:frame.request.URL] || !webView.window) {
+        completionHandler(nil);
+        return;
+    }
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = parameters.allowsMultipleSelection;
+    [panel beginSheetModalForWindow:webView.window completionHandler:^(NSModalResponse response) {
+        completionHandler(response == NSModalResponseOK ? panel.URLs : nil);
+    }];
+}
 - (BOOL)trusted:(NSURL*)url {
     if (!url) return NO;
     // file:// navigation is deliberately disallowed. All production assets
@@ -701,6 +830,34 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         return [url.path isEqualToString:@"/index.html"] || [url.path isEqualToString:@"/"];
     return devURL_ && [url.scheme isEqualToString:@"http"] &&
            [url.host isEqualToString:@"127.0.0.1"] && url.port.integerValue==4173;
+}
+- (void)application:(NSApplication*)app openFiles:(NSArray<NSString*>*)files {
+    for (NSString* file in files) {
+        try {
+            const std::string path=file.fileSystemRepresentation;
+            std::string error;
+            if (!aiverse::editor::isProjectFilePath(path))
+                throw std::runtime_error("Select an AIVERSE project file.");
+            const auto dir=aiverse::editor::resolveProjectDir(path,&error);
+            if (dir.empty()) throw std::runtime_error(error);
+            if (!mainWebReady_ && !hasFinderProject_) {
+                core_->setPendingProject(dir);
+                hasFinderProject_=YES;
+            } else if (mainWebReady_ && core_->session().workspace().project.dir==dir) {
+                [window_ makeKeyAndOrderFront:nil];
+            } else {
+                platform_->openProjectStudio(NSBundle.mainBundle.executablePath.fileSystemRepresentation,dir);
+            }
+        } catch (const std::exception& e) {
+            NSAlert* alert=[[NSAlert alloc] init];
+            alert.messageText=@"Could not open project";
+            alert.informativeText=ns(e.what());
+            [alert runModal];
+            [app replyToOpenOrPrint:NSApplicationDelegateReplyFailure];
+            return;
+        }
+    }
+    [app replyToOpenOrPrint:NSApplicationDelegateReplySuccess];
 }
 - (void)applicationDidFinishLaunching:(NSNotification*)note {
     (void)note;
@@ -728,9 +885,30 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     [window_.contentView addSubview:viewport_
         positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
     fxViewport_=[[StudioFxView alloc] initWithFrame:NSZeroRect];
-    fxViewport_.shell=self;fxViewport_.hidden=YES;
+    fxViewport_.surface=studio::StudioSurface::Fx;fxViewport_.shell=self;fxViewport_.hidden=YES;
     [window_.contentView addSubview:fxViewport_
         positioned:(htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
+    for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i){
+        NSView* view;
+        const auto surface=static_cast<studio::StudioSurface>(i+int(studio::StudioSurface::Material));
+        if(surface==studio::StudioSurface::Nature||surface==studio::StudioSurface::GpuEmitter||surface==studio::StudioSurface::EffectFile){
+            StudioFxView* effect=[[StudioFxView alloc] initWithFrame:NSZeroRect];
+            effect.surface=surface;effect.shell=self;view=effect;
+        }else view=i>=3&&i<=4?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
+        view.wantsLayer=YES;view.layer=[CAMetalLayer layer];view.hidden=YES;
+        if(i>=3&&i<=4){
+            StudioCharacterSurface* character=(StudioCharacterSurface*)view;
+            character.photo=[CALayer layer];character.photo.hidden=YES;
+            view.layer.masksToBounds=YES;
+            [view.layer addSublayer:character.photo];
+            character.brushRing=[CALayer layer];character.brushRing.hidden=YES;
+            character.brushRing.borderWidth=1.5;
+            character.brushRing.borderColor=NSColor.whiteColor.CGColor;
+            [view.layer addSublayer:character.brushRing];
+        }
+        assetViews_[i]=view;
+        [window_.contentView addSubview:view positioned:NSWindowAbove relativeTo:web_];
+    }
     gameViewport_=[[StudioGameView alloc] initWithFrame:NSZeroRect];
     gameViewport_.shell=self;gameViewport_.hidden=YES;
     gameChrome_=[[StudioDeviceChromeView alloc] initWithFrame:NSZeroRect];
@@ -805,11 +983,13 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     WKWebView* web=nil;
     if (htmlComposite_) {
         web=[[StudioTransparentWebView alloc] initWithFrame:frame configuration:cfg];
+        [web setValue:@NO forKey:@"drawsBackground"];
         if (@available(macOS 12.0, *)) web.underPageBackgroundColor=[NSColor clearColor];
     } else web=[[StudioFileDropWebView alloc] initWithFrame:frame configuration:cfg];
     ((StudioFileDropWebView*)web).shell=self;
     [web registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
     web.navigationDelegate=self;
+    web.UIDelegate=self;
     web.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
     return web;
 }
@@ -964,6 +1144,11 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
         [window_.contentView addSubview:viewport_ positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
         core_->surfaceDetached(studio::StudioSurface::Scene);
     }
+    for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i)if(assetViews_[i].window==window){
+        NSView* view=assetViews_[i];[view removeFromSuperview];view.hidden=YES;
+        [window_.contentView addSubview:view positioned:NSWindowAbove relativeTo:web_];
+        core_->surfaceDetached(static_cast<studio::StudioSurface>(int(studio::StudioSurface::Material)+i));
+    }
     if (fxViewport_.window==window) {
         [fxViewport_ removeFromSuperview];fxViewport_.hidden=YES;
         [window_.contentView addSubview:fxViewport_ positioned:
@@ -977,6 +1162,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     }
     [web.configuration.userContentController removeScriptMessageHandlerForName:@"aiverse"];
     [floatWindows_ removeObjectForKey:panel];[floatWebs_ removeObjectForKey:panel];
+    if (dictationWeb_ == web) { core_->cancelWizardDictation(); dictationWeb_ = nil; }
     if (currentWeb_==web) currentWeb_=nil;
     if (!closingFloats_) core_->sendEvent("window.floatClosed",panel.UTF8String);
 }
@@ -1164,12 +1350,12 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
 // Returns NO for a stale report from a window that no longer hosts the view.
 - (BOOL)placeSurface:(studio::StudioSurface)surface rect:(const studio::ViewportRect&)rect out:(studio::NativeViewportPlacement&)out {
     WKWebView* host=currentWeb_ ?: web_;
-    NSView* view=surface==studio::StudioSurface::Scene?(NSView*)viewport_:
+    NSView* view=surface>=studio::StudioSurface::Material?assetViews_[int(surface)-int(studio::StudioSurface::Material)]:surface==studio::StudioSurface::Scene?(NSView*)viewport_:
         surface==studio::StudioSurface::Fx?(NSView*)fxViewport_:(NSView*)gameViewport_;
     if (view.superview!=host.superview) {
         if (!rect.visible) return NO;
         [view removeFromSuperview];
-        [host.superview addSubview:view positioned:((htmlComposite_ && view!=gameViewport_) ? NSWindowBelow : NSWindowAbove) relativeTo:host];
+        [host.superview addSubview:view positioned:((htmlComposite_ && (view==viewport_ || view==fxViewport_)) ? NSWindowBelow : NSWindowAbove) relativeTo:host];
     }
     out=studio::viewportPlacement(rect,host.bounds.size.width,host.bounds.size.height,host.window.backingScaleFactor);
     if (view.hidden!=!out.visible) view.hidden=!out.visible;
@@ -1183,7 +1369,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     const CGSize size=CGSizeMake(out.pixelsW,out.pixelsH);
     if (!CGSizeEqualToSize(layer.drawableSize,size)) {
         // The Scene layer is drawn on the render thread: resize between its frames.
-        if (view==viewport_ || view==fxViewport_)
+        if (view!=gameViewport_)
             core_->runOnSceneThread([&]{ layer.drawableSize=size; });
         else layer.drawableSize=size;
     }
@@ -1197,15 +1383,20 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     (void)view; (void)navigation;
     NSLog(@"[studio-web] navigation error: %@",error);
 }
+- (void)webView:(WKWebView*)view didStartProvisionalNavigation:(WKNavigation*)navigation {
+    (void)navigation;
+    if (dictationWeb_ == view) { core_->cancelWizardDictation(); dictationWeb_ = nil; }
+}
 - (void)webViewWebContentProcessDidTerminate:(WKWebView*)view {
-    (void)view;
+    if (dictationWeb_ == view) { core_->cancelWizardDictation(); dictationWeb_ = nil; }
     NSLog(@"[studio-web] WebKit content process terminated");
 }
 - (void)webView:(WKWebView*)view didFinishNavigation:(WKNavigation*)navigation {
     (void)navigation;
     NSLog(@"[studio-web] top-level navigation finished: %@",view.URL);
+    [view evaluateJavaScript:@"document.documentElement.classList.add('character-composite');" completionHandler:nil];
     if (htmlComposite_) [view evaluateJavaScript:@"document.documentElement.classList.add('native-composite');" completionHandler:nil];
-    if (view==web_) core_->webReady();
+    if (view==web_) { mainWebReady_=YES; core_->webReady(); }
 }
 - (void)webView:(WKWebView*)view decidePolicyForNavigationAction:(WKNavigationAction*)action decisionHandler:(void (^)(WKNavigationActionPolicy))done {
     (void)view;
@@ -1237,26 +1428,29 @@ int aiverseMain(int argc,char** argv) {
     @autoreleasepool {
         std::string project;
         bool dev=false, composite=false;
+        int listenPort=0;
         for(int i=1;i<argc;++i) {
             std::string arg(argv[i]);
             if(arg=="--dev")dev=true;
             else if(arg=="--html-composite")composite=true;
+            else if(arg=="--listen" && i+1<argc) {
+                listenPort=aiverse::editor::net::parseListenPort(argv[++i]);
+                if(!listenPort){std::fprintf(stderr,"Invalid --listen port\n");return 2;}
+            }
             else if(arg=="--project"&&i+1<argc)project=argv[++i];
-            else { std::fprintf(stderr,"Usage: AiverseStudioHTML5 [--dev] [--html-composite] [--project /path/to/project]\n"); return 2; }
+            else { std::fprintf(stderr,"Usage: AiverseStudioHTML5 [--dev] [--html-composite] [--listen PORT] [--project /path/to/project]\n"); return 2; }
         }
         // Without --project, reopen the last project chosen in the Open panel.
         if(project.empty()) {
             NSString* last=[[NSUserDefaults standardUserDefaults] stringForKey:@"AiverseLastProject"];
-            BOOL isDir=NO;
-            if(last.length && [[NSFileManager defaultManager] fileExistsAtPath:last isDirectory:&isDir] && isDir)
-                project=last.UTF8String;
-        } else {
-            [[NSUserDefaults standardUserDefaults] setObject:[NSString stringWithUTF8String:project.c_str()] forKey:@"AiverseLastProject"];
+            if (last.length) project=aiverse::editor::resolveProjectDir(last.fileSystemRepresentation, nullptr);
         }
         try {
             [NSApplication sharedApplication];
+            const auto association = aiverse::editor::ensureFileAssociation(NSBundle.mainBundle.executablePath.fileSystemRepresentation);
+            if (!association.empty()) std::fprintf(stderr, "%s\n", association.c_str());
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-            StudioShell* shell=[[StudioShell alloc] initWithProject:project dev:dev composite:composite];
+            StudioShell* shell=[[StudioShell alloc] initWithProject:project dev:dev composite:composite listenPort:listenPort];
             [NSApp setDelegate:shell];
             [NSApp run];
         } catch(const std::exception& e) {

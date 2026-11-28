@@ -1,0 +1,10 @@
+2026-11-26 11:30:20.367 AiverseStudioHTML5[22747:84214202] [studio-web] JS: CROSS main DONE_1
+2026-11-26 11:30:12.622 AiverseStudioHTML5[22747:84214202] APPKIT marquee replace
+2026-11-26 11:30:14.064 AiverseStudioHTML5[22747:84214202] [studio-web] JS: CROSS main replace selected ["entity:0","entity:1"] hierarchy ["entity:0","entity:1"]
+2026-11-26 11:30:14.302 AiverseStudioHTML5[22747:84214202] APPKIT marquee add
+2026-11-26 11:30:15.665 AiverseStudioHTML5[22747:84214202] [studio-web] JS: CROSS main add selected ["entity:0","entity:1","entity:2"] hierarchy ["entity:0","entity:1","entity:2"]
+2026-11-26 11:30:17.302 AiverseStudioHTML5[22747:84214202] APPKIT marquee toggle
+2026-11-26 11:30:18.767 AiverseStudioHTML5[22747:84214202] [studio-web] JS: CROSS main toggle selected ["entity:2"] hierarchy ["entity:2"]
+2026-11-26 11:30:18.982 AiverseStudioHTML5[22747:84214202] APPKIT marquee clear
+2026-11-26 11:30:20.367 AiverseStudioHTML5[22747:84214202] [studio-web] JS: CROSS main clear selected [] hierarchy []
+2026-11-26 11:30:20.367 AiverseStudioHTML5[22747:84214202] [studio-web] JS: CROSS main VERIFIED AppKit replace, shift add, command toggle, empty marquee clear; exact ids matched live Hierarchy after each gesture

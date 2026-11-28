@@ -6,6 +6,7 @@ interface NativeReply { id?: number; result?: unknown; error?: string; event?: s
 type NativeHandler = { postMessage: (message: NativeRequest) => void };
 declare global {
   interface Window {
+    __aiverseLinux?: NativeHandler;
     webkit?: { messageHandlers?: { aiverse?: NativeHandler } };
     __aiverseReceive?: (message: NativeReply) => void;
   }
@@ -19,16 +20,11 @@ const pending = new Map<number, {
 const listeners = new Set<(event: string, payload: unknown) => void>();
 // Floating panel windows share the native bridge, and asynchronous replies
 // reach every window, so each window draws request ids from its own range.
-function firstRequestId(): number {
-  try {
-    const panel = new URLSearchParams(window.location?.search ?? '').get('panel');
-    if (!panel) return 1;
-    let hash = 0;
-    for (const c of panel) hash = (hash * 31 + c.charCodeAt(0)) % 9000;
-    return (hash + 1) * 1_000_000 + 1;
-  } catch { return 1; }
-}
-let nextId = firstRequestId();
+// A fresh range per WebView load also isolates outstanding replies after redocking or reloading.
+const requestRange = window.crypto?.getRandomValues(new Uint32Array(1))[0] ??
+  Math.floor(Math.random() * 0x100000000);
+// Native dialog replies also round-trip IDs through the engine's Q48.16 JSON reader.
+let nextId = (requestRange % 0x4000000) * 0x100000 + 1;
 
 window.__aiverseReceive = (message: NativeReply) => {
   if (message && typeof message.event === 'string') {
@@ -45,16 +41,17 @@ window.__aiverseReceive = (message: NativeReply) => {
   else call.resolve(message.result);
 };
 
-export const nativeConnected = (): boolean => !!window.webkit?.messageHandlers?.aiverse;
+const nativeHandler = () => window.__aiverseLinux ?? window.webkit?.messageHandlers?.aiverse;
+export const nativeConnected = (): boolean => !!nativeHandler();
 /** Native window chrome actions (no reply): drag the window from the title bar, zoom on double-click. */
 export function nativeWindowAction(action: 'studio.windowDrag' | 'studio.windowZoom' | 'studio.windowMinimize' | 'studio.windowClose'): void {
-  const native = window.webkit?.messageHandlers?.aiverse;
+  const native = nativeHandler();
   try { native?.postMessage({ id: 0, method: action, params: {} }); }
   catch { /* not in the native host */ }
 }
 /** Start an edge resize. The button must still be down; the host runs the system size loop. */
 export function nativeWindowResize(edge: 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'): void {
-  const native = window.webkit?.messageHandlers?.aiverse;
+  const native = nativeHandler();
   try { native?.postMessage({ id: 0, method: 'studio.windowResize', params: { edge } }); }
   catch { /* not in the native host */ }
 }
@@ -69,12 +66,12 @@ export function onNativeEvent(listener: (event: string, payload: unknown) => voi
   return () => listeners.delete(listener);
 }
 export async function invoke<M extends StudioMethod>(method: M, params: StudioParams[M]): Promise<StudioResult[M]> {
-  const native = window.webkit?.messageHandlers?.aiverse;
+  const native = nativeHandler();
   if (!native) return mockInvoke(method, params);
   return new Promise<StudioResult[M]>((resolve, reject) => {
     const id = nextId++;
     // Interactive native sheets wait for a person, including dirty-document prompts.
-    const interactive = ['studio.openProject','studio.openMap','studio.newMap','studio.saveAs','studio.save','studio.assetImportPreview','studio.spectraPackageChoose'].includes(method);
+    const interactive = ['studio.openProject','studio.openMap','studio.newMap','studio.saveAs','studio.save','studio.assetImportPreview','studio.spectraPackageChoose','studio.wizardArt','studio.wizardCreate'].includes(method);
     // No RPC timeout: the host answers every request (with an error if it fails), and long operations
     // (generation, builds, a busy main thread while a project streams in) are legitimate. A very slow reply
     // only leaves a note in the host log; the call keeps waiting and resolves when the answer comes.

@@ -1,3 +1,5 @@
+#include "engine/view/MaterialLibraryFiles.h"
+#include <random>
 #include "MaterialOps.h"
 #include "GraphAssetTransaction.h"
 #include "TexturePublicationJournal.h"
@@ -199,28 +201,135 @@ std::vector<std::string> checkMaterial(const Json& m) {
     return out;
 }
 
-Json loadMaterialLibrary(const Workspace& ws) {
-    std::string text;
-    if (ws.project.dir.empty() || !readDisk(ws.project.dir + "/materials.json", text)) return Json::object();
-    try {
-        Json j = Json::parse(text)["materials"];
-        return j.isObject() ? j : Json::object();
-    } catch (const std::exception& e) {
-        throw std::runtime_error(std::string("materials.json: ") + e.what());
+namespace {
+fs::path materialFile(const fs::path& root,const std::string& relative) {
+    if(!view::materialAssetPath(relative))throw std::runtime_error("Invalid material asset path: "+relative);
+    fs::path file=root;
+    for(const auto& part:fs::path(relative)){
+        file/=part;
+        if(fs::is_symlink(file))throw std::runtime_error("Material asset crosses a symbolic link");
     }
+    return file;
+}
+Json readMaterialIndex(const fs::path& root){
+    std::string bytes;
+    if(!readDisk((root/"materials.json").string(),bytes)){
+        if(fs::exists(root/"materials.json"))throw std::runtime_error("Cannot read materials.json");
+        Json doc=Json::object();doc.set("materials",Json::object());return doc;
+    }
+    return Json::parse(bytes);
+}
+std::string materialFileName(const std::string& name){
+    static constexpr char hex[]="0123456789abcdef";
+    std::string stem;
+    for(unsigned char c:name){
+        if((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_')stem+=char(c);
+        else {stem+='%';stem+=hex[c>>4];stem+=hex[c&15];}
+    }
+    return "content/materials/"+stem+".material.json";
+}
 }
 
-static void saveMaterialLibraryLocked(Workspace& ws, const graph_asset::Transaction& tx, const Json& lib, const std::string& what) {
-    Json doc=Json::object();
-    if(fs::exists(tx.target())) doc=Json::parseFile(tx.target().string());
-    if(!doc.isObject()) throw std::runtime_error("Invalid material library");
-    doc.set("materials",lib);
-    tx.replace(doc.dump(2)+"\n",16*1024*1024);
-    ws.note({Change::Rules,0,0,-1,-1,-1,what});
+Json materialFilePaths(const Workspace& ws){
+    const Json index=readMaterialIndex(ws.project.dir);
+    Json paths=Json::object();
+    for(const auto& [name,value]:index["materials"].members())
+        if(value.isString())paths.set(name,value);
+    return paths;
 }
-void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what) {
+
+Json loadMaterialLibrary(const Workspace& ws) {
+    if(ws.project.dir.empty())return Json::object();
+    return resolveMaterialLibraryIndex(ws.project.dir,readMaterialIndex(ws.project.dir));
+}
+
+Json resolveMaterialLibraryIndex(const fs::path& root,const Json& index,size_t maxFileBytes) {
+    return view::materialLibraryFromIndex(index,[&](const std::string& path,std::string& bytes){
+        const auto file=materialFile(root,path);
+        return fs::is_regular_file(file) && fs::file_size(file)<=maxFileBytes && readDisk(file.string(),bytes);
+    });
+}
+
+static Json saveMaterialLibraryLocked(Workspace& ws,const graph_asset::Transaction& tx,const Json& lib,const std::string& what,
+                         const std::map<std::string,std::string>& relocated = {}) {
+    const fs::path root=ws.project.dir;
+    Json index=readMaterialIndex(root);
+    const Json old=index["materials"];
+    if(!old.isObject()||!lib.isObject())throw std::runtime_error("Invalid material library");
+    Json entries=Json::object();
+    struct ChangeFile {fs::path file,backup;bool created;};
+    std::vector<ChangeFile> written;
+    fs::path staging;
+    std::random_device random;
+    do {staging=root/(".material-save-"+std::to_string(random()));}while(!fs::create_directory(staging));
+    struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{staging};
+    const auto publish=[&](const fs::path& file,const std::string& bytes,bool remove=false){
+        const bool exists=fs::exists(file);
+        if(exists&&!fs::is_regular_file(file))throw std::runtime_error("Invalid material destination: "+file.string());
+        const fs::path backup=staging/std::to_string(written.size());
+        if(exists)fs::copy_file(file,backup);
+        if(remove){if(exists)fs::remove(file);}
+        else{
+            const fs::path pending=staging/"pending";
+            std::ofstream stream(pending,std::ios::binary);stream<<bytes;stream.close();
+            if(!stream)throw std::runtime_error("Cannot write "+file.string());
+            fs::create_directories(file.parent_path());
+            fs::rename(pending,file);
+        }
+        written.push_back({file,backup,!exists});
+    };
+    try {
+        for(const auto& [name,material]:lib.members()){
+            const bool indexed=old[name].isString();
+            std::string path=indexed?old[name].str():materialFileName(name);
+            if(auto move=relocated.find(path);move!=relocated.end())path=move->second;
+            if(old[name].isObject()){
+                const std::string suffix=".material.json";
+                const auto stem=path.substr(0,path.size()-suffix.size());
+                unsigned ordinal=1;
+                // A tilde is escaped in canonical material names, keeping aliases distinct.
+                while(fs::exists(fs::symlink_status(root/path)) ||
+                      fs::exists(fs::symlink_status(root/(path+".meta")))){
+                    path=stem+"~"+std::to_string(ordinal++)+suffix;
+                }
+            }
+            const auto file=materialFile(root,path);
+            if(!indexed&&fs::exists(file))throw std::runtime_error("Material asset already exists: "+path);
+            std::string previous;
+            if(!readDisk(file.string(),previous)||Json::parse(previous)!=material)publish(file,material.dump(2)+"\n");
+            entries.set(name,Json::string(path));
+        }
+        for(const auto& [name,entry]:old.members())if(!lib.has(name)&&entry.isString())
+            publish(materialFile(root,entry.str()),"",true);
+        index.set("materials",std::move(entries));
+        tx.replace(index.dump(2)+"\n",16*1024*1024);
+    }catch(...){
+        for(auto it=written.rbegin();it!=written.rend();++it){
+            if(it->created)fs::remove(it->file);
+            else fs::copy_file(it->backup,it->file,fs::copy_options::overwrite_existing);
+        }
+        throw;
+    }
+    ws.note({Change::Rules,0,0,-1,-1,-1,what});
+    return index;
+}
+void migrateInlineMaterials(Workspace& ws) {
+    const fs::path root=ws.project.dir;
+    const auto hasInline=[](const Json& index){
+        for(const auto& [name,entry]:index["materials"].members())
+            if(entry.isObject())return true;
+        return false;
+    };
+    if(!hasInline(readMaterialIndex(root)))return;
+    graph_asset::Transaction tx(root/"materials.json",root);
+    const auto index=readMaterialIndex(root);
+    if(hasInline(index))
+        saveMaterialLibraryLocked(ws,tx,resolveMaterialLibraryIndex(root,index),"Migrated inline materials to content");
+}
+
+void saveMaterialLibrary(Workspace& ws,const Json& lib,const std::string& what,const std::map<std::string,std::string>& relocated) {
     graph_asset::Transaction tx(fs::path(ws.project.dir)/"materials.json",ws.project.dir);
-    saveMaterialLibraryLocked(ws,tx,lib,what);
+    saveMaterialLibraryLocked(ws,tx,lib,what,relocated);
 }
 
 static Json publishGraphExr(Workspace& ws,const std::string& name,int width,int height,const char* suffix,const char* output,const std::vector<uint8_t>& exr){
@@ -571,12 +680,13 @@ void registerMaterialOps(Workspace& ws) {
         [modelTechniques](const Json& p) { return modelTechniques(p, true); });
 
     add("material_list",
-        "The game's material library (materials.json) and, per type with a model, its material overrides, node assignments, "
+        "Resolved project materials (library), indexed project-relative asset paths by material name (files), and per-type overrides, node assignments, "
         "the model's own material names and mesh nodes (targets for material_apply).",
         R"({"properties": {"type": {"type": "string", "description": "only this type"}}})", [w](const Json& p) {
             needProject(*w);
             Json r = okJson();
             r.set("library", loadMaterialLibrary(*w));
+            r.set("files", materialFilePaths(*w));
             Json types = Json::array();
             const std::string only = p.getStr("type");
             for (const auto& [id, t] : w->project.rulesJson["types"].members()) {
@@ -633,7 +743,7 @@ void registerMaterialOps(Workspace& ws) {
         });
 
     add("material_set",
-        std::string("Create or replace a material in the game's library (materials.json), usable by name from any type: "
+        std::string("Create or replace a material asset. New files are saved under content/materials/ and indexed by materials.json. Returns the saved project-relative path in file. Assign a material by name using "
                     "material_apply, or a view's \"materials\" / \"assign\". ") + kMaterialDoc +
             " merge: true keeps the existing keys and changes only the given ones.",
         R"J({"properties": {"name": {"type": "string", "description": "e.g. steel, rusty_iron, team_cloth"},
@@ -663,8 +773,9 @@ void registerMaterialOps(Workspace& ws) {
                     !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
             const bool existed = lib.has(name);
             lib.set(name, mat);
-            saveMaterialLibraryLocked(*w, tx, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
+            const Json savedIndex = saveMaterialLibraryLocked(*w, tx, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
             Json r = okJson();
+            r.set("file", savedIndex["materials"][name]);
             r.set("summary", Json::string(std::string(existed ? "Материал изменён: " : "Материал создан: ") + name));
             r.set("warnings", strs(warnings));
             return r;

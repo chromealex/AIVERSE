@@ -241,8 +241,10 @@ Workspace directly, without a GUI or Python dependency.
 
 ## Validation
 
+Use a desktop build configured with `-DAIVERSE_BUILD_STUDIO_HTML5=ON`. The preview check launches the packaged HTML Studio and its MCP executable.
+
 ```sh
-cmake --build <build> --target aiverse_modeling_tests aiverse_animation_tests aiverse_editor aiversemcp
+cmake --build <build> --target aiverse_modeling_tests aiverse_animation_tests aiverse_studio aiversemcp
 <build>/aiverse_modeling_tests
 <build>/aiverse_animation_tests
 python3 tests/modeling/mcp_preview.py --build <build> --output /tmp/modeling-preview

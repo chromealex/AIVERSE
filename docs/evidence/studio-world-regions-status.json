@@ -1,0 +1,10 @@
+{
+  "sha": "7e35c7a88513af2ca242bed60555fcde32521d95",
+  "argv": [
+    "bash",
+    "../status.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-world-regions-status.log.txt",
+  "sha256": "a49331baa45d68b858fb4c7d07632500a7a247210e43eb908b70f3b9a349f1dd"
+}

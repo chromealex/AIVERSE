@@ -1,19 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { dockDragActive, watchDockDrag, watchOverlays, viewportRectChanged, forgetViewportRect, visibleViewport } from '../nativeOverlay';
-import { Menu, RotateCcw } from 'lucide-react';
-import { invoke } from '../bridge';
+import { ExternalLink, Menu, RotateCcw } from 'lucide-react';
+import { invoke, onNativeEvent } from '../bridge';
 import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption, StudioPlayReview } from '../types';
 import type { StudioPanelContext } from './StudioPanelRenderer';
-import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioSelect, StudioField, StudioCheckbox } from '../ui';
+import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../ui';
+import GameSpeedSlider from './GameSpeedSlider';
+import GameRoleLaunch from './GameRoleLaunch';
+import GameDevicePicker from './GameDevicePicker';
 import './GamePanel.css';
+import { ActorNetworkPlay } from './ActorNetworkPlay';
 import { gameViewportSize } from './gameViewport';
 
-export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelContext) {
+export default function GamePanel({snapshot,connected,busy,setBusy,showPanel}:StudioPanelContext) {
   const [state,setState]=useState<StudioGameState|null>(null);
   const [error,setError]=useState('');
   const [reviewOpen,setReviewOpen]=useState(false),[review,setReview]=useState<StudioPlayReview|null>(null);
   const [positions,setPositions]=useState(true),[amounts,setAmounts]=useState(true),[removeDead,setRemoveDead]=useState(false);
   const [kept,setKept]=useState('');
+  const actorSession=!!snapshot?.project.actorSession;
   const projectPath=snapshot?.project.path??'';
   useEffect(()=>{setReview(null);setReviewOpen(false);setKept('');},[projectPath,state?.epoch]);
   const [devices,setDevices]=useState<StudioGameDeviceOption[]>([]);
@@ -31,7 +36,18 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
       const b=entries[0].contentRect;setAreaSize({width:b.width,height:b.height});
     });observer.observe(area.current);return ()=>observer.disconnect();
   },[]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='standalonePlay.error')setError((payload as {message:string}).message);
+  }),[]);
+  async function launchStandalone() {
+    if(busy || !projectPath)return;
+    setBusy(true);setError('');
+    try { await invoke('studio.standalonePlay',{project:projectPath}); }
+    catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
   const device=state?.device;
+  const insets=device?.width ? device.chrome?.insets : undefined;
   // A device preview is drawn as the device (legacy Game window): a bezel around the screen; the native
   // view draws the rounded screen corners, the camera cut-out and the safe area over the game.
   const framed=!!device?.width;
@@ -86,10 +102,10 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
-  const control=async(action:'pause'|'resume'|'step'|'restart')=>{
+  const control=async(command:'pause'|'resume'|'step'|'restart'|{action:'setSpeed';speed:number})=>{
     setReview(null);setReviewOpen(false);
     if(busy)return;setBusy(true);setError('');
-    try{setState(await invoke('studio.gameControl',{action}));}
+    try{setState(await invoke('studio.gameControl',typeof command==='string'?{action:command}:command));}
     catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
@@ -116,21 +132,36 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
   return <StudioPanel title="Game" className="studio-game" flush
     actions={<>
       {/* Play / Pause / Step / Stop live in the title bar (⌘P); only what it lacks is here. */}
-      <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>
+      {actorSession && <StudioButton onClick={()=>showPanel('actor')}>Actors &amp; Cameras</StudioButton>}
+      {!actorSession && <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>}
+      <StudioButton disabled={!loaded||busy} onClick={()=>void launchStandalone()} title="Open the saved project in AiverseGame"><ExternalLink size={14}/>Standalone player</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>void control('restart')}><RotateCcw size={14}/>Restart</StudioButton>
-      <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>
+      {!actorSession && <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>}
     </>}
-    footer={<><StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
+    footer={<>{state?.roleLabel && <StudioBadge>{state.roleLabel}</StudioBadge>}<StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
     {(error||state?.error) && <StudioAlert tone="danger">{error||state?.error}</StudioAlert>}
     <div className="studio-game__devices">
-      <StudioField label="Device" htmlFor="studio-game-device"><StudioSelect id="studio-game-device" aria-label="Game device" value={device?.id||'none'} disabled={!connected||busy} onChange={e=>void configure({id:e.target.value})}>
-        {!devices.length && <option value="none">Free size</option>}
-        {devices.map(d=><option key={d.id} value={d.id}>{d.group?`${d.group} · `:''}{d.name}</option>)}
-      </StudioSelect></StudioField>
-      <StudioButton disabled={!device?.width||busy} onClick={()=>void configure({landscape:!device?.landscape})}>{device?.landscape?'Landscape':'Portrait'}</StudioButton>
+      <GameDevicePicker devices={devices} selected={device?.id ?? 'none'} disabled={!connected || busy}
+        onSelect={id => void configure({id})}/>
+      <div className="studio-game__orientation" role="group" aria-label="Device orientation">
+        {(['Portrait','Landscape'] as const).map(label => {
+          const landscape = label === 'Landscape';
+          const active = framed && device?.landscape === landscape;
+          return <StudioButton key={label} aria-pressed={active} disabled={!framed || busy}
+            variant={active ? 'primary' : 'secondary'} onClick={() => { if (!active) void configure({landscape}); }}>
+            {label}
+          </StudioButton>;
+        })}
+      </div>
       <StudioCheckbox label="Safe area" checked={device?.safeArea??true} disabled={!device?.width||busy} onChange={e=>void configure({safeArea:e.target.checked})}/>
       {!!device?.width && <StudioBadge>{device.width} × {device.height} · {device.touch?'Touch':'Mouse'}</StudioBadge>}
+      {insets && Object.values(insets).some(value=>value>0) ?
+        <dl className="studio-game__insets" data-enabled={device?.safeArea} aria-label="Device safe area in logical points">
+          {(['top','right','bottom','left'] as const).map(edge=><div key={edge}><dt>{edge}</dt><dd>{insets[edge]} pt</dd></div>)}
+        </dl> : null}
     </div>
+    {state?.simulationSpeed !== undefined && <GameSpeedSlider value={state.simulationSpeed} disabled={busy}
+      onCommit={speed => void control({action:"setSpeed",speed})}/>}
     {state?.runtimeDebugEdited&&<StudioAlert tone="warning">Local debug edits are outside command replay; Stop/Restart discards this runtime session.</StudioAlert>}
     {reviewOpen&&<div className="studio-game__review au-stack">
       <StudioAlert>Pause the local saved-map game. Only an unchanged launch map can receive changes. Stop or Restart does not copy anything automatically.</StudioAlert>
@@ -150,7 +181,19 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     <div ref={area} className="studio-game__area">
     <div style={surfaceStyle} ref={surface} className={'studio-game__surface'+(framed?' studio-game__surface--device':'')}
       data-orientation={device?.landscape?'landscape':'portrait'} aria-label="Native Game viewport">
-      {!state?.active && <StudioEmptyState title={loaded?'Ready to play':'Open a project'}
+      {!state?.active && loaded && !actorSession && snapshot?.graphDocument
+        ? <GameRoleLaunch key={JSON.stringify(snapshot.graphDocument)} scope={snapshot.graphDocument} busy={busy}
+            launch={async (seat,scope)=>{
+              setBusy(true);setError('');
+              try { setState(await invoke('studio.gameStart',{entry:'map',localSeat:seat,scope})); }
+              catch(e){setError(e instanceof Error?e.message:String(e));}
+              finally{setBusy(false);}
+            }}/>
+        : !state?.active && loaded && actorSession
+        ? <StudioEmptyState title="First-person play" description="Play the saved map in this window. Click the viewport to control your character."
+            action={<><StudioButton variant="primary" disabled={busy} onClick={()=>void act('map')}>Play map</StudioButton>
+              <ActorNetworkPlay key={projectPath} project={projectPath} hostOnly/></>}/>
+        : !state?.active && <StudioEmptyState title={loaded?'Ready to play':'Open a project'}
         description={loaded?'Run the saved map or open the project’s own menus. Stop returns to authoring without copying runtime changes into the map.':'Play uses the native game client and renderer.'}/>}
     </div>
     </div>

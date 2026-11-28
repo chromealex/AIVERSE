@@ -1,5 +1,6 @@
 """Check native module selection across projects in one reused CMake cache."""
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,12 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
     # Build.cmake now separates the registrar from the gameplay implementation.
     (src / "engine/game/NativeRegistry.cpp").write_bytes((engine / "engine/game/NativeRegistry.cpp").read_bytes())
     (src / "stub.cpp").write_text("")
+    # Studio is declared in a subdirectory and packages the top-level game executable.
+    (src / "studio").mkdir()
+    (src / "studio/CMakeLists.txt").write_text(
+        'add_executable(game_client ../stub.cpp)\n'
+        'target_link_libraries(game_client PRIVATE aiverse_client_runtime aiverse_game_view)\n'
+        'add_dependencies(game_client game_host)\n')
     module_cmake = (engine / "engine/game/native/Build.cmake").as_posix()
     protobuf_cmake = (engine / "engine/grpc/Protobuf.cmake").as_posix()
     (src / "CMakeLists.txt").write_text(
@@ -31,10 +38,9 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
         'target_link_libraries(camera_only PRIVATE aiverse_runtime)\n'
         'add_executable(scene_only stub.cpp)\n'
         'target_link_libraries(scene_only PRIVATE aiverse_client_runtime)\n'
-        'add_executable(game_client stub.cpp)\n'
-        'target_link_libraries(game_client PRIVATE aiverse_client_runtime aiverse_game_view)\n'
         'add_executable(game_host stub.cpp)\n'
         'target_link_libraries(game_host PRIVATE aiverse_game)\n'
+        'add_subdirectory(studio)\n'
         'aiverse_native_configure()\n'
         'foreach(t camera_only scene_only game_client game_host)\n'
         '  file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${t}-links.txt" CONTENT "$<TARGET_PROPERTY:${t},LINK_LIBRARIES>")\n'
@@ -80,6 +86,14 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
 
     a = configure("a")
     assert "create_a" in a and "create_b" not in a
+    # Both editor and player consume the registry, and the editor packages the player.
+    # Ninja must resolve the whole dependency chain before compilation begins.
+    if shutil.which("ninja"):
+        ninja_build = root / "ninja-build"
+        subprocess.run([cmake, "-S", str(src), "-B", str(ninja_build), "-G", "Ninja",
+                        "-DAIVERSE_CONTENT_DIR=" + str(root / "a")], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([cmake, "--build", str(ninja_build), "--target", "game_client", "--", "-n"],
+                       check=True, stdout=subprocess.DEVNULL)
     b = configure("b")
     assert "create_b" in b and "create_a" not in b
     empty = configure("empty")

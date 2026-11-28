@@ -1,0 +1,10 @@
+{
+  "sha": "bcef0f4d6ebec69fd2c2a8895938d5aa382de0d0",
+  "argv": [
+    "bash",
+    "/tmp/physis-grid-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-physis-grid.log.txt",
+  "sha256": "3f92666c92316f851989ddb0d3ee63ab996ae6915612a6434df5592b06742231"
+}

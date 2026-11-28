@@ -260,8 +260,7 @@ Windows: `studio_windows.cmd [project]` compila e abre o `AiverseStudio.exe` (re
 CMake, Node.js; roda no WebView2 Runtime e Vulkan).
 
 `studio_mac.command` compila a interface web e o Studio nativo e o abre. Só o motor:
-`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`. O editor
-anterior em ImGui (`build/mac/AiverseEditor.app`) continua sendo compilado e funciona no Linux e no Windows.
+`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`.
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Se preferir não compilar, a
 branch `builds` tem o editor e as ferramentas pré-compilados

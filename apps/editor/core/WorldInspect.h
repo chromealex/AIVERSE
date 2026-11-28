@@ -105,6 +105,7 @@ struct WorldRow {
     int region = -1;
     std::bitset<kMaxWorldComponents> comps;   // indices into worldComponents()
     std::string label;        // game label (WorldConfig::labelKey) or ""
+    std::string runtimeName;   // component-provided name when there is no authored label
     std::string category;     // category name (tags / kind)
     std::map<std::string, std::string> data;   // top-level scalar script data (game.data) as text, for grouping / search
     // (only when read with WorldReadOptions::scriptData)
@@ -164,7 +165,11 @@ std::string worldGroupValue(const WorldModel& m, const game::Rules& rules, const
 // Search: tokens are AND-ed; prefixes t: type, p: owner, c: component, r: region, d: script data,
 // # / id: entity or map id; a plain token matches any of them and the row name.
 bool worldRowMatches(const WorldModel& m, const game::Rules& rules, const MapData* doc, const WorldRow& r, const std::string& query);
+std::string runtimeEntityName(const World& world, Entity entity, const char** category = nullptr);
 std::string worldRowName(const WorldModel& m, const game::Rules& rules, const MapData* doc, const WorldRow& r);
+Json listWorldRows(const WorldModel& world,const game::Rules& rules,const MapData* doc,const Json& p,const char* mode);
+Json inspectWorldRow(Simulation& sim, game::GameCore& module,const WorldModel& world,const Json& rulesJson,const MapData* doc,const Json& params);
+Json worldRowJson(const WorldModel& m, const game::Rules& rules, const MapData* doc, const WorldRow& r);
 
 // The edit-mode preview: the open map set up in a throwaway simulation (seed 1) and run a few ticks.
 // build() runs on the calling thread; start() runs the same build on a worker thread where threads are

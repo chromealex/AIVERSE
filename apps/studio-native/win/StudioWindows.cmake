@@ -71,7 +71,7 @@ if(NOT MSVC)
 endif()
 target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime
     aiverse_fx aiverse_game_view aiverse_gfx_vulkan AIVERSE::vivid_human AIVERSE::libraries
-    ole32 oleaut32 uuid shell32 shlwapi user32 advapi32 dwmapi)
+    ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 dwmapi)
 target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
 target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}" _WIN32_WINNT=0x0A00)
 if(MSVC)
@@ -80,19 +80,23 @@ else()
     target_compile_options(aiverse_studio PRIVATE -Wa,-mbig-obj)
 endif()
 set_target_properties(aiverse_studio PROPERTIES OUTPUT_NAME AiverseStudio)
-# Publish / Build panel: the packager built next to Studio.
-if(TARGET aiversebuild)
-    add_dependencies(aiverse_studio aiversebuild)
-    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_BUILD_TOOL="$<TARGET_FILE:aiversebuild>")
-endif()
-# Agent panel: the MCP server the in-editor Claude Code run talks to.
-if(TARGET aiversemcp)
-    add_dependencies(aiverse_studio aiversemcp)
-    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_MCP_TOOL="$<TARGET_FILE:aiversemcp>")
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_studio_win_device_overlay_tests tests/StudioWindowsDeviceOverlayTests.cpp ${_aiverse_studio_manifest})
+    target_include_directories(aiverse_studio_win_device_overlay_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_definitions(aiverse_studio_win_device_overlay_tests PRIVATE _WIN32_WINNT=0x0A00)
+    target_link_libraries(aiverse_studio_win_device_overlay_tests PRIVATE aiverse_engine gdi32 user32)
+    add_test(NAME studio_win_device_overlay COMMAND aiverse_studio_win_device_overlay_tests)
+    set_tests_properties(studio_win_device_overlay PROPERTIES LABELS "EDITOR")
 endif()
 # The UI and the WebView2 loader next to the exe; runs every build so UI-only changes are picked up.
 add_custom_target(aiverse_studio_web_assets
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_STUDIO_WEB_DIST}" "$<TARGET_FILE_DIR:aiverse_studio>/studio-web"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversemcp>"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_CAPTION_FONT} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
+    COMMAND "${CMAKE_COMMAND}" "-Dsource=${AIVERSE_STUDIO_WEB_DIST}" "-Ddestination=$<TARGET_FILE_DIR:aiverse_studio>/studio-web" -P "${CMAKE_CURRENT_SOURCE_DIR}/StageWebAssets.cmake"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_aiverse_wv2_loader}" "$<TARGET_FILE_DIR:aiverse_studio>"
     VERBATIM)
 add_dependencies(aiverse_studio aiverse_studio_web_assets)

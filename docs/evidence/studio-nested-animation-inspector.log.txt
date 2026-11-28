@@ -1,0 +1,2 @@
+2026-11-26 10:57:53.942 AiverseStudioHTML5[96753:83995673] [studio-web] JS: CROSS main DONE_1
+2026-11-26 10:57:53.942 AiverseStudioHTML5[96753:83995673] [studio-web] JS: CROSS main VERIFIED clip speed and loop, nested notify object edits, add/remove/Undo/Redo, preserved unknowns, typed vector and boolean defaults, native compile and reopen

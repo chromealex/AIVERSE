@@ -1,5 +1,32 @@
+#include "engine/render/TexturePreviewGrid.h"
+#include "apps/editor/core/NatureFieldArrows.h"
+#include "apps/editor/core/RiverFlowGizmos.h"
+#include "apps/editor/core/TerrainSlopeArrows.h"
+#include "apps/editor/TerraWeaveForestPreview.h"
+#include "apps/editor/core/TreeWindGizmo.h"
+#include "apps/editor/core/ErosionZoneGizmo.h"
+#include "apps/studio-native/StudioDocumentIds.h"
+#include "engine/render/BakedLighting.h"
+#include "engine/render/PrismaReportJson.h"
+#include "engine/render/StaticGeometryReport.h"
+#include "apps/editor/core/LightBakeCapture.h"
+#include "engine/render/LightmapUv.h"
+#include <future>
+#include "engine/view/MaterialLibraryFiles.h"
+#include "engine/view/AppearanceAuthoringService.h"
+#include "engine/render/TextureCache.h"
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/editor/core/BrandingOps.h"
+#include "apps/studio-native/StudioAttachmentPreview.h"
+#include "engine/view/game/GameView.h"
+#include "apps/studio-native/StudioGpuEmitterPlayback.h"
+#include "apps/studio-native/StudioNaturePreview.h"
+#include "apps/studio-native/StudioEffectPlayback.h"
+#include "engine/render/CameraCaptureViews.h"
+#include "engine/render/EcsCameraRender.h"
+#include "engine/render/CameraRig.h"
+#include "engine/sim/CameraSceneAsset.h"
 #include "apps/editor/core/TextureGraphGpuPreview.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
@@ -10,6 +37,7 @@
 #include "engine/render/TerraWeaveBotanicalForest.h"
 #include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "apps/studio-native/StudioFont6x11.h"
+#include "apps/studio-native/StudioCaptionFont.h"
 #include "engine/render/CameraPng.h"
 #include "engine/render/EnvironmentIbl.h"
 #include "engine/render/EnvironmentIblGpu.h"
@@ -276,6 +304,35 @@ struct Overlay2D {
         float3 o,d; if(!view.screenRay(x,y,W,H,o,d))return false;
         out=o+d*depth; return true;
     }
+    void bitmapText(float left,float top,float cell,const std::string& text,uint32_t color) const {
+        for(int pass=0;pass<2;++pass){
+            const uint32_t col=pass==0?rgba(0,0,0,170):color;const float off=pass==0?cell*0.6f:0;
+            float cx=left;
+            for(unsigned char ch:text){
+                if(ch<32||ch>126)ch='?';
+                const unsigned char* g=kStudioFont6x11[ch-32];
+                for(int row=0;row<11;++row)for(int col0=0;col0<6;){
+                    if(!((g[row]>>col0)&1)){++col0;continue;}
+                    int col1=col0;while(col1<6&&((g[row]>>col1)&1))++col1;
+                    const float y=top+row*cell+cell*0.5f+off;
+                    segment(cx+col0*cell+off,y,cx+col1*cell+off,y,cell,col);
+                    col0=col1;
+                }
+                cx+=6*cell;
+            }
+        }
+    }
+    void arrow(float3 a,float3 b,float thickness,uint32_t color) const {
+        float2 start,end;
+        if(!view.worldToScreen(a,W,H,start)||!view.worldToScreen(b,W,H,end))return;
+        if(!std::isfinite(start.x)||!std::isfinite(start.y)||!std::isfinite(end.x)||!std::isfinite(end.y))return;
+        const float dx=end.x-start.x,dy=end.y-start.y,length=std::hypot(dx,dy);
+        if(length<3)return;
+        const float head=std::clamp(length*.35f,5.f,14.f),ux=dx/length,uy=dy/length;
+        segment(start.x,start.y,end.x,end.y,thickness,color);
+        tri(end.x,end.y,end.x-head*(ux+.55f*uy),end.y-head*(uy-.55f*ux),
+                    end.x-head*(ux-.55f*uy),end.y-head*(uy+.55f*ux),color);
+    }
     void tri(float ax,float ay,float bx,float by,float cx,float cy,uint32_t col) const {
         float3 a,b,c; if(at(ax,ay,a)&&at(bx,by,b)&&at(cx,cy,c))r.triangle(a,b,c,col);
     }
@@ -319,7 +376,11 @@ bool planeQuad(const Camera& view,float3 pivot,const float3* axes,int n,float wo
     const float s0=worldLength*0.18f,s1=worldLength*0.42f;
     const float3 c[4]={pivot+a*s0+b*s0,pivot+a*s1+b*s0,pivot+a*s1+b*s1,pivot+a*s0+b*s1};
     for(int i=0;i<4;++i)if(!view.worldToScreen(c[i],W,H,out[i]))return false;
-    return true;
+    // An edge-on plane collapses to a line. Suppress it in both drawing and picking.
+    const float2 a2{out[1].x-out[0].x,out[1].y-out[0].y};
+    const float2 b2{out[3].x-out[0].x,out[3].y-out[0].y};
+    const float area=std::abs(a2.x*b2.y-a2.y*b2.x);
+    return area>std::max(std::hypot(a2.x,a2.y),std::hypot(b2.x,b2.y));
 }
 bool insideQuad(const float2* q,float x,float y){
     bool pos=false,neg=false;
@@ -383,6 +444,121 @@ bool axisParameter(float3 pivot,float3 a,float3 o,float3 d,float& t){
     t=(b*ew-dw)/denom; return std::isfinite(t);
 }
 }
+struct StudioScene::NatureView : StudioPreviewParticles {
+    render::Camera renderedCamera;
+    editor::PhysisNaturePreview display;
+    editor::TerraWeaveForestPreview forest;
+    std::chrono::steady_clock::time_point last{};
+    std::uint64_t ignition=0;
+    NatureView(gfx::Device& device, render::RenderDeviceLifetime::Lease lease,const std::string& project,const editor::MapDoc& map)
+        :StudioPreviewParticles(device,std::move(lease),project) {
+        forest.setProjectDir(project);
+        display.setWater(editor::AuthoredWaterQuery::fromDoc(map));
+    }
+    ~NatureView(){forest.release(device_);display.release(device_,particles_);}
+    using StudioPreviewParticles::particles_;
+    using StudioPreviewParticles::read;
+};
+struct StudioScene::GraphParticlePreview {
+    explicit GraphParticlePreview(gfx::Device& device):device(device){}
+    ~GraphParticlePreview(){
+        system.shutdown();
+        for(const auto& [path,texture]:textures)device.destroyTexture(texture);
+    }
+    gfx::Device& device;
+    fx::ParticleSystem system;
+    std::map<std::string,gfx::TextureHandle> textures;
+    std::chrono::steady_clock::time_point lastFrame{};
+};
+std::string StudioScene::shaderPreviewError() const {
+    if(!graphPreviewError_.empty())return graphPreviewError_;
+    if(graphParticles_){
+        const auto& errors=graphParticles_->system.errors();
+        return errors.empty()?graphParticles_->system.lastError():errors.back();
+    }
+    return graphPreviewPost_?graphPreviewPost_->lastError():std::string{};
+}
+struct StudioScene::SceneBake {
+    struct Load { bake::LightmapData data; std::string error; };
+    std::future<Load> pending;
+    render::BakedLighting gpu;
+    std::string project, map, error;
+    std::filesystem::file_time_type stamp{};
+    std::chrono::steady_clock::time_point nextCheck{};
+    uint64_t generation=0, pendingGeneration=0;
+    bool enabled=false, needsLoad=false, exists=false;
+};
+
+bake::CapturedBake StudioScene::captureLightBake(const editor::MapDoc& doc, const std::string& project, const game::Rules& rules) {
+    if (!sceneCacheValid_ || modelsPending_ || sceneKey_.doc != &doc ||
+        sceneKey_.revision != doc.revision || sceneKey_.project != project)
+        throw std::runtime_error("Scene is still loading the active map");
+    return collectLightBake(doc,rules,renderer_.lighting,sceneKey_.levelHeight,showTerrain_);
+}
+
+std::optional<bake::CapturedBake> StudioScene::prepareLightBake(const editor::MapDoc& doc,const std::string& project,
+        const game::Rules& rules,const Json& rulesJson,float levelHeight) {
+    if(doc.data.planet())throw std::runtime_error("Lightmap capture requires a planar map");
+    if(sceneCacheValid_ && !modelsPending_ && sceneKey_.doc==&doc && sceneKey_.project==project &&
+       sceneKey_.revision==doc.revision && sceneKey_.levelHeight==levelHeight && sceneKey_.rules==&rulesJson)
+        return captureLightBake(doc,project,rules);
+    const auto proxies=studioDocumentProxies(doc,doc.data.worldSpace,levelHeight);
+    sceneCacheValid_=false; // Scene must rebuild its proxy draw list before its next visible frame.
+    syncDocumentModels(doc,project,rulesJson,proxies);
+    if(modelsPending_)return {};
+    const bool terrain=rulesJson["terrain"].getBool("render",true) && doc.data.extra.getStr("terrainPresentation","legacy")!="entities";
+    const auto environment=weatherEnvironment_.value_or(studioMapEnvironment(doc,previewDocumentDay(doc)));
+    return collectLightBake(doc,rules,environment,levelHeight,terrain);
+}
+
+bake::CapturedBake StudioScene::collectLightBake(const editor::MapDoc& doc,const game::Rules& rules,
+        const render::Lighting& environment,float levelHeight,bool terrain) {
+    if(doc.data.planet())throw std::runtime_error("Lightmap capture requires a planar map");
+    bake::CapturedBake capture;
+    editor::captureBakeEnvironment(capture,environment,doc.data.extra["lights"],doc.data.w,doc.data.h,
+        [&](float x,float z){return doc.data.worldSpace ? 0.f : terrainPreviewHeight(doc.data,x,z,levelHeight);},
+        terrain && !doc.data.worldSpace);
+    for (const auto& instance : modelInstances_) {
+        if (!instance.model || !instance.model->path.starts_with("content/")) continue;
+        const int index = studioMapEntityIndex(instance.id,doc);
+        if (index < 0) continue;
+        const int type = rules.findType(doc.data.entities[size_t(index)].type);
+        if (type >= 0) {
+            const auto& unit = rules.types[size_t(type)];
+            if ((!unit.structure && unit.speed > Fixed{}) || (unit.layer & game::kLayerAir)) continue;
+        }
+        const auto& model = *instance.model;
+        bake::CapturedBake::Draw draw;
+        draw.path = model.path;
+        for (const auto& node : model.bindWorld) draw.nodeWorld.push_back(instance.world * node);
+        draw.still.assign(draw.nodeWorld.size(),1);
+        const auto authored = instanceMaterials_.find(instance.id);
+        const auto* materials = authored == instanceMaterials_.end() ? nullptr : &authored->second.materials;
+        if (graphPresentation_) materials = graphPresentation_->materials(model,instance.id,materials);
+        if (materials) draw.materials = *materials;
+        capture.draws.push_back(std::move(draw));
+    }
+    return capture;
+}
+
+void StudioScene::setBakedSceneEnabled(bool enabled) {
+    if(!sceneBake_)sceneBake_=std::make_unique<SceneBake>();
+    if(sceneBake_->enabled==enabled)return;
+    sceneBake_->enabled=enabled;
+    sceneBake_->nextCheck={};
+    if(!enabled)syncSceneBake({},{});
+}
+
+Json StudioScene::bakedSceneStatus() const {
+    Json out=Json::object();
+    out.set("enabled",Json::fromBool(sceneBake_ && sceneBake_->enabled));
+    out.set("loaded",Json::fromBool(sceneBake_ && !sceneBake_->gpu.empty()));
+    out.set("lightmapped",Json::number(int64_t(renderer_.bakedLightmapped())));
+    out.set("probed",Json::number(int64_t(renderer_.bakedProbed())));
+    if(sceneBake_ && !sceneBake_->error.empty())out.set("message",Json::string(sceneBake_->error));
+    return out;
+}
+
 StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     : device_(std::move(device)) {
     if (!device_) throw std::runtime_error("Scene GPU device unavailable");
@@ -498,25 +674,235 @@ std::vector<std::string> StudioScene::takeFinishedThumbnails() {
     std::lock_guard<std::mutex> lock(thumbShared_->mutex);
     return std::exchange(thumbShared_->done,{});
 }
-std::unique_ptr<render::Model> StudioScene::loadContentModel(const std::string& projectPath,const std::string& asset) {
+static std::filesystem::path previewAssetPath(const std::filesystem::path& root,const std::string& name) {
     namespace fs=std::filesystem;
-    if(asset.rfind("content/",0)!=0 || asset.size()>512 || projectPath.empty())return nullptr;
-    const fs::path root=fs::path(projectPath)/"content";
-    // Same containment as the Scene's model loader: no "..", no symlinks, content/ only.
-    auto read=[root](const std::string& name,std::string& out)->bool {
-        if(name.rfind("content/",0)!=0 || name.size()>512)return false;
-        const fs::path rel(name.substr(8));
-        if(rel.empty()||rel.is_absolute())return false;
-        fs::path file=root;
-        for(const auto& part:rel){ if(part.empty()||part=="."||part=="..")return false; file/=part;
-            std::error_code ec;const auto st=fs::symlink_status(file,ec);if(ec||fs::is_symlink(st))return false; }
+    const fs::path rel(name);
+    if(name.empty()||name.size()>512||rel.is_absolute()||rel.has_root_name())return {};
+    fs::path file=root;
+    for(const auto& part:rel){
+        if(part.empty()||part=="."||part=="..")return {};
+        file/=part;
         std::error_code ec;
-        if(!fs::is_regular_file(file,ec))return false;
-        const auto bytes=fs::file_size(file,ec);
-        if(ec||bytes>256ull*1024ull*1024ull)return false;
-        std::ifstream input(file,std::ios::binary);if(!input)return false;
-        out.assign(std::istreambuf_iterator<char>(input),std::istreambuf_iterator<char>());
-        return bool(input)||input.eof();
+        if(fs::is_symlink(fs::symlink_status(file,ec))||ec)return {};
+    }
+    std::error_code ec;
+    if(!fs::is_regular_file(file,ec))return {};
+    return file;
+}
+static bool readPreviewAsset(const std::filesystem::path& root,const std::string& name,std::string& out) {
+    namespace fs=std::filesystem;
+    const auto file=previewAssetPath(root,name);
+    if(file.empty())return false;
+    std::error_code ec;
+    const auto size=fs::file_size(file,ec);
+    if(ec||size>256ull*1024ull*1024ull)return false;
+    std::ifstream input(file,std::ios::binary);if(!input)return false;
+    out.resize(size_t(size));
+    return bool(input.read(out.data(),std::streamsize(size)));
+}
+
+struct StudioScene::ConfiguredModel {
+    gfx::Device& device;
+    render::Renderer3D& renderer;
+    game::Rules rules;
+    game::GameView view;
+    uint16_t type=0;
+    int owner=0;
+    float yaw=.6f,pitch=.4f;
+    double time=0;
+    bool playing=true;
+    std::chrono::steady_clock::time_point last{};
+    ConfiguredModel(gfx::Device& dev,render::Renderer3D& r,const Json& definitions)
+        :device(dev),renderer(r),rules(game::loadRules(definitions)){}
+    void shutdown(){
+        {const auto read=view.readModelOf(type);if(read.get())renderer.invalidateModelCachesFor(read.get());}
+        view.shutdown(device);
+    }
+};
+
+struct StudioScene::StaticScenery {
+    render::GeometryScene scene;
+    std::string project,file,error;
+    std::map<std::string,std::filesystem::file_time_type> inputs;
+    std::chrono::steady_clock::time_point nextCheck{};
+    bool loaded=false;
+};
+
+void StudioScene::syncStaticGeometry(const std::string& project,const std::string& file) {
+    if(!device_ || (!staticScenery_ && (file.empty() || project.empty())))return;
+    if(!staticScenery_)staticScenery_=std::make_unique<StaticScenery>();
+    auto& state=*staticScenery_;
+    state.scene.collectRetired(*device_);
+    const bool capture=natureLayers_.strataWire || natureLayers_.strataFill;
+    const bool captureChanged=capture!=state.scene.strataDebugGeometryCaptureEnabled();
+    state.scene.setStrataDebugGeometryCaptureEnabled(capture);
+    const bool moved=captureChanged || state.project!=project || state.file!=file;
+    if(moved){
+        state.scene.clear(*device_);
+        state.project=project;state.file=file;state.inputs.clear();
+        state.loaded=false;state.error.clear();lastFrameSignature_=0;
+    }
+    if(file.empty()||project.empty())return;
+    const auto now=std::chrono::steady_clock::now();
+    if(!moved && now<state.nextCheck)return;
+    state.nextCheck=now+std::chrono::seconds(1);
+    const auto stamp=[project](const std::string& name){
+        const auto path=previewAssetPath(project,name);
+        std::error_code ec;
+        return path.empty()?std::filesystem::file_time_type::min():std::filesystem::last_write_time(path,ec);
+    };
+    if(!moved && std::none_of(state.inputs.begin(),state.inputs.end(),
+            [&](const auto& entry){return entry.second!=stamp(entry.first);}))return;
+    // Cooked STRATA may retain this reader after loadTransactional returns.
+    auto inputs=std::make_shared<decltype(state.inputs)>();
+    const auto read=[project,stamp,inputs](const std::string& name,std::string& bytes){
+        (*inputs)[name]=stamp(name);
+        return readPreviewAsset(project,name,bytes);
+    };
+    try {
+        std::string bytes;
+        if(!read(file,bytes))throw std::runtime_error("Cannot read static geometry: "+file);
+        auto scene=Json::parse(bytes);
+        // A replacement inherits owner configuration. A descriptor without STRATA uses LOD.
+        if(!scene.has("strata"))scene.set("strata",Json::object());
+        state.scene.loadTransactional(*device_,scene,read);
+        state.loaded=true;state.error.clear();
+    } catch(const std::exception& e){state.error=e.what();}
+    state.inputs=*inputs;
+    lastFrameSignature_=0;
+}
+
+void StudioScene::syncMapWater(const editor::MapData& map, float levelHeight, bool visible) {
+    appliedWaterLook_ = planetTerrainLook_;
+    mapWaterBaseGrid_ = baseTerrainView_;
+    mapWaterRefusal_.clear();
+    Json document = Json::object();
+    if (visible && appliedWaterLook_ && appliedWaterLook_->waterRenderer == game::TerrainLook::WaterRenderer::Nereid &&
+        map.w > 0 && map.h > 0 && map.cells.size() == size_t(map.w) * size_t(map.h)) {
+        game::MapGrid grid;
+        grid.w = map.w;
+        grid.h = map.h;
+        grid.flags.reserve(map.cells.size());
+        for (const char cell : map.cells) grid.flags.push_back(game::cellFlagsFromChar(cell));
+        const auto groundAt = [&](float x, float z) { return terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_); };
+        const auto layout = game::mapWaterLayout(grid,*appliedWaterLook_,!map.corners.empty(),
+            !baseTerrainView_ && terrainDetailScale(map)>0,groundAt,
+            [&](int x,int z) { return terrainPreviewCorner(map,x,z,levelHeight); });
+        auto converted = game::legacyWaterToNereidManifest(layout,appliedWaterLook_->waterColor,
+            appliedWaterLook_->nereid,groundAt,&mapWaterRefusal_);
+        if (converted) document = std::move(*converted);
+    }
+    mapWater_.configure(document);
+}
+
+Json StudioScene::geometryStats() const {
+        const auto& s = renderer_.geometryStats(); Json r=Json::object();
+        r.set("clustersTested",Json::number(int64_t(s.clustersTested)));
+        r.set("clustersCulled",Json::number(int64_t(s.clustersCulled)));
+        r.set("coarseClusters",Json::number(int64_t(s.coarseClusters)));
+        r.set("occluded",Json::number(int64_t(s.occluded)));
+        r.set("occluderTriangles",Json::number(int64_t(s.occluderTriangles)));
+        r.set("drawCalls",Json::number(int64_t(renderer_.drawCalls())));
+        r.set("cameraModelTriangles",Json::number(int64_t(renderer_.profile().cameraModelTriangles)));
+        r.set("cameraMeshTriangles",Json::number(int64_t(renderer_.profile().cameraMeshTriangles)));
+        r.set("opaqueSceneCapture",Json::fromBool(renderer_.ssrActive()));
+        r.set("ssrRaymarch",Json::fromBool(renderer_.ssrActive() && renderer_.traceActive()));
+        r.set("nereidConfiguredSurfaces",Json::number(int64_t(nereid_.configuredSurfaces())));
+        r.set("nereidWaterDraws",Json::number(int64_t(nereid_.scene().drawStats().draws)));
+        r.set("nereidWaterTriangles",Json::number(int64_t(nereid_.scene().drawStats().triangles)));
+        r.set("nereidMapWaterDraws",Json::number(int64_t(mapWater_.scene().drawStats().draws)));
+        r.set("nereidMapWaterTriangles",Json::number(int64_t(mapWater_.scene().drawStats().triangles)));
+        if (!mapWaterRefusal_.empty()) r.set("nereidWaterRefused",Json::string(mapWaterRefusal_));
+        r.set("sunShadowModelTriangles",Json::number(int64_t(renderer_.profile().triangles[0])));
+        if (staticScenery_) r.set("strata",render::staticGeometryReport(staticScenery_->scene));
+        const double frameGpu=device_?device_->gpuFrameMs():0;
+        if(std::isfinite(frameGpu)&&frameGpu>0)
+            r.set("completedGpuFrameMs",Json::number(frameGpu,6));
+        auto viewportGpu=Json::array();
+        for(const auto& timing:post_.viewGpuTimings()) {
+            auto sample=Json::object();
+            sample.set("viewId",Json::number(int64_t(timing.viewId)));
+            sample.set("milliseconds",Json::number(timing.lastGpuMs,6));
+            sample.set("sampleSequence",Json::number(int64_t(timing.sampleSequence)));
+            viewportGpu.push(sample);
+        }
+        r.set("viewportGpuTimings",viewportGpu);
+        const auto& model=renderer_.modelStats();auto levels=Json::array();for(auto count:model.cameraLodNodes)levels.push(Json::number(int64_t(count)));r.set("cameraLodNodes",levels);r.set("lodChains",Json::number(int64_t(model.cameraLodChains)));r.set("lodBlocked",Json::number(int64_t(model.cameraLodBlocked)));r.set("shadowLimitedLod",Json::number(int64_t(model.cameraShadowLimitedLod)));return r;
+}
+
+Json StudioScene::staticGeometryReport(const std::string& project,const std::string& file) const {
+    if(!staticScenery_ || file.empty() || staticScenery_->project!=project || staticScenery_->file!=file)return {};
+    auto report=render::staticGeometryReport(staticScenery_->scene);
+    if(!staticScenery_->error.empty())report.set("error",Json::string(staticScenery_->error));
+    return report;
+}
+
+void StudioScene::syncSceneBake(const std::string& project,const std::string& mapPath) {
+    if(!sceneBake_)return;
+    auto& state=*sceneBake_;
+    const auto now=std::chrono::steady_clock::now();
+    const bool moved=project!=state.project || mapPath!=state.map;
+    const auto invalidate=[&]{
+        lightingRevision_=std::numeric_limits<uint64_t>::max();
+        sceneCacheValid_=false;lastFrameSignature_=0;
+    };
+    if(moved || now>=state.nextCheck){
+        namespace fs=std::filesystem;
+        state.nextCheck=now+std::chrono::seconds(1);
+        fs::path rel=fs::path(mapPath).lexically_relative(project);
+        const bool valid=state.enabled && !project.empty() && !rel.empty() && !rel.is_absolute() && *rel.begin()!="..";
+        std::error_code ec;
+        const auto folder=bake::bakeFolderFor(rel.generic_string());
+        const auto stamp=valid?fs::last_write_time(fs::path(project)/folder/"lightmap.json",ec):fs::file_time_type{};
+        const bool exists=valid && !ec;
+        if(moved || exists!=state.exists || (exists && stamp!=state.stamp)){
+            if(!state.gpu.empty()){
+                if(!device_->waitForResourceIdle())throw std::runtime_error("Cannot retire Scene lightmaps");
+                renderer_.setBakedLighting(nullptr);state.gpu.release();
+                invalidate();
+            }
+            state.project=project;state.map=mapPath;state.exists=exists;state.stamp=stamp;
+            ++state.generation;state.needsLoad=exists;state.error.clear();
+        }
+    }
+    if(state.pending.valid() && state.pending.wait_for(std::chrono::seconds(0))==std::future_status::ready){
+        auto load=state.pending.get();
+        if(state.generation==state.pendingGeneration){
+            state.error=std::move(load.error);
+            if(state.error.empty()){
+                const auto& terrain=load.data.terrain;
+                if(terrain.page>=0 && size_t(terrain.page)<load.data.pages.size()){
+                    bake::LightmapRegion region;region.page=uint16_t(terrain.page);
+                    std::copy_n(terrain.st,4,region.st);
+                    load.data.regions[bake::lightmapRegionKey("studio/lighting-preview",1,mat4{})]=region;
+                }
+                if(state.gpu.upload(*device_,std::move(load.data))){
+                    // The same bake can publish fresh .lmuv sidecars for already loaded models.
+                    if(!device_->waitForResourceIdle())throw std::runtime_error("Cannot refresh lightmap UVs");
+                    clearDocumentModels();invalidate();
+                }
+                else state.error="No GPU lightmaps or probes in baked output";
+            }
+        }
+    }
+    if(state.needsLoad && !state.pending.valid()){
+        state.needsLoad=false;state.pendingGeneration=state.generation;
+        const auto folder=bake::bakeFolderFor(std::filesystem::path(mapPath).lexically_relative(project).generic_string());
+        state.pending=std::async(std::launch::async,[project,folder]{
+            SceneBake::Load load;
+            try {
+                bake::loadLightmapData(folder,[&](const std::string& path,std::string& bytes){
+                    return readPreviewAsset(project,path,bytes);
+                },load.data,load.error);
+            }catch(const std::exception& e){load.error=e.what();}
+            return load;
+        });
+    }
+}
+std::unique_ptr<render::Model> StudioScene::loadContentModel(const std::string& projectPath,const std::string& asset) {
+    if(asset.rfind("content/",0)!=0 || asset.size()>512 || projectPath.empty())return nullptr;
+    auto read=[&projectPath](const std::string& name,std::string& out){
+        return name.rfind("content/",0)==0&&readPreviewAsset(projectPath,name,out);
     };
     try {
         auto model=render::loadModel(asset,read);
@@ -588,6 +974,7 @@ void StudioScene::clearDocumentModels() {
         if (model) releasePreviewModel(*model);
     shapeModels_.clear();shapesBuilt_=false;instanceTeams_.clear();
     modelInstances_.clear();
+    terrainTileSurface_.reset();
     documentModels_.clear();
     rejectedDocumentModels_.clear();
     documentModelTimes_.clear();
@@ -600,6 +987,7 @@ void StudioScene::syncDocumentModels(
     const editor::MapDoc& doc,const std::string& projectPath,
     const Json& rules,const std::vector<StudioDocumentProxy>& proxies) {
     modelInstances_.clear();
+    terrainTileSurface_.reset();
     instanceTeams_.clear();
     if (projectPath.empty()) { loadProgress_={}; modelsPending_=false; return; }
     // Streaming budget: always load at least one new model per frame, then stop
@@ -627,7 +1015,7 @@ void StudioScene::syncDocumentModels(
             std::ifstream input(libraryPath,std::ios::binary);
             if(input) {
                 const std::string text((std::istreambuf_iterator<char>(input)),std::istreambuf_iterator<char>());
-                try { const Json parsed=Json::parse(text)["materials"]; if(parsed.isObject())materialLibrary_=parsed; }
+                try { const Json parsed=view::materialLibraryFromIndex(Json::parse(text),[&](const std::string& path,std::string& bytes){return readPreviewAsset(project,path,bytes);}); if(parsed.isObject())materialLibrary_=parsed; }
                 catch(const std::exception&) {}
             }
             instanceMaterials_.clear();
@@ -1800,8 +2188,25 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     if(missing)lightingStatus_+=" · missing live models "+std::to_string(missing);
 }
 StudioScene::~StudioScene() {
+    if(configuredModel_){
+        try{configuredModel_->shutdown();}catch(const std::exception& e){
+            std::fprintf(stderr,"Studio type preview retirement: %s\n",e.what());
+            (void)configuredModel_.release();
+        }
+    }
+    attachmentPreview_.reset();
     if (device_) {
         const bool idle=device_->waitForResourceIdle();
+        if(staticScenery_){
+            try { staticScenery_->scene.shutdown(*device_); }
+            catch(const std::exception& e){
+                std::fprintf(stderr,"Studio static geometry shutdown: %s\n",e.what());
+                (void)staticScenery_.release(); // Quarantine owners while submitted work is unresolved.
+            }
+        }
+        natureView_.reset();
+        gpuEmitter_.reset();
+        effectFile_.reset();
         if(textureGraph_){
             if(idle||!device_->gpuHealthy())textureGraph_->shutdownAfterIdle(*device_);
             else std::fprintf(stderr,"Studio Texture Graph: idle barrier failed; GPU pools left to device teardown\n");
@@ -1823,12 +2228,15 @@ StudioScene::~StudioScene() {
             renderer_.invalidateModelCachesFor(lightingModel_.get());
             releaseModel(*device_,*lightingModel_);lightingModel_.reset();
         }
+        graphParticles_.reset();
+        if(graphPreviewPost_)graphPreviewPost_->shutdown();
         post_.shutdown();
         (void)facialGpu_.clear(*device_,renderer_);
         if(studioCyclorama_.vb.valid())device_->destroyBuffer(studioCyclorama_.vb);
         if(studioCyclorama_.ib.valid())device_->destroyBuffer(studioCyclorama_.ib);
         if (cube_.vb.valid()) device_->destroyBuffer(cube_.vb);
         if (cube_.ib.valid()) device_->destroyBuffer(cube_.ib);
+        if(animationModel_)releasePreviewModel(*animationModel_);
         if (materialSphere_) {
             releasePreviewModel(*materialSphere_);
             materialSphere_.reset();
@@ -1846,8 +2254,11 @@ StudioScene::~StudioScene() {
         (void)terrainRetirement_.completeForShutdown(*device_);
         sparseTerrainPreview_.release([&](auto& model){sparseTerrainRetirement_.retireModel(*device_,model);});
         (void)sparseTerrainRetirement_.completeForShutdown(*device_);
+        if (idle && captureColor_.valid()) device_->destroyTexture(captureColor_);
+        if (idle && captureDepth_.valid()) device_->destroyTexture(captureDepth_);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
         if (thumbDepth_.valid()) device_->destroyTexture(thumbDepth_);
+        mapWater_.shutdown(*device_);
         nereid_.shutdown(*device_);
         antialiasing_.shutdown();
         renderer_.shutdown();
@@ -1939,12 +2350,51 @@ std::optional<Json> StudioScene::forestPick(float x,float y,float w,float h,cons
     result.set("key",Json::number(int64_t(chosen->key)));result.set("direct",Json::fromBool(chosen->direct));
     result.set("body",Json::string(planetPreview_->bodyId));return result;
 }
+bool StudioScene::planetBrushPoint(double x,double y,double w,double h,const editor::MapDoc& doc,float3& hit,std::string& body,double& elevation)const{
+    if(!planetMode_ || !planetPreview_ || !cameraInitialized_ || planetMapPath_!=doc.path ||
+       planetRevision_!=doc.revision || planetLiveTerrainVisible_)return false;
+    float3 origin,ray;
+    if(!viewCamera().screenRay(float(x),float(y),float(w),float(h),origin,ray))return false;
+    const auto t=planetPreview_->terrainHit(origin,ray,visiblePlanetTerrain());
+    if(!std::isfinite(t))return false;
+    hit=origin+ray*t;
+    body=planetPreview_->bodyId;
+    const int index=doc.data.findBody(body);
+    if(index<0 || dot(hit,hit)<1e-8f)return false;
+    const auto unit=normalize(hit);
+    game::CubeSphere cube(planetPreview_->faceSize);
+    int face;Fixed a,b;
+    cube.faceFromDir({StudioPlanetPreview::fixed(unit.x),StudioPlanetPreview::fixed(unit.y),StudioPlanetPreview::fixed(unit.z)},face,a,b);
+    elevation=StudioPlanetPreview::height(doc.data.bodies[size_t(index)],face,float(a.toDouble()),float(b.toDouble()),baseTerrainView_);
+    return true;
+}
 std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
     if(planetLiveSnapshot_["forest"].getBool("active")&&planetLivePath_==path&&planetLiveRevision_==revision)return {};
     if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
        w<2||h<2||x<0||y<0||x>w||y>h)return {};
     float3 o,d;if(!viewCamera().screenRay(x,y,w,h,o,d))return {};
     return planetPreview_->groundPlacement(o,d,visiblePlanetTerrain());
+}
+std::optional<Json> StudioScene::playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc)const{
+    if(!cameraInitialized_||x<0||y<0||w<2||h<2||x>=w||y>=h||doc.data.worldSpace)return {};
+    if(doc.data.planet())return forestGroundPlacement(x,y,w,h,doc.path,doc.revision);
+    const auto hit=flatMapPoint(x,y,w,h,doc);
+    if(!hit)return {};
+    Json start=Json::array();
+    start.push(Json::number(std::min(double(doc.data.w)-.5,std::round(double(hit->x)*2)/2)));
+    start.push(Json::number(std::min(double(doc.data.h)-.5,std::round(double(hit->z)*2)/2)));
+    return start;
+}
+std::optional<float3> StudioScene::flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc,bool requireSurface)const{
+    if(!cameraInitialized_||planetMode_||doc.data.worldSpace||doc.data.planet()||terrainRevision_!=doc.revision||
+       !(x>=0 && y>=0 && x<w && y<h && w>=2 && h>=2))return {};
+    float3 origin,direction,at;
+    if(!viewCamera().screenRay(x,y,w,h,origin,direction))return {};
+    const float t=studioRayMesh(origin,direction,terrainCpu_);
+    if(std::isfinite(t))at=origin+direction*t;
+    else if(requireSurface || !groundPoint(x,y,w,h,at))return {};
+    if(at.x<0||at.z<0||at.x>=doc.data.w||at.z>=doc.data.h)return {};
+    return at;
 }
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
@@ -1963,12 +2413,14 @@ void StudioScene::frameAll(const editor::MapDoc& map,bool fpsProject) {
     startTween((lo+hi)*.5f,std::clamp(std::max({size.x,size.y,size.z,1.0f})*1.2f,2.0f,100000.0f),camera_.yaw,camera_.pitch);
 }
 render::Camera StudioScene::viewCamera() const {
-    render::Camera view=camera_;
-    view.zNear=std::clamp(camera_.distance*0.002f,0.05f,0.5f);
-    view.zFar=std::max(1000.0f,camera_.distance*6.0f);
+    if(lensCamera_)return *lensCamera_;
+    render::Camera view=captureOutput_?captureOutput_->options.camera(camera_):camera_;
+    const auto distance=view.distance;
+    view.zNear=std::clamp(distance*0.002f,0.05f,0.5f);
+    view.zFar=std::max(1000.0f,distance*6.0f);
     if(view.ortho) {
-        view.orthoHalfHeightOverride=std::max(0.01f,camera_.distance*std::tan(camera_.fovY*0.5f));
-        view.distance=std::min(camera_.distance,400.0f);
+        view.orthoHalfHeightOverride=std::max(0.01f,distance*std::tan(view.fovY*0.5f));
+        view.distance=std::min(distance,400.0f);
     }
     return view;
 }
@@ -1981,6 +2433,24 @@ void StudioScene::startTween(render::float3 target,float distance,float yaw,floa
     tween_.toYaw=camera_.yaw+std::remainder(yaw-camera_.yaw,6.28318530718f);
     tween_.fromPitch=camera_.pitch;tween_.toPitch=pitch;
     tween_.start=std::chrono::steady_clock::now();
+}
+void StudioScene::applyPendingSceneLens() {
+    if (!pendingSceneLens_) return;
+    const auto view=*pendingSceneLens_;
+    pendingSceneLens_.reset();
+    const auto eye=view.eye();
+    const auto forward=view.rotation.rotate({0,0,-1});
+    const float distance=view.ortho ? view.orthoHalfHeight()/std::tan(view.fovY*.5f) : 12.f;
+    camera_.distance=std::clamp(distance,camera_.minDistance,camera_.maxDistance);
+    camera_.target=eye+forward*camera_.distance;
+    camera_.yaw=std::atan2(-forward.x,-forward.z);
+    camera_.pitch=std::asin(std::clamp(-forward.y,-1.f,1.f));
+    camera_.usePose=false;
+    camera_.ortho=view.ortho;
+    camera_.fovY=view.fovY;
+    autoIso_=false;
+    tween_.active=false;
+    lastFrameSignature_=0;
 }
 void StudioScene::stepTween() {
     if(!tween_.active)return;
@@ -2016,6 +2486,76 @@ void StudioScene::drawSelectionBox(const Camera& view,int width,int height) {
 bool StudioScene::projectPoint(float3 world,float width,float height,float2& out) const {
     return viewCamera().worldToScreen(world,width,height,out);
 }
+void StudioScene::beginDeviceFrame(int width, int height) {
+    device_->beginFrame(width, height);
+    if (pendingTextureRead_) {
+        auto submit = std::move(pendingTextureRead_);
+        pendingTextureRead_ = {};
+        submit();
+    }
+}
+
+Json StudioScene::textureReadback(const Json& params, std::string (*encodeRgb)(const void*, int, int)) {
+    const std::string ticket = params.getStr("ticket");
+    if (ticket.empty() || ticket.size() > 100) throw std::runtime_error("Invalid texture readback ticket");
+    if (params.getBool("poll")) {
+        if (ticket != textureReadTicket_ || !textureReadResult_.valid())
+            throw std::runtime_error("Texture readback was replaced");
+        if (textureReadResult_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            return textureReadResult_.get();
+        return Json::object();
+    }
+    if (textureReadResult_.valid() && textureReadResult_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        throw std::runtime_error("A texture readback is already pending");
+    const auto id = params.getInt("texture", -1), mip = params.getInt("mip", -1), layer = params.getInt("layer", -1);
+    const auto resources = device_->textureResources();
+    const auto it = std::find_if(resources.begin(), resources.end(), [&](const auto& t){ return t.handle.id == id && id > 0; });
+    if (it == resources.end()) throw std::runtime_error("Texture was released");
+    const auto& t = *it;
+    if (mip < 0 || mip >= t.mipLevels || mip >= 31 || layer < 0 ||
+        layer >= (t.dimension == gfx::TextureDimension::Texture3D ? std::max(1,t.depth >> mip) : t.arrayLayers))
+        throw std::runtime_error("Texture subresource changed");
+    const size_t pixelBytes = render::texturePreviewPixelBytes(t.format);
+    if (!pixelBytes || t.sampleCount != 1 || t.dimension == gfx::TextureDimension::Texture1D)
+        throw std::runtime_error("Unsupported texture readback format or sampling");
+    if (uint64_t(std::max(1,t.width >> mip)) * std::max(1,t.height >> mip) > (16u << 20) / pixelBytes)
+        throw std::runtime_error("Selected mip exceeds the 16 MiB readback limit");
+    auto completion = std::make_shared<std::promise<Json>>();
+    auto future = completion->get_future().share();
+    gfx::TextureReadbackDesc desc;
+    desc.mipLevel = int(mip);
+    desc.arrayLayer = int(layer);
+    auto decode = [completion, encodeRgb, fullResolution = params.getBool("fullResolution"), preview2D = t.dimension == gfx::TextureDimension::Texture2D](gfx::TextureReadbackResult image){
+        try {
+            const auto grid = render::texturePreviewGrid(image, preview2D, fullResolution);
+            if (!grid.error.empty()) throw std::runtime_error(grid.error);
+            Json result = Json::object(), pixels = Json::array();
+            if (fullResolution) {
+                const auto png = encodeRgb(grid.colors.data(), grid.columns, grid.rows);
+                if (png.empty())
+                    throw std::runtime_error("Could not encode full-resolution texture");
+                result.set("url", Json::string("data:image/png;base64," + editor::base64Encode(png)));
+                completion->set_value(std::move(result));
+                return;
+            }
+            for (const auto& rgb : grid.colors)
+                pixels.push(Json::number(int64_t((rgb[0] << 16) | (rgb[1] << 8) | rgb[2])));
+            result.set("width",Json::number(int64_t(grid.columns)));
+            result.set("height",Json::number(int64_t(grid.rows)));
+            result.set("pixels",std::move(pixels));
+            completion->set_value(std::move(result));
+        } catch (...) { completion->set_exception(std::current_exception()); }
+    };
+    pendingTextureRead_ = [this, handle=t.handle, desc, completion, decode=std::move(decode)]{
+        if (!device_->readTextureAsync(handle, desc, decode))
+            completion->set_exception(std::make_exception_ptr(std::runtime_error("GPU backend could not schedule texture readback")));
+    };
+    lastFrameSignature_ = 0;
+    textureReadTicket_ = ticket;
+    textureReadResult_ = std::move(future);
+    return Json::object();
+}
+
 Json StudioScene::textureResources() const {
     static const char* formats[]={"RGBA8","R8","Depth","RGBA32F","ETC2_RGB8","ETC2_RGBA8","BC1","BC3","BC7","ASTC_4x4","ASTC_6x6",
         "RGBA8_sRGB","RGBA16F","BC4","BC5","EAC_R11","RG8","R16F","RG16F","R32F","RG32F","BC6H_UFloat","BC6H_SFloat",
@@ -2025,6 +2565,9 @@ Json StudioScene::textureResources() const {
     for(const auto& t:device_->textureResources()){
         Json o=Json::object();
         const size_t f=size_t(t.format);
+        static constexpr const char* dimensions[]={"1D","2D","3D","2D Array","Cube","Cube Array"};
+        const size_t dimension=size_t(t.dimension);
+        o.set("dimension",Json::string(dimension<std::size(dimensions)?dimensions[dimension]:"Unknown"));
         o.set("id",Json::number(int64_t(t.handle.id)));
         o.set("format",Json::string(f<sizeof(formats)/sizeof(formats[0])?formats[f]:"?"));
         o.set("width",Json::number(int64_t(t.width)));o.set("height",Json::number(int64_t(t.height)));
@@ -2050,22 +2593,7 @@ void StudioScene::drawBrushCursor(const Camera& view,int width,int height) {
         if(s.kind==4){
             // Bitmap text (6x11 glyphs), one horizontal run per lit row segment, with a dark outline pass.
             const float cell=std::max(1.f,px*1.4f);
-            for(int pass=0;pass<2;++pass){
-                const uint32_t col=pass==0?rgba(0,0,0,170):color;const float off=pass==0?cell*0.6f:0;
-                float cx=a.x+6*cell;
-                for(unsigned char ch:s.text.substr(0,64)){
-                    if(ch<32||ch>126)ch='?';
-                    const unsigned char* g=kStudioFont6x11[ch-32];
-                    for(int row=0;row<11;++row)for(int col0=0;col0<6;){
-                        if(!((g[row]>>col0)&1)){++col0;continue;}
-                        int col1=col0;while(col1<6&&((g[row]>>col1)&1))++col1;
-                        const float y=a.y-6*cell+row*cell+cell*0.5f+off;
-                        o.segment(cx+col0*cell+off,y,cx+col1*cell+off,y,cell,col);
-                        col0=col1;
-                    }
-                    cx+=6*cell;
-                }
-            }
+            o.bitmapText(a.x+6*cell,a.y-6*cell,cell,s.text.substr(0,64),color);
             continue;
         }
         if(s.kind==1&&view.worldToScreen(s.b,W,H,b))o.segment(a.x,a.y,b.x,b.y,t,color);
@@ -2116,18 +2644,19 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     float3 axes[3];handleAxes(axes);
     const auto h=axisHandles(view,selectedPivot_,axes,width,height);
     if(!h.valid)return -1;
+    if(tool_==TransformTool::Scale && std::hypot(x-h.px,y-h.py)<h.pick*1.4f)return 3;
     int best=-1;float bestD=h.pick;
     // Plane squares (all tools): Move = drag in the plane, Scale = both plane axes,
     // Rotate = turn about the plane's normal (same as that axis's ring).
     for(int n=0;n<3;++n){
-        if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
+        if((planetMode_||selectedOrientedCollider_)&&tool_==TransformTool::Rotate&&n!=1)continue;
         float2 q[4];
         if(planeQuad(view,selectedPivot_,axes,n,h.worldLength,width,height,q)&&insideQuad(q,x,y))
             return tool_==TransformTool::Rotate?n:4+n;
     }
     if(tool_==TransformTool::Rotate) {
         for(int a=0;a<3;++a){
-            if(planetMode_&&a!=1)continue;
+            if((planetMode_||selectedOrientedCollider_)&&a!=1)continue;
             float3 u,v;ringBasis(axes[a],u,v);float2 prev{};bool hasPrev=false;
             for(int i=0;i<=kRingSegments;++i){
                 const float t=6.2831853f*float(i)/float(kRingSegments);
@@ -2139,7 +2668,6 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
         return best;
     }
     for(int a=0;a<3;++a){const float d=segmentDistance(x,y,h.px,h.py,h.tip[a][0],h.tip[a][1]);if(d<bestD){bestD=d;best=a;}}
-    if(tool_==TransformTool::Scale && std::hypot(x-h.px,y-h.py)<h.pick*1.4f)best=3; // centre: uniform
     return best;
 }
 bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
@@ -2159,6 +2687,7 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     float3 axes[3];handleAxes(axes);
     const auto h=axisHandles(view,selectedPivot_,axes,width,height);
     TransformDrag d;d.axis=axis;d.tool=tool_;d.id=selectedId_;d.pivot=selectedPivot_;
+    if(selectedOrientedCollider_)d.expectedRevision=terrainRevision_;
     for(int a=0;a<3;++a)d.axes[a]=axes[a];
     d.dir=axis<3?axes[axis]:float3{1,1,1};d.lengthPx=h.lengthPx;d.worldLength=h.worldLength;
     d.startX=x;d.value=tool_==TransformTool::Scale?1.0f:0.0f;
@@ -2296,6 +2825,7 @@ std::optional<StudioScene::TransformCommit> StudioScene::endTransformDrag() {
     if(drag_.axis<0)return std::nullopt;
     TransformCommit c;c.id=drag_.id;c.tool=drag_.tool;c.axis=drag_.axis;
     if(planetMode_)c.expectedRevision=planetTransformRevision_;
+    else c.expectedRevision=drag_.expectedRevision;
     if(drag_.tool==TransformTool::Move)c.move=drag_.moveOffset;
     else if(drag_.tool==TransformTool::Rotate)c.degrees=drag_.value;
     else c.factor=drag_.value;
@@ -2318,7 +2848,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
     const float u=std::min(W,H)*0.16f/110.0f;
     auto drawPlanes=[&](){
         for(int n=0;n<3;++n){
-            if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
+            if((planetMode_||selectedOrientedCollider_)&&tool_==TransformTool::Rotate&&n!=1)continue;
             float2 q[4];if(!planeQuad(view,pivot,axes,n,h.worldLength,W,H,q))continue;
             const bool hot=dragging&&(drag_.axis==4+n||(tool_==TransformTool::Rotate&&drag_.axis==n));
             const uint32_t base=hot?active:colors[n];
@@ -2331,7 +2861,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
         drawPlanes();
         const float3 toEye=normalize(view.eye()-pivot);
         for(int a=0;a<3;++a){
-            if(planetMode_&&a!=1)continue;
+            if((planetMode_||selectedOrientedCollider_)&&a!=1)continue;
             const bool hot=dragging&&drag_.axis==a;
             float3 bu,bv;ringBasis(axes[a],bu,bv);
             float2 prev{};bool hasPrev=false;
@@ -2605,6 +3135,73 @@ void StudioScene::move(float right, float up, float forward) {
                        -std::cos(yaw)*std::cos(camera_.pitch)};
     camera_.target += (side*right + float3{0,1,0}*up + ahead*forward)*speed;
 }
+const editor::TerrainTileSurface* StudioScene::groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface) {
+    auto& tiles=drag_.id.empty()?terrainTileSurface_:dragSurface;
+    if(!tiles && map.data.extra.getStr("terrainPresentation")=="entities"){
+        for(const auto& instance:modelInstances_){
+            if(!instance.model || hidden_.count(instance.id))continue;
+            const int index=studioMapEntityIndex(instance.id,map);
+            if(index<0 || !editor::isTerrainTile(map.data.entities[size_t(index)]))continue;
+            if(!tiles)tiles.emplace(map.data.w,map.data.h);
+            const auto world=instance.id==drag_.id ? dragPreview()*instance.world : instance.world;
+            tiles->add(*instance.model,world);
+        }
+    }
+    return tiles?&*tiles:nullptr;
+}
+Json StudioScene::groundHeights(const Json& points,const editor::MapDoc& map) {
+    if(!points.isArray())throw std::runtime_error("points must be [[x,z],...]");
+    std::vector<std::pair<float,float>> coordinates;
+    for(const auto& point:points.items()){
+        if(!point.isArray() || point.size()<2 || !point[0].isNumber() || !point[1].isNumber())
+            throw std::runtime_error("Each ground point requires numeric x and z");
+        const float x=float(point[0].toDouble()),z=float(point[1].toDouble());
+        if(!std::isfinite(x)||!std::isfinite(z))throw std::runtime_error("Ground coordinates must be finite");
+        coordinates.emplace_back(x,z);
+    }
+    std::optional<editor::TerrainTileSurface> dragSurface;
+    const auto* tiles=coordinates.empty()?nullptr:groundTiles(map,dragSurface);
+    Json heights=Json::array();
+    for(const auto& [x,z]:coordinates){
+        const float base=terrainMeshHeight(map.data,x,z,terrainLevelHeight_,baseTerrainView_);
+        heights.push(Json::number(double(tiles?tiles->sample(x,z,base):base),3));
+    }
+    Json result=Json::object();
+    result.set("heights",heights);
+    return result;
+}
+
+Json StudioScene::focusCoordinates(float x,float y,float z,float distance,const editor::MapDoc& map) {
+    float3 target{x,y,z};
+    float yaw=camera_.yaw,pitch=camera_.pitch;
+    Json out=Json::object();
+    if(map.data.planet()){
+        if(!planetPreview_ || !planetMode_ || planetMapPath_!=map.path || planetRevision_!=map.revision)
+            throw std::runtime_error("Planet surface unavailable");
+        const auto view=viewCamera();
+        float3 origin,ray;
+        if(!view.screenRay(.5f,.5f,1,1,origin,ray))throw std::runtime_error("Invalid Scene camera");
+        const auto at=planetPreview_->groundPlacement(origin,ray,visiblePlanetTerrain());
+        if(!at)throw std::runtime_error("Point the Scene camera at a planetary face");
+        const int face=int(at->getInt("face"));
+        const float side=float(planetPreview_->faceSize);
+        const auto a=StudioPlanetPreview::fixed(std::clamp(x,0.f,side));
+        const auto b=StudioPlanetPreview::fixed(std::clamp(z,0.f,side));
+        game::CubeSphere cube(planetPreview_->faceSize);
+        const auto up=normalize(StudioPlanetPreview::f3(cube.dirFromFace(face,a,b)));
+        // The mesh is radial. Casting from its center excludes intersections
+        // with the back hemisphere, even when the cell lies on a triangle edge.
+        const float radius=planetPreview_->terrainHit({},up,visiblePlanetTerrain());
+        if(!std::isfinite(radius))throw std::runtime_error("Planet focus cell has no rendered terrain");
+        target=up*radius;
+        yaw=std::atan2(up.x,up.z);pitch=std::asin(std::clamp(up.y,-1.f,1.f));
+        out.set("body",Json::string(planetPreview_->bodyId));out.set("face",Json::number(int64_t(face)));
+    }
+    const auto zoom=distance>0?std::clamp(distance,camera_.minDistance,camera_.maxDistance):camera_.distance;
+    startTween(target,zoom,yaw,pitch);
+    out.set("ok",Json::fromBool(true));
+    return out;
+}
 void StudioScene::focusSelected(const editor::MapDoc& map,bool fpsProject,
                                       const std::string& selectedId) {
     if(map.data.planet()){
@@ -2707,7 +3304,7 @@ void StudioScene::renderCaveGlobe(int width,int height,const editor::MapDoc& doc
     // No chart or flat-scene object submissions in overview mode.
     camera_.target={0,0,0};camera_.distance=std::clamp(camera_.distance,12.f,100.f);
     tween_.active=false;
-    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    beginMapOutput(width,height);StudioFrameScope scope{*device_};
     renderer_.beginScene(viewCamera(),width,height);
     renderer_.clearDynamicGiOverlay();
     renderer_.lighting=render::Lighting{};
@@ -2720,7 +3317,9 @@ void StudioScene::renderCaveGlobe(int width,int height,const editor::MapDoc& doc
                 {.95f,.66f,.18f,1},kDrawNoCastShadow);
     }
     gfx::PassDesc pass;pass.clearColor[0]=.025f;pass.clearColor[1]=.035f;pass.clearColor[2]=.06f;pass.clearColor[3]=1.f;
+    setMapOutput(pass);
     renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();
+    readMapOutput();
     globeReady_=globe_.has_value()&&globeMesh_.vb.valid()&&globeMesh_.ib.valid();
     ++framesDrawn_;
 }
@@ -2756,13 +3355,338 @@ void StudioScene::finishReplayTransaction() {
         rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
     }
 }
+void StudioScene::setPostPreview(const std::string& project,const Json& game,const Json& map,PrismaQuality quality,bool visible) {
+    const bool projectChanged=postProject_!=project;
+    if (projectChanged) {
+        post_.setImageLoader([project](const std::string& path,int& w,int& h,std::vector<uint8_t>& pixels){
+            std::string bytes;
+            return readPreviewAsset(project,path,bytes) && render::decodeImage(bytes,w,h,pixels);
+        });
+    }
+    if (projectChanged || game!=gamePostSettings_ || map!=mapPostSettings_) {
+        if (game.isNull() && map.isNull()) {
+            post_.configure(game,map);
+            PrismaSettings settings;
+            settings.hdr=HdrMode::On;
+            post_.setSettings(settings);
+        } else post_.configure(game,map);
+        postProject_=project;gamePostSettings_=game;mapPostSettings_=map;
+    }
+    post_.setQuality(quality);
+    post_.setEnabled(visible);
+}
+Json StudioScene::prismaFrameReports(const std::string& project, const std::string& map) const {
+    if (project.empty() || prismaReportProject_ != project || prismaReportMap_ != map) return Json::array();
+    return render::prismaViewReports(post_);
+}
+Json StudioScene::lensViewPose() const {
+    if (!cameraInitialized_) throw std::runtime_error("Open Scene to copy its camera");
+    const auto view = viewCamera();
+    const auto eye = view.eye();
+    const auto rotation = render::cameraPoseRotation(view);
+    auto array = [](std::initializer_list<float> values) {
+        Json result = Json::array();
+        for (float value : values) result.push(Json::number(double(value),9));
+        return result;
+    };
+    Json result = Json::object();
+    result.set("position", array({eye.x, eye.y, eye.z}));
+    result.set("rotation", array({rotation.x, rotation.y, rotation.z, rotation.w}));
+    Json projection=Json::object();
+    projection.set("projection",Json::string(view.ortho?"ortho":"perspective"));
+    projection.set("fov",Json::number(double(view.fovY),9));
+    projection.set("near",Json::number(double(view.zNear),9));
+    projection.set("far",Json::number(double(view.zFar),9));
+    projection.set("orthographicHalfHeight",Json::number(double(view.orthoHalfHeight()),9));
+    result.set("camera",std::move(projection));
+    return result;
+}
+Json StudioScene::configureLensCamera(const Json& params) {
+    World world;
+    SceneHierarchy hierarchy;
+    std::vector<Entity> entities;
+    std::string error;
+    if (!loadCameraScene(world, hierarchy, params["document"], &entities, &error)) throw std::runtime_error(error);
+    hierarchy.update(world);
+    for (Entity entity : entities) {
+        auto* name = world.tryGetConst<CameraNameComponent>(entity);
+        if (!name || int64_t(name->stableId) != params.getInt("id")) continue;
+        render::EcsCameraView selected;
+        if (!render::resolveEcsCamera(world,entity,selected)) throw std::runtime_error("Enable the camera to preview its view");
+        const auto* lens = world.tryGetConst<CameraLensComponent>(entity);
+        if (lens && lens->physicalFov && render::validCameraLens(*lens))
+            selected.camera.fovY = 2.f * std::atan(float(lens->sensorHeightMm.toDouble()/(2.*lens->focalLengthMm.toDouble())));
+        if(params.getBool("useInScene")) pendingSceneLens_=selected.camera;
+        else { lensCamera_=selected.camera; prismaReportProject_.clear(); }
+        lastFrameSignature_ = 0;
+        sceneCacheValid_ = false;
+        return Json::object();
+    }
+    throw std::runtime_error("Select an existing camera");
+}
+Json StudioScene::sourceModelCommand(const std::string& project,const Json& rules,const Json& params){
+    if(params["type"].isString()){
+        auto next=std::make_unique<ConfiguredModel>(*device_,renderer_,rules);
+        const int index=next->rules.findType(params.getStr("type"));
+        if(index<0)throw std::runtime_error("Unknown game type");
+        next->type=uint16_t(index);
+        next->view.setGpuDeviceLease(deviceLifetime_->lease());
+        next->view.setDeferredLoading(true);
+        next->view.setContentBase(project+"/");
+        try{
+            if(!next->view.init(*device_,next->rules,[project](const std::string& path,std::string& bytes){
+                return readPreviewAsset(project,path,bytes);
+            }))throw std::runtime_error("Game type preview initialization failed");
+            next->view.loadType(next->type);
+            if(configuredModel_)configuredModel_->shutdown();
+        }catch(...){
+            try{next->shutdown();}catch(...){(void)next.release();}
+            throw;
+        }
+        configuredModel_=std::move(next);
+        attachmentPreview_.reset();
+    }
+    if(params["model"].isString()){
+        Json layout=Json::object();layout.set("parent",params["model"]);layout.set("attachments",Json::array());
+        Json settings=params;settings.set("document",layout);settings.set("playing",Json::fromBool(false));
+        auto result=attachmentCommand(project,settings,true);
+        if(configuredModel_){configuredModel_->shutdown();configuredModel_.reset();}
+        return result;
+    }
+    if(!configuredModel_)return attachmentCommand(project,params,true);
+    auto& model=*configuredModel_;
+    if(params.has("owner"))model.owner=int(std::clamp<int64_t>(params.getInt("owner"),0,8));
+    if(params.has("playing"))model.playing=params.getBool("playing");
+    if(params.has("yaw"))model.yaw=float(params["yaw"].toDouble());
+    if(params.has("pitch"))model.pitch=float(std::clamp(params["pitch"].toDouble(),-.9,1.4));
+    Json result=Json::object();
+    result.set("time",Json::number(model.time));return result;
+}
+void StudioScene::drawSourceModel(int width,int height){
+    if(!configuredModel_){drawAttachments(width,height);return;}
+    if(width<2||height<2)return;
+    auto& model=*configuredModel_;
+    const auto now=std::chrono::steady_clock::now();
+    if(model.playing&&model.last.time_since_epoch().count())
+        model.time+=std::min(.1,std::chrono::duration<double>(now-model.last).count());
+    model.last=now;
+    render::Camera camera;
+    const float heightHint=std::max(.3f,float(model.rules.types[model.type].view["height"].toDouble(1)));
+    const float radius=std::max(heightHint,model.view.selectionRadius(model.type));
+    camera.target={0,heightHint*.45f,0};camera.distance=radius*2.65f*std::max(1.f,float(height)/width);
+    camera.minDistance=.05f;camera.yaw=model.yaw;camera.pitch=model.pitch;
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
+    renderer_.beginScene(camera,width,height);
+    renderer_.lighting.skyColor={.8f,.85f,.9f};renderer_.lighting.fogDensity=0;
+    model.view.drawPreview(renderer_,model.type,uint8_t(model.owner),model.time,0.f);
+    gfx::PassDesc pass;pass.clearColor[0]=.07f;pass.clearColor[1]=.09f;pass.clearColor[2]=.135f;
+    renderer_.render(pass);
+}
+Json StudioScene::attachmentCommand(const std::string& project,const Json& params,bool originalModel){
+    if(!attachmentPreview_)attachmentPreview_=std::make_unique<StudioAttachmentPreview>(*device_,renderer_,deviceLifetime_->lease());
+    if(params.has("document")){
+        auto result=attachmentPreview_->publish(project,params["document"],originalModel);
+        attachmentPreview_->controls(params);
+        return result;
+    }
+    if(params.getBool("status")){
+        Json result=Json::object();result.set("time",Json::number(double(attachmentPreview_->time()),4));return result;
+    }
+    attachmentPreview_->controls(params);return Json::object();
+}
+Json StudioScene::gpuEmitterCommand(const std::string& project,const Json& params){
+    if(!gpuEmitter_)gpuEmitter_=std::make_unique<StudioGpuEmitterPlayback>(*device_,project);
+    return gpuEmitter_->command(params);
+}
+void StudioScene::drawGpuEmitter(int width,int height){
+    if(!gpuEmitter_||width<2||height<2)return;
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
+    gpuEmitter_->draw(renderer_,width,height);
+}
+Json StudioScene::effectFileCommand(const std::string& project,const Json& params){
+    if(!effectFile_)effectFile_=std::make_unique<StudioEffectPlayback>(*device_,deviceLifetime_->lease(),project);
+    return effectFile_->command(params);
+}
+std::optional<float3> StudioScene::natureGroundPoint(float x,float y,float width,float height) const {
+    float3 origin,direction;
+    if(!natureView_ || x<0 || y<0 || x>=width || y>=height ||
+       !natureView_->renderedCamera.screenRay(x,y,width,height,origin,direction))return {};
+    const float t=studioRayMesh(origin,direction,terrainCpu_);
+    if(!std::isfinite(t))return {};
+    return origin+direction*t;
+}
+static void drawFieldOutline(Renderer3D& renderer,Vec3 center,Fixed radius,physis::DebugColor c) {
+    const float r=float(radius.toDouble()), y=float(center.y.toDouble());
+    const auto point=[&](int i){
+        const float angle=float(i%48)*6.28318530718f/48.f;
+        return float3{float(center.x.toDouble())+r*std::cos(angle),y,float(center.z.toDouble())+r*std::sin(angle)};
+    };
+    for (int i=0;i<48;++i) renderer.line(point(i),point(i+1),rgba(c.r,c.g,c.b,c.a));
+}
+
+static void drawHeatmapTiles(Renderer3D& renderer,const StudioScene::HeatmapTiles& tiles,float alpha) {
+    for (const auto& tile:tiles) {
+        float3 corners[4];
+        for (int i=0;i<4;++i) {
+            const auto& p=tile.corners[i];
+            corners[i]={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+        }
+        const auto color=rgba(tile.color.r,tile.color.g,tile.color.b,int(alpha*tile.color.a));
+        renderer.triangle(corners[0],corners[1],corners[2],color);
+        renderer.triangle(corners[0],corners[2],corners[3],color);
+    }
+}
+
+Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const World& source,const editor::MapDoc& map,
+                             const std::string& project,float levelHeight,const editor::SceneScreenshotOptions& capture) {
+    if(width<2 || height<2)return Json::object();
+    if(!natureView_){
+        natureView_=std::make_unique<NatureView>(*device_,deviceLifetime_->lease(),project,map);
+        buildTerrainPreview(map.data,terrainCpu_,levelHeight);
+        if(!terrainCpu_.empty())terrain_=terrainCpu_.upload(*device_);
+    }
+    auto& view=*natureView_;
+    const auto now=std::chrono::steady_clock::now();
+    const float dt=view.last.time_since_epoch().count()?std::clamp(std::chrono::duration<float>(now-view.last).count(),0.f,.12f):0.f;
+    view.last=now;
+    const auto heightAt=[&](float x,float z){return terrainPreviewHeight(map.data,x,z,levelHeight);};
+    render::Camera camera;
+    camera.target={map.data.w*.5f,heightAt(map.data.w*.5f,map.data.h*.5f),map.data.h*.5f};
+    camera.distance=state.distance;camera.pitch=state.pitch;camera.yaw=state.yaw;
+    if (state.forestEnabled && state.forestHorizon) camera.zFar=std::max(camera.zFar,14000.f);
+    camera=capture.camera(camera);
+    view.renderedCamera=camera;
+    if(view.ignition!=state.ignitionRevision || view.display.settings.grass!=state.preview.settings.grass)
+        view.display.invalidateFrame();
+    if(view.ignition!=state.ignitionRevision)state.overlay.dirty=true;
+    view.ignition=state.ignitionRevision;
+    view.display.settings=state.preview.settings;
+    view.display.settings.enabled=state.showNature && state.preview.settings.enabled;
+    auto& particles=view.particles_;
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
+    renderer_.beginScene(camera,width,height);
+    renderer_.lighting.skyColor={.7f,.8f,.95f};renderer_.lighting.fogDensity=0;
+    if(terrain_.vb.valid() && terrain_.ib.valid())renderer_.drawMesh(terrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+    particles.setView(camera,renderer_.viewProj(),width,height);
+    auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
+    (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
+    const double seconds=std::chrono::duration<double>(now.time_since_epoch()).count();
+    view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,seconds,heightAt,retire);
+    renderer_.setSceneWind(view.display.sceneWind(seconds));
+    renderer_.setWindRigDebugView(state.forestEnabled?state.forestMask:render::wind::WindDebugView::Off);
+    using Geometry=terraweave::ArborTreeGeometry;
+    view.forest.setTreeGeometry(state.treeGeometry=="merged"?Geometry::Merged:
+                                state.treeGeometry=="perBranch"?Geometry::PerBranch:Geometry::Auto);
+    view.forest.setHierarchicalWind(state.hierarchical);
+    view.forest.setLodScale(state.forestLodScale);
+    view.forest.setHorizon(state.forestHorizon);
+    view.forest.setEnabled(state.forestEnabled);
+    if (state.forestEnabled) {
+        const auto eye=renderer_.cameraPos();
+        view.forest.draw(*device_,renderer_,map,std::llround(eye.x*100.),std::llround(eye.z*100.),
+            [&](int64_t x,int64_t z){return int32_t(std::llround(heightAt(float(x)*.01f,float(z)*.01f)*100.));});
+    }
+    particles.update(dt);
+    std::vector<fx::FxPointLight> lights;
+    particles.collectLights(lights);
+    for(const auto& light:lights)renderer_.lights.add(light.pos,light.radius,light.color,light.intensity);
+    int overlayTiles=0, overlayVolumes=0;
+    if (state.overlay.enabled) {
+        editor::updatePhysisOverlayTiles(state.overlay,source,camera.target.x,camera.target.z);
+        drawHeatmapTiles(renderer_,state.overlay.tiles,state.overlay.alpha);
+        overlayTiles=int(state.overlay.tiles.size());
+        if (state.overlay.drawVolumes) {
+            editor::eachPhysisOverlayVolume(source,view.display.tick(),[&](Vec3 center,Fixed radius,physis::DebugColor c){
+                if (overlayVolumes>=32 || radius<=Fixed{}) return;
+                drawFieldOutline(renderer_,center,radius,c);
+                ++overlayVolumes;
+            });
+        }
+    }
+    gfx::PassDesc pass;pass.clearColor[0]=.09f;pass.clearColor[1]=.12f;pass.clearColor[2]=.14f;
+    renderer_.render(pass);particles.render({renderer_.lighting.fogColor,0});
+    Json stats=Json::object();
+    stats.set("tick",Json::number(int64_t(view.display.tick())));
+    stats.set("yaw",Json::number(double(camera.yaw)));
+    stats.set("pitch",Json::number(double(camera.pitch)));
+    stats.set("distance",Json::number(double(camera.distance)));
+    stats.set("overlayVolumesDrawn",Json::number(int64_t(overlayVolumes)));
+    stats.set("overlayTiles",Json::number(int64_t(overlayTiles)));
+    stats.set("forestInstances",Json::number(int64_t(state.forestEnabled?view.forest.visibleInstances():0)));
+    stats.set("patches",Json::number(int64_t(view.display.grassPatches())));
+    stats.set("flames",Json::number(int64_t(view.display.flames())));
+    stats.set("smoke",Json::number(int64_t(view.display.smoke())));
+    stats.set("burningAreaM2",Json::number(double(view.display.burningArea())));
+    stats.set("grassBladeLimit",Json::number(int64_t(view.display.grassBladeLimit())));
+    stats.set("masterVolume",Json::number(double(view.display.masterVolume())));
+    stats.set("particles",Json::number(int64_t(particles.stats().particles)));
+    stats.set("voices",Json::number(int64_t(view.display.voices())));
+    return stats;
+}
+void StudioScene::drawEffectFile(int width,int height){
+    if(!effectFile_ || width<2 || height<2)return;
+    beginDeviceFrame(width,height);
+    StudioFrameScope frame{*device_};
+    effectFile_->draw(renderer_,width,height);
+}
+void StudioScene::drawAttachments(int width,int height){
+    if(!attachmentPreview_||!attachmentPreview_->ready()||width<2||height<2)return;
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
+    attachmentPreview_->draw(width,height);
+}
+
+void StudioScene::drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
+                                    const render::Pose& pose,float yaw) {
+    if(!device_||width<2||height<2)return;
+    if(source!=animationSource_){
+        if(animationModel_){
+            if(!device_->waitForResourceIdle())throw std::runtime_error("Animation preview GPU busy");
+            releasePreviewModel(*animationModel_);
+            animationModel_.reset();
+            animationSource_.reset();
+        }
+        if(source){
+            auto model=std::make_unique<render::Model>(*source);
+            try {
+                if(!render::uploadModel(*device_,*model))throw std::runtime_error("Animation model upload failed");
+            } catch(...){releasePreviewModel(*model);throw;}
+            animationModel_=std::move(model);
+            animationSource_=source;
+        }
+    }
+    render::Camera camera;
+    camera.yaw=yaw;camera.pitch=.15f;camera.minDistance=.01f;camera.fovY=.6f;
+    if(source){
+        camera.target=(source->boundsMin+source->boundsMax)*.5f;
+        const auto size=source->boundsMax-source->boundsMin;
+        camera.distance=std::max({size.x,size.y,size.z,.3f})*2.1f*std::max(1.f,float(height)/width);
+    }
+    beginDeviceFrame(width,height);
+    StudioFrameScope frame{*device_};
+    renderer_.beginScene(camera,width,height);
+    renderer_.lighting.skyColor={.8f,.85f,.9f};
+    renderer_.lighting.groundColor={.5f,.5f,.5f};
+    renderer_.lighting.fogDensity=0;
+    std::vector<render::mat4> world;
+    if(animationModel_&&pose.size()==animationModel_->nodes.size()){
+        render::worldMatrices(*animationModel_,pose,world);
+        render::ModelDraw draw;
+        draw.model=animationModel_.get();draw.nodeWorld=&world;draw.pose=&pose;
+        renderer_.drawModel(draw);
+    }
+    gfx::PassDesc pass;
+    pass.clearColor[0]=.07f;pass.clearColor[1]=.09f;pass.clearColor[2]=.135f;
+    renderer_.render(pass,&antialiasing_);
+    renderer_.resolvePostFx();
+}
+
 void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     if(!device_ || framebufferWidth<2 || framebufferHeight<2)return;
     // GPU updates/retirement happen between frames, before an active pass.
     if(antialiasing_.pendingTargetRetirements())antialiasing_.collectRetiredTargets();
     if(renderer_.pendingProgramRetirements())renderer_.collectRetiredPrograms();
     if(renderer_.pendingTargetRetirements())renderer_.collectRetiredTargets();
-    device_->beginFrame(framebufferWidth,framebufferHeight);
+    beginDeviceFrame(framebufferWidth,framebufferHeight);
     StudioFrameScope scope{*device_};
     const auto view=viewCamera();
     const float aspect=float(framebufferWidth)/float(framebufferHeight);
@@ -2832,6 +3756,51 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     while(fxFrameProvenance_->size()>64)fxFrameProvenance_->pop_front();
     // StudioFrameScope closes the native pass and frame on owner thread.
 }
+void StudioScene::renderMapOutput(const StudioSceneDocument& document,int width,int height,const std::function<void(int,int)>& draw) {
+    if(!mapCapture_ || mapCapture_->document!=document){draw(width,height);return;}
+    auto request=std::move(*mapCapture_);
+    mapCapture_.reset();
+    if(request.options.width){
+        width=request.options.width;height=request.options.height;
+    }else{
+        std::tie(width,height)=editor::SceneScreenshotOptions::boundedViewportSize(width,height);
+    }
+    captureOutput_=&request;
+    lastFrameSignature_=0;
+    try { draw(width,height); }
+    catch(const std::exception& e){std::fprintf(stderr,"Studio Scene export: %s\n",e.what());}
+    captureOutput_=nullptr;
+    lastFrameSignature_=0;
+    if(request.callback)request.callback(0,0,{});
+}
+
+void StudioScene::beginMapOutput(int width,int height) {
+    if(!captureOutput_){beginDeviceFrame(width,height);return;}
+    if(width!=captureWidth_ || height!=captureHeight_ || !captureColor_.valid() || !captureDepth_.valid()){
+        if((captureColor_.valid() || captureDepth_.valid()) && !device_->waitForResourceIdle())
+            throw std::runtime_error("Scene export target is still in use");
+        if(captureColor_.valid())device_->destroyTexture(captureColor_);
+        if(captureDepth_.valid())device_->destroyTexture(captureDepth_);
+        captureColor_={};captureDepth_={};
+        gfx::TextureDesc texture;texture.width=width;texture.height=height;texture.renderTarget=true;
+        texture.format=gfx::PixelFormat::RGBA8;texture.label="Scene export color";
+        captureColor_=device_->createTexture(texture);
+        texture.format=gfx::PixelFormat::Depth;texture.label="Scene export depth";
+        captureDepth_=device_->createTexture(texture);
+        if(!captureColor_.valid() || !captureDepth_.valid())throw std::runtime_error("Scene export target allocation failed");
+        captureWidth_=width;captureHeight_=height;
+    }
+    if(!device_->beginOffscreenFrame())throw std::runtime_error("Scene export frame unavailable");
+}
+void StudioScene::setMapOutput(gfx::PassDesc& pass) const {
+    if(captureOutput_){pass.colorTarget=captureColor_;pass.depthTarget=captureDepth_;}
+}
+void StudioScene::readMapOutput() {
+    if(!captureOutput_)return;
+    device_->endPass();
+    if(device_->captureTexture(captureColor_,captureOutput_->callback))captureOutput_->callback={};
+}
+
 void StudioScene::frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                              bool fpsProject, const std::string& selectedId,
                              const std::string& previewName, const Json& previewFactors,
@@ -2841,6 +3810,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     static const StudioFacialPreviewBinding kNoFacialBinding{};
     const StudioFacialPreviewBinding& facialBinding=facialBindingIn?*facialBindingIn:kNoFacialBinding;
     const std::string& projectRoot=projectPath;
+    renderer_.setBakedLighting(nullptr);
     // Project changes invalidate runtime particle buffers and preview input
     // so a previous project's effect can never render in the new Scene.
     if(spectraProject_!=projectRoot){
@@ -2867,7 +3837,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // orbit/zoom/pan operate on camera_ and never mutate the project.
     if(buildingPreview_ && buildingPreviewGpuReady_){
         lastFrameSignature_=0; // redraw while interactive camera is active
-        device_->beginFrame(framebufferWidth,framebufferHeight);
+        beginDeviceFrame(framebufferWidth,framebufferHeight);
         StudioFrameScope scope{*device_};
         renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
         renderer_.clearDynamicGiOverlay();
@@ -2938,7 +3908,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 camera_.distance=v=="face"?.85f:v=="torso"?2.f:4.2f;
                 camera_.pitch=v=="face"?.05f:.15f;camera_.yaw=0;camera_.ortho=false;tween_.active=false;
             }
-            device_->beginFrame(framebufferWidth,framebufferHeight);
+            beginDeviceFrame(framebufferWidth,framebufferHeight);
             renderer_.beginScene(camera_,framebufferWidth,framebufferHeight);
             renderer_.clearDynamicGiOverlay(); // map GI must not leak into the isolated facial preview
             const auto* model=facialGpu_.model();
@@ -3020,24 +3990,99 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     if (materialRevision_ != previewRevision) {
         materialRevision_ = previewRevision;
-        if (materialRequested) {
-            if (!materialSphere_) {
-                // Same primitive->Model->GPU path used by AIVERSE's HDR material gallery.
+        graphPreviewError_.clear();
+        if(graphParticles_){
+            if(device_->waitForResourceIdle())graphParticles_.reset();
+            else graphPreviewError_="Cannot retire previous particle preview";
+        }
+        if(graphPreviewPost_){
+            if(device_->waitForResourceIdle()){graphPreviewPost_->shutdown();graphPreviewPost_.reset();}
+            else graphPreviewError_="Cannot retire previous post effect preview";
+        }
+        if (materialRequested && graphPreviewError_.empty()) {
+            const bool graphDraft=previewFactors.has("studioGraphDraft")&&previewName.rfind("Shader Graph / ",0)==0;
+            const Json& previewGraph=graphDraft ? previewFactors["studioGraphDraft"] : previewFactors["shaderGraph"];
+            if(graphDraft&&previewGraph.getStr("domain")=="particle"){
+                auto particles=std::make_unique<GraphParticlePreview>(*device_);
+                if(!particles->system.init(device_.get()))graphPreviewError_="Cannot initialize particle renderer";
+                else {
+                    particles->system.setTextureLoader([preview=particles.get(),root=projectRoot](const std::string& path,fx::FxTexture& out){
+                        auto found=preview->textures.find(path);
+                        if(found==preview->textures.end()){
+                            std::string bytes;std::vector<uint8_t> rgba;
+                            gfx::TextureDesc texture;
+                            if(!readPreviewAsset(root,path,bytes)||!render::decodeImage(bytes,texture.width,texture.height,rgba))return false;
+                            texture.data=rgba.data();texture.repeat=true;texture.mipmaps=true;texture.label=path.c_str();
+                            auto handle=preview->device.createTexture(texture);
+                            if(!handle.valid())return false;
+                            found=preview->textures.emplace(path,handle).first;
+                        }
+                        out={found->second,0,0,1,1};return true;
+                    });
+                    fx::EmitterDef emitter;emitter.shaderGraph=previewGraph;emitter.loop=true;
+                    emitter.rate={20,20};emitter.duration=2;emitter.life={1.2f,1.2f};
+                    emitter.speed={0.5f,1};emitter.size={0.25f,0.35f};
+                    fx::EffectDef effect;effect.emitters.push_back(std::move(emitter));
+                    const int id=particles->system.define("shader-preview",effect);
+                    if(id<0)graphPreviewError_=particles->system.errors().empty()?"Invalid particle graph":particles->system.errors().back();
+                    else {
+                        particles->system.play(id,{0,0,0});
+                        graphParticles_=std::move(particles);
+                    }
+                }
+            }
+            if(graphDraft&&previewGraph.getStr("domain")=="postfx"){
+                auto chain=std::make_unique<render::Prisma>();
+                try{
+                    if(!chain->init(*device_))throw std::runtime_error("Cannot initialize the post effect GPU preview");
+                    chain->setQuality(render::PrismaQuality::High);
+                    chain->setImageLoader([root=projectRoot](const std::string& path,int& w,int& h,std::vector<uint8_t>& rgba){
+                        std::string bytes;return readPreviewAsset(root,path,bytes)&&render::decodeImage(bytes,w,h,rgba);
+                    });
+                    Json effect=Json::object();effect.set("type",Json::string("shaderGraph"));effect.set("graph",previewGraph);
+                    Json effects=Json::array();effects.push(std::move(effect));
+                    Json settings=Json::object();settings.set("effects",std::move(effects));
+                    chain->configure(settings,Json::object());
+                    graphPreviewPost_=std::move(chain);
+                }catch(const std::exception& e){chain->shutdown();graphPreviewError_=e.what();}
+            }
+            const bool materialGraph=previewGraph.isObject() && previewGraph.getStr("domain","material")=="material";
+            if (!graphParticles_ && (!materialSphere_ || materialGraph || materialSphere_->materials.at(0).shaderGraph)) {
                 render::MeshBuilder sphere;
                 sphere.color(render::rgba(255,255,255));
                 sphere.sphere({0,0,0},1.0f,32,48);
-                render::Material base;
-                base.vertexColors=false;
-                materialSphere_ = render::modelFromParts("studio/pbr-preview",
-                    {{"PBR sphere",&sphere,base,render::mat4{}}});
-                if (!materialSphere_) throw std::runtime_error("Material preview geometry missing");
-                materialSphere_->batching.autoLod=false;
-                render::prepareModelUpload(*materialSphere_);
-                if (!render::uploadModel(*device_,*materialSphere_))
-                    throw std::runtime_error("Material preview GPU upload failed");
+                render::Material base=studioPbrPreviewMaterial(previewFactors,previewName);
+                auto next=render::modelFromParts("studio/pbr-preview",{{"PBR sphere",&sphere,base,render::mat4{}}});
+                try {
+                    if(!next)throw std::runtime_error("Material preview geometry missing");
+                    if(materialGraph){
+                        Json ref=Json::object();ref.set("shaderGraph",previewGraph);
+                        view::AppearanceAuthoringService::applyMaterial(next->materials.at(0),Json::object(),ref,
+                            [&](const std::string& path){
+                                std::string bytes;
+                                render::Image image;image.name=path;
+                                if(!readPreviewAsset(projectRoot,path,bytes)||!render::decodeImage(bytes,image))
+                                    throw std::runtime_error("Cannot load graph texture "+path);
+                                next->images.push_back(std::move(image));
+                                return int(next->images.size()-1);
+                            },[](const std::string& message){throw std::runtime_error(message);});
+                    }
+                    next->batching.autoLod=false;
+                    render::prepareModelUpload(*next);
+                    if(!render::uploadModel(*device_,*next))throw std::runtime_error("Material preview GPU upload failed");
+                    if(materialSphere_){
+                        if(!device_->waitForResourceIdle())throw std::runtime_error("Material preview GPU busy");
+                        releasePreviewModel(*materialSphere_);
+                    }
+                    materialSphere_=std::move(next);
+                } catch(const std::exception& e){
+                    if(next)releasePreviewModel(*next);
+                    graphPreviewError_=e.what();
+                }
+            }else if(!graphParticles_){
+                materialSphere_->materials.at(0)=studioPbrPreviewMaterial(previewFactors,previewName);
+                materialSphere_->markMaterialChanged();
             }
-            materialSphere_->materials.at(0)=studioPbrPreviewMaterial(previewFactors,previewName);
-            materialSphere_->markMaterialChanged(); // invalidate renderer-owned material signature
         }
     }
     if (materialMode_ != materialRequested) {
@@ -3046,7 +4091,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         cameraInitialized_=false;
     }
     if (materialMode_) {
-        lightingStatus_="Material preview · GI: off · Direct: standard";
+        lightingStatus_=graphPreviewError_.empty()
+            ? (previewFactors.has("studioGraphDraft")?previewName+" · GPU "+previewFactors["studioGraphDraft"].getStr("domain")+" preview":"Material preview · GI: off · Direct: standard")
+            : graphPreviewError_;
         if (!cameraInitialized_) {
             camera_.target={0,0,0};
             camera_.distance=4.3f;
@@ -3056,8 +4103,25 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             tween_.active=false;
             cameraInitialized_=true;
         }
-        device_->beginFrame(framebufferWidth,framebufferHeight);
+        beginDeviceFrame(framebufferWidth,framebufferHeight);
         StudioFrameScope scope{*device_};
+        if(graphParticles_&&graphPreviewError_.empty()){
+            const auto now=std::chrono::steady_clock::now();
+            auto& particles=*graphParticles_;
+            float dt=particles.lastFrame==std::chrono::steady_clock::time_point{}?0.1f:
+                std::min(0.1f,std::chrono::duration<float>(now-particles.lastFrame).count());
+            particles.lastFrame=now;
+            render::Camera cam;cam.target={0,.3f,0};cam.distance=3;cam.minDistance=.1f;
+            const auto projection=cam.proj(float(framebufferWidth)/framebufferHeight,device_->info().clipDepthZeroToOne);
+            particles.system.setView(cam,projection*cam.view(),framebufferWidth,framebufferHeight);
+            particles.system.update(dt);
+            gfx::PassDesc pass;pass.clearColor[0]=.07f;pass.clearColor[1]=.09f;pass.clearColor[2]=.135f;
+            device_->beginPass(pass);device_->setViewport({0,0,framebufferWidth,framebufferHeight});
+            particles.system.render({});
+            if(!particles.system.lastError().empty())lightingStatus_=particles.system.lastError();
+            if(!particles.system.errors().empty())lightingStatus_=particles.system.errors().back();
+            return;
+        }
         renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
         renderer_.clearDynamicGiOverlay();
         renderer_.lighting=render::Lighting{};
@@ -3066,7 +4130,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lighting.groundColor={.27f,.27f,.31f};
         renderer_.lighting.fogDensity=0;
         renderer_.lights.add({1.5f,2.4f,1.6f},6,{1,.9f,.78f},2.5f);
-        if (materialSphere_) {
+        if (materialSphere_ && graphPreviewError_.empty()) {
             render::ModelDraw sample;
             sample.model=materialSphere_.get();
             renderer_.drawModel(sample);
@@ -3077,11 +4141,15 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         previewPass.clearColor[0]=.07f;
         previewPass.clearColor[1]=.09f;
         previewPass.clearColor[2]=.135f;
-        renderer_.render(previewPass,&antialiasing_);
+        render::PostProcess* previewPost=graphPreviewPost_?static_cast<render::PostProcess*>(graphPreviewPost_.get()):&antialiasing_;
+        renderer_.render(previewPass,previewPost);
         renderer_.resolvePostFx();
+        if(graphPreviewPost_&&!graphPreviewPost_->lastError().empty())lightingStatus_=graphPreviewPost_->lastError();
 
         return;
     }
+    if(sceneBake_)syncSceneBake(sceneBake_->enabled && !doc.data.planet()?projectPath:"",sceneBake_->enabled && !doc.data.planet()?doc.path:"");
+    const bool bakedScene=sceneBake_ && !sceneBake_->gpu.empty();
     if(doc.data.planet()){
         framePlanet(framebufferWidth,framebufferHeight,doc,selectedId,projectPath,rules);return;
     }
@@ -3118,15 +4186,24 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         // (hot reload), every frame only while models are still streaming in.
         const SceneCacheKey key{&doc,doc.revision,fpsProject,levelHeight,projectPath,&rules};
         const bool documentChanged=!sceneCacheValid_ || !(key==sceneKey_);
+        if (documentChanged || appliedWaterLook_ != planetTerrainLook_ || mapWaterBaseGrid_ != baseTerrainView_)
+            syncMapWater(map,levelHeight,!fpsProject && !map.worldSpace && !map.planet() &&
+                rules["terrain"].getBool("render",true) && map.extra.getStr("terrainPresentation","legacy")!="entities");
         if(documentChanged || modelsPending_ || now>=nextFileCheck_) {
             // The periodic pass also catches document changes that did not bump the
             // revision (direct loads) and rules edits, within a second.
             {
+                mapRoutes_.clear();
+                if(!fpsProject && !map.worldSpace && !map.planet() && map.extra["routes"].size()){
+                    game::Rules previewRules;
+                    if(rules["lanes"].isObject())game::loadRouteRules(rules["lanes"],previewRules.routes);
+                    mapRoutes_=editor::routePreviewLines(previewRules,doc);
+                }
                 proxies_=studioDocumentProxies(doc,fpsProject,levelHeight);
                 showTerrain_=rules["terrain"].getBool("render",true)&&map.extra.getStr("terrainPresentation","legacy")!="entities";
                 lightingSettings_=renderLightingSettings(doc.data.extra["renderLighting"]);
                 useLighting_=lightingSettings_.getStr("indirect")!="off" || lightingSettings_.getStr("direct")!="legacy";
-                activeLights_=studioAuthoredLights(doc,levelHeight,std::numeric_limits<size_t>::max());
+                activeLights_=studioAuthoredLights(doc,levelHeight,std::numeric_limits<size_t>::max(),bakedScene);
                 day_=previewDocumentDay(doc);
                 nereid_.configure(fpsProject?Json::object():editor::authoredWaterDocument(doc));
             }
@@ -3165,7 +4242,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         TerrainPreviewStats cutStats;
         Mesh replacement{};
         if(showTerrain){
-            cutStats=planetaryChart?buildPlanetChartPreview(map,source,doc.revision):buildTerrainPreview(map,source,levelHeight);
+            cutStats=planetaryChart?buildPlanetChartPreview(map,source,doc.revision):buildTerrainPreview(map,source,levelHeight,baseTerrainView_);
             if(!source.empty()){
                 replacement=source.upload(*device_);
                 if(!replacement.vb.valid()||!replacement.ib.valid()){
@@ -3182,6 +4259,16 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         terrainCutStats_=std::move(cutStats);
         terrainLevelHeight_=levelHeight;
         terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
+        regionBordersDirty_=true;
+        rampTiles_.clear();
+        resourceTiles_.clear();
+        if(!map.worldSpace && !planetaryChart && map.w>0 && map.cells.size()==size_t(map.w)*map.h){
+            const bool hasFields=map.fieldRes.size()==map.cells.size() && map.fieldAmt.size()==map.cells.size();
+            for(size_t i=0;i<map.cells.size();++i){
+                if(hasFields && map.fieldRes[i]>=0 && map.fieldAmt[i]>0)resourceTiles_.push_back({int(i%map.w),int(i/map.w)});
+                if(map.cells[i]=='/')rampTiles_.push_back({int(i%map.w),int(i/map.w)});
+            }
+        }
         terrainRevision_=doc.revision;
         planetTerrainDoc_=planetaryChart?&doc:nullptr;
         planetTerrainProject_=planetaryChart?projectPath:std::string{};
@@ -3210,15 +4297,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastFrameSignature_=0;
     }
     const Json& settings=lightingSettings_;
-    const bool useLighting=useLighting_&&!planetaryChart;
+    const bool useLighting=(useLighting_||bakedScene||weatherEnvironment_.has_value())&&!planetaryChart;
     const auto& activeLights=activeLights_;
-    Lighting environment;
-    const auto& day=day_;
+    const auto& day=weatherEnvironment_?weatherDay_:day_;
     const Json& lightingSource=doc.data.extra["lighting"];
-    if(lightingSource.isObject()) {
-        environment.sunIntensity=day.sun;
-        environment.skyColor={.5f*day.ambient,.58f*day.ambient,.7f*day.ambient};
-    }
+    Lighting environment=weatherEnvironment_.value_or(studioMapEnvironment(doc,day));
     const bool lightingForced=lightingRevision_==std::numeric_limits<uint64_t>::max();
     const bool lightingDue=lightingForced || continuousRedraw_ || now-lastDocChange_>=std::chrono::milliseconds(200) ||
                            now-lastLightingBuild_>=std::chrono::milliseconds(300);
@@ -3236,9 +4319,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             std::set<std::string> modelIds;
             for(const auto& instance:modelInstances_)modelIds.insert(instance.id);
             lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds,
-                (terrainCavernsAuthored_||sparseTerrain)?&terrainCpu_:nullptr);
+                (terrainCavernsAuthored_||sparseTerrain||terrainDetailScale(map)>0)?&terrainCpu_:nullptr);
             StaticShadowGeometry geometry;
             if(lightingModel_) {
+                if(bakedScene && !fpsProject)studioTerrainLightmapUv(*lightingModel_,sceneBake_->gpu.data().terrain);
                 prepareModelUpload(*lightingModel_);
                 geometry=giModelGeometry(*lightingModel_);
                 if(!uploadModel(*device_,*lightingModel_,true))throw std::runtime_error("Studio lighting upload failed");
@@ -3286,6 +4370,15 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastMapWidth_ = map.w;
         lastMapHeight_ = map.h;
     }
+    applyPendingSceneLens();
+    if(pendingSceneFocus_) {
+        auto [target,distance]=*pendingSceneFocus_;
+        pendingSceneFocus_.reset();
+        if(focusBounds_)focusBoundsUntil_=now+std::chrono::milliseconds(1600);
+        if(!fpsProject)target.y+=terrainPreviewHeight(doc.data,target.x,target.z,levelHeight,baseTerrainView_);
+        startTween(target,distance,camera_.yaw,camera_.pitch);
+    }
+    if(focusBounds_ && now>=focusBoundsUntil_)focusBounds_.reset();
     stepTween();
     const auto view=viewCamera();
     spectraSources_.synchronize(*device_,doc,projectRoot,hidden_,levelHeight,showTerrain,&nereid_.scene());
@@ -3295,8 +4388,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         constexpr int kSettleFrames=30;
         const uint64_t signature=frameSignature(framebufferWidth,framebufferHeight,doc,fpsProject,selectedId);
         // Pending Assets thumbnails render inside a drawn frame (one per frame).
-        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
-            lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
+        const bool animated=continuousRedraw_ || focusBounds_.has_value() || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
+            lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 || mapWater_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
             !thumbJobs_.empty() || spectraPreview_->needsFrame() || spectraSources_.animated(); // native FX playback forces draw
@@ -3307,7 +4400,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastDrawn_=now; ++framesDrawn_;
     }
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
-    device_->beginFrame(framebufferWidth, framebufferHeight);
+    beginMapOutput(framebufferWidth,framebufferHeight);
     StudioFrameScope scope{*device_};
     // Stage both preview owners before draw submission. Share the exact
     // surface plan pointer; neither half is drawn before its counterpart.
@@ -3316,7 +4409,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         try{
             if(sparseTerrainRetirement_.pending()>=128)throw std::runtime_error("Sparse terrain GPU retirement pressure");
             const auto cm=[](float v){return int64_t(std::llround(std::clamp(double(v),-9990000.,9990000.)*100.));};
-            sparseTerrainPreview_.prepare(*device_,doc,cm(camera_.target.x),cm(camera_.target.z),
+            sparseTerrainPreview_.prepare(*device_,doc,cm(view.target.x),cm(view.target.z),
                 retireSparse,cavernsPreview_.visible());
             sparsePrepared=true;sparseTerrainError_.clear();
         }catch(const std::exception& e){sparseTerrainError_=e.what();}
@@ -3326,7 +4419,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         ?planetCutPlan_:nullptr;
     cavernsPreview_.syncRimGroup(planetaryChart?chartGroup:surfaceGroup);
     cavernsPreview_.beforeRender(*device_,planetaryChart?view.eye():
-        brushVisible_&&brushVolume_?brushCenter_:camera_.target);
+        brushVisible_&&brushVolume_?brushCenter_:view.target);
     if(surfaceGroup&&!surfaceGroup->rims.empty()&&cavernsPreview_.rimRejected(surfaceGroup)){
         const auto why=cavernsPreview_.rimError();
         sparseTerrainPreview_.rejectSurfaceGroup(retireSparse,why.empty()?"Caverns matching volume unavailable":why);
@@ -3343,20 +4436,28 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
         spectraPreview_->prepare(fx::SpectraFxView::fromCamera(
-            view,viewProj,framebufferWidth,framebufferHeight),camera_.target);
+            view,viewProj,framebufferWidth,framebufferHeight),view.target);
     }
     {
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
         spectraSources_.prepare(fx::SpectraFxView::fromCamera(view,viewProj,framebufferWidth,framebufferHeight),1.f/60.f);
     }
+    mapWater_.prepare(*device_,view.eye());
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
     underwaterFrameTime_=opticalNow;
     renderThumbnail(); // at most one Assets thumbnail, offscreen, before the scene pass
+    struct RestoreModelDebug {
+        render::Renderer3D& renderer;
+        int previous;
+        ~RestoreModelDebug(){ renderer.setStudioDebugMode(previous); }
+    } restoreModelDebug{renderer_,renderer_.studioDebugMode()};
+    renderer_.setStudioDebugMode(cleanMapOutput() ? 0 : natureLayers_.modelDebugMode);
+    if(bakedScene)renderer_.setBakedLighting(&sceneBake_->gpu);
     renderer_.beginScene(view, framebufferWidth, framebufferHeight);
-    renderer_.setSceneSelectionOutline(true); // editor-only depth-tested silhouette
+    renderer_.setSceneSelectionOutline(!cleanMapOutput()); // editor-only depth-tested silhouette
     {
         const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-windClock_).count();
         renderer_.setSceneWind(wind_.sceneWind(seconds));
@@ -3364,15 +4465,29 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             render::wind::WindDebugView::Off : wind_.debug);
     }
     renderer_.lighting=environment;
-    if (lightingSource.isObject()) {
+    if (weatherEnvironment_ || lightingSource.isObject()) {
         renderer_.lights.setNightGlow(day.night*1.5f);
-        renderer_.lights.setClouds(day.clouds,.6f,16.f,0,0);
+        renderer_.lights.setClouds(day.clouds,.6f,16.f,-weatherSeconds_,-.5f*weatherSeconds_);
     }
     if(!planetaryChart&&(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled))
         for(const auto& light:activeLights)renderer_.lights.add(light);
-    lightingRuntime_.update(*device_,renderer_,camera_.target);
+    lightingRuntime_.update(*device_,renderer_,view.target);
     if(lightingRuntime_.indirect || lightingRuntime_.direct)lightingStatus_=lightingRuntime_.status();
 
+    if(staticScenery_ && staticScenery_->loaded && !cavernsPreview_.isolate() && !planetaryChart)
+    {
+        auto& scene=staticScenery_->scene;
+        render::strata::DebugViewOptions debug;
+        debug.color=static_cast<render::strata::DebugColorMode>(natureLayers_.strataColor);
+        debug.clusterBounds=natureLayers_.strataBounds;
+        debug.clusterWireframe=natureLayers_.strataWire;
+        debug.clusterFill=natureLayers_.strataFill;
+        debug.instanceBounds=natureLayers_.strataRoutes;
+        debug.enabled=debug.clusterBounds || debug.clusterWireframe || debug.clusterFill || debug.instanceBounds;
+        scene.setStrataDebugView(debug);
+        scene.setStrataDebugSuppressed(cleanMapOutput());
+        scene.draw(renderer_);
+    }
     // Real map dimensions and positions from the active native Workspace.
     // Temporary primitive preview (NOT legacy editor terrain, animation or materials).
     const float w = float(std::max(map.w, 1));
@@ -3396,13 +4511,48 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const int xStep = std::max(1, map.w / 48);
     const int zStep = std::max(1, map.h / 48);
-    for (int x=0; !planetaryChart && !fpsProject && x<=map.w; x+=xStep)
+    for (int x=0; !cleanMapOutput() && !planetaryChart && !fpsProject && x<=map.w; x+=xStep)
         renderer_.line({float(x),.01f,0},{float(x),.01f,h},rgba(55,84,109,120));
-    for (int z=0; !planetaryChart && !fpsProject && z<=map.h; z+=zStep)
+    for (int z=0; !cleanMapOutput() && !planetaryChart && !fpsProject && z<=map.h; z+=zStep)
         renderer_.line({0,.01f,float(z)},{w,.01f,float(z)},rgba(55,84,109,120));
 
     } // external/Terra surface suppresses the default plane and grid
 
+    if (!map.worldSpace && !map.planet() && !cavernsPreview_.isolate()) {
+        for (const auto& [a,b] : map.roads) {
+            if (a < 0 || b < 0 || size_t(a) >= map.entities.size() || size_t(b) >= map.entities.size()) continue;
+            const auto aId = studioDocumentId(doc, editor::DocumentEntityRef::mapEntity(size_t(a)));
+            const auto bId = studioDocumentId(doc, editor::DocumentEntityRef::mapEntity(size_t(b)));
+            if (hidden_.count(aId) || hidden_.count(bId)) continue;
+            auto endpoint = [&](int index, const std::string& id) {
+                const auto& entity = map.entities[size_t(index)];
+                float3 point{float(entity.x), 0, float(entity.z)};
+                if (id == drag_.id && drag_.tool == TransformTool::Move) point = point + drag_.moveOffset;
+                point.y = 0;
+                return point;
+            };
+            const auto from = endpoint(a, aId), to = endpoint(b, bId);
+            const auto delta = to - from;
+            const float distance = length(delta);
+            if (!std::isfinite(distance) || distance < 0.001f) continue;
+            const float3 side = float3{-delta.z, 0, delta.x} * (0.16f / distance);
+            const int segments = int(std::ceil(std::min(distance * 2, float(2 * std::max(map.w,map.h) + 1))));
+            auto surface = [&](float3 point) {
+                point.y = (showTerrain ? terrainPreviewHeight(map,point.x,point.z,levelHeight,baseTerrainView_) : 0.f) + 0.055f;
+                return point;
+            };
+            const uint32_t color = (selectedId == aId || selectedId == bId) ? rgba(255,201,91) : rgba(212,170,104);
+            auto left = surface(from - side), right = surface(from + side);
+            for (int i = 1; i <= segments; ++i) {
+                const auto center = lerp(from, to, float(i) / float(segments));
+                const auto nextLeft = surface(center - side), nextRight = surface(center + side);
+                renderer_.triangle(left, nextLeft, nextRight, color);
+                renderer_.triangle(left, nextRight, right, color);
+                left = nextLeft;
+                right = nextRight;
+            }
+        }
+    }
     selectedId_=selectedId;
     selectedPivotValid_=false;
     selectedBoxValid_=false;
@@ -3412,8 +4562,18 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const bool dragged=!drag_.id.empty() && entity.id==drag_.id;
         const mat4 preview=dragged?dragPreview():mat4{};
         const float3 offset=dragged&&drag_.tool==TransformTool::Move?drag_.moveOffset:float3{};
+        if(!cleanMapOutput() && objectBounds_){
+            const auto lo=entity.boundsMin,hi=entity.boundsMax;
+            float3 corners[8];
+            for(int i=0;i<8;++i)
+                corners[i]=preview.transformPoint({i&1?hi.x:lo.x,i&2?hi.y:lo.y,i&4?hi.z:lo.z});
+            for(int axis:{1,2,4})
+                for(int i=0;i<8;++i)if(!(i&axis))
+                    renderer_.line(corners[i],corners[i|axis],rgba(72,195,213));
+        }
         if(entity.id==selectedId) {
-            selectedPivot_=entity.light?entity.center:float3{entity.center.x,entity.boundsMin.y,entity.center.z};
+            selectedOrientedCollider_=entity.orientedCollider;
+            selectedPivot_=(entity.light||entity.orientedCollider)?entity.center:float3{entity.center.x,entity.boundsMin.y,entity.center.z};
             selectedPivotValid_=true;selectedIsLight_=entity.light;
             selectedAxesValid_=false;
         }
@@ -3432,16 +4592,16 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         // draws a PBR primitive Model; plain default cubes keep the cheap proxy path.
         if(!lightingModel_ && cached.primitive) {
             render::ModelDraw draw;draw.model=cached.primitive;draw.world=world;draw.materials=&cached.materials;
-            if(entity.id==selectedId||selection_.count(entity.id))draw.outline={.25f,.62f,1.0f,.035f};
-            else if(entity.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
+            if(!cleanMapOutput() && (entity.id==selectedId||selection_.count(entity.id)))draw.outline={.25f,.62f,1.0f,.035f};
+            else if(!cleanMapOutput() && entity.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
             renderer_.drawModel(draw);
             continue;
         }
         if(!lightingModel_ && !entity.light) {
-            if(entity.id==selectedId||selection_.count(entity.id)) renderer_.drawSelectionMesh(cube_,world,entity.color,{.25f,.62f,1.0f,1.0f});
-            else if(entity.id==hover_) renderer_.drawSelectionMesh(cube_,world,entity.color,{.62f,.8f,1.0f,.55f});
+            if(!cleanMapOutput() && (entity.id==selectedId||selection_.count(entity.id))) renderer_.drawSelectionMesh(cube_,world,entity.color,{.25f,.62f,1.0f,1.0f});
+            else if(!cleanMapOutput() && entity.id==hover_) renderer_.drawSelectionMesh(cube_,world,entity.color,{.62f,.8f,1.0f,.55f});
             else renderer_.drawMesh(cube_,world,entity.color,kDrawNoCastShadow);
-        } else if(entity.id==selectedId && entity.light) {
+        } else if(!cleanMapOutput() && entity.id==selectedId && entity.light) {
             const auto lo=entity.boundsMin+offset,hi=entity.boundsMax+offset;
             const float3 p[8]={{lo.x,lo.y,lo.z},{hi.x,lo.y,lo.z},
                 {hi.x,lo.y,hi.z},{lo.x,lo.y,hi.z},{lo.x,hi.y,lo.z},
@@ -3466,10 +4626,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             draw.materials=&custom->second.materials;
         if(graphPresentation_&&instance.model)draw.materials=graphPresentation_->materials(*instance.model,instance.id,draw.materials);
         if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
-        if(instance.id!=selectedId && selection_.count(instance.id))draw.outline={.25f,.62f,1.0f,.035f};
-        else if(instance.id!=selectedId && instance.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
+        if(!cleanMapOutput() && instance.id!=selectedId && selection_.count(instance.id))draw.outline={.25f,.62f,1.0f,.035f};
+        else if(!cleanMapOutput() && instance.id!=selectedId && instance.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
         if(instance.id==selectedId) {
-            draw.outline={.25f,.62f,1.0f,.035f};
+            if(!cleanMapOutput())draw.outline={.25f,.62f,1.0f,.035f};
             if(instance.model)captureSelectedBox(draw.world,instance.model->boundsMin,instance.model->boundsMax);
         }
         renderer_.drawModel(draw);
@@ -3480,40 +4640,278 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             cachedRig=windRigs_.emplace(instance.model,render::wind::findWindRig(*instance.model)).first;
         if(const auto& rig=cachedRig->second) {
             ++riggedInstances_; riggedParts_+=rig->decoded.nodes.size();
-            if(wind_.debug==render::wind::WindDebugView::Skeleton &&
+            if(!cleanMapOutput() && wind_.debug==render::wind::WindDebugView::Skeleton &&
                (selectedId.empty() || instance.id==selectedId || riggedInstances_<=32)) {
                 std::vector<render::wind::WindDebugLine> lines;
                 const auto params=render::wind::windRigParamsForDraw(wind_.sceneWind(windSeconds),draw.world);
                 render::wind::windRigDebugLines(*rig,draw.world,params,lines,6,1024);
-                for(const auto& l:lines)
-                    renderer_.line({l.a.x,l.a.y,l.a.z},{l.b.x,l.b.y,l.b.z},l.rgba);
+                Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+                for(const auto& line:lines){
+                    float2 start,end;
+                    if(!view.worldToScreen({line.a.x,line.a.y,line.a.z},overlay.W,overlay.H,start) ||
+                       !view.worldToScreen({line.b.x,line.b.y,line.b.z},overlay.W,overlay.H,end))continue;
+                    overlay.segment(start.x,start.y,end.x,end.y,2.f,line.rgba);
+                }
             }
         }
     }
-    if(!planetaryChart)nereid_.draw(renderer_);
+    if(!planetaryChart){mapWater_.draw(renderer_);nereid_.draw(renderer_);}
     // Editor gizmos for authored lights; actual light contribution is passed through
     // Renderer3D::lights, not faked with an overlay screenshot.
-    if(!planetaryChart)for(const auto& light:activeLights) {
-        const auto at=light.pos;
-        const float extent=std::clamp(light.radius*.08f,.2f,2.f);
-        const uint32_t color=rgba(245,200,100);
-        renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
-        renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
-        renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
-    }
-    if(gizmosVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
-    drawBrushCursor(view,framebufferWidth,framebufferHeight);
-    drawTransformGizmo(view,framebufferWidth,framebufferHeight);
-    if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,framebufferWidth,framebufferHeight);
-    if(marquee_.on) {
-        const float W=float(framebufferWidth),H=float(framebufferHeight);
-        Overlay2D o{renderer_,view,W,H,view.ortho?0.5f:view.zNear*1.4f};
-        const float x0=std::min(marquee_.x0,marquee_.x1)*W,x1=std::max(marquee_.x0,marquee_.x1)*W;
-        const float y0=std::min(marquee_.y0,marquee_.y1)*H,y1=std::max(marquee_.y0,marquee_.y1)*H;
-        o.tri(x0,y0,x1,y0,x1,y1,rgba(130,181,255,40));o.tri(x0,y0,x1,y1,x0,y1,rgba(130,181,255,40));
-        const float w=std::max(1.0f,std::min(W,H)*0.0015f);
-        o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
-        o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
+    if(!cleanMapOutput()) {
+        if(!planetaryChart)for(const auto& light:activeLights) {
+            const auto at=light.pos;
+            const float extent=std::clamp(light.radius*.08f,.2f,2.f);
+            const uint32_t color=rgba(245,200,100);
+            renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
+            renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
+            renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
+        }
+        if(natureLayers_.mapRoutes){
+            const auto point=[&](const std::array<float,2>& p){
+                const float y=showTerrain?terrainPreviewHeight(map,p[0],p[1],levelHeight,baseTerrainView_):0.f;
+                return float3{p[0],y+.12f,p[1]};
+            };
+            for(const auto& line:mapRoutes_){
+                const auto color=line.line==0?rgba(255,240,160,230):rgba(220,190,110,120);
+                for(size_t i=1;i<line.pts.size();++i)
+                    renderer_.line(point(line.pts[i-1]),point(line.pts[i]),color);
+            }
+        }
+        if(natureLayers_.playerStarts && !fpsProject && !planetaryChart && !map.worldSpace){
+            for(size_t i=0;i<map.players.size();++i){
+                const auto& player=map.players[i];
+                if(!player.hasStart)continue;
+                const float x=player.startX,z=player.startZ;
+                const float ground=showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f;
+                const auto color=rgbaf(game::GameView::playerColor(int(i+1)));
+                renderer_.circleXZ({x,0,z},1.2f,color,24,ground+.15f);
+                renderer_.line({x,ground,z},{x,ground+2.5f,z},color);
+            }
+        }
+        if((natureLayers_.rampTiles || natureLayers_.resourceFields) && !fpsProject && !planetaryChart){
+            const auto point=[&](float x,float z,float lift){
+                return float3{x,(showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f)+lift,z};
+            };
+            const auto tile=[&](int x,int z,float inset,float lift,uint32_t color){
+                const auto a=point(x+inset,z+inset,lift), b=point(x+1-inset,z+inset,lift);
+                const auto c=point(x+1-inset,z+1-inset,lift), d=point(x+inset,z+1-inset,lift);
+                renderer_.triangle(a,d,c,color);
+                renderer_.triangle(a,c,b,color);
+            };
+            if(natureLayers_.resourceFields)for(const auto& [x,z]:resourceTiles_){
+                const auto i=map.idx(x,z);
+                const auto alpha=uint8_t(60+18*map.fieldAmt[i]);
+                const uint32_t palette[]={rgba(240,170,40,alpha),rgba(80,220,255,alpha),rgba(230,90,220,alpha)};
+                tile(x,z,.08f,.05f,palette[map.fieldRes[i]%3]);
+            }
+            if(natureLayers_.rampTiles)for(const auto& [x,z]:rampTiles_)
+                tile(x,z,.2f,.07f,rgba(255,255,255,110));
+        }
+        if((areaBounds_ || natureLayers_.triggerAreas) && !fpsProject && !planetaryChart){
+            const auto point=[&](int x,int z){return float3{float(x),showTerrain?terrainPreviewCorner(map,x,z,levelHeight)+.08f:.08f,float(z)};};
+            const auto outline=[&](int left,int top,int right,int bottom,uint32_t color){
+                for(int x=left;x<right;++x)for(int z:{top,bottom})
+                    renderer_.line(point(x,z),point(x+1,z),color);
+                for(int z=top;z<bottom;++z)for(int x:{left,right})
+                    renderer_.line(point(x,z),point(x,z+1),color);
+            };
+            if(natureLayers_.triggerAreas)for(const auto& entry:map.extra["areas"].members()){
+                const auto& rect=entry.second;
+                if(!rect.isArray() || rect.size()!=4)continue;
+                const double x=rect[0].toDouble(-1),z=rect[1].toDouble(-1);
+                const double w=rect[2].toDouble(),h=rect[3].toDouble();
+                if(x>=0 && z>=0 && w>=1 && h>=1 && x+w<=map.w && z+h<=map.h)
+                    outline(int(x),int(z),int(x+w),int(z+h),rgba(255,214,105));
+            }
+            if(areaBounds_){
+                const auto [x,z,w,h]=*areaBounds_;
+                outline(x,z,x+w,z+h,rgba(255,255,255));
+            }
+        }
+        if((regionBorderLetter_ || natureLayers_.regionBorders) && !fpsProject && !planetaryChart){
+            if(regionBordersDirty_)regionBorders_.measure(map,levelHeight,showTerrain);
+            const auto bounds=regionBorders_.visible(map,view,framebufferWidth,framebufferHeight);
+            if(regionBordersDirty_ || bounds!=regionBorders_.bounds){
+                regionBorders_.build(map,bounds,levelHeight,showTerrain,regionBorderLetter_);
+                regionBordersDirty_=false;
+            }
+            for(const auto& edge:regionBorders_.edges){
+                const unsigned c=static_cast<unsigned char>(edge.letter);
+                const uint32_t color=edge.letter==regionBorderLetter_?rgba(125,215,255):
+                    rgba(80+(c*47)%175,80+(c*91)%175,80+(c*23)%175);
+                renderer_.line(edge.a,edge.b,color);
+            }
+        }
+        if(!planetaryChart && natureLayers_.erosionZones && map.extra["erosionZones"].isArray() && map.extra["erosionZones"].size()){
+            Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+            std::optional<editor::TerrainTileSurface> dragSurface;
+            const auto* tiles=groundTiles(doc,dragSurface);
+            const auto height=[&](float x,float z){
+                const float base=terrainMeshHeight(map,x,z,levelHeight,baseTerrainView_);
+                return tiles?tiles->sample(x,z,base):base;
+            };
+            const auto project=[&](float3 p,float2& pixel){
+                return view.worldToScreen(p,overlay.W,overlay.H,pixel) && std::isfinite(pixel.x) && std::isfinite(pixel.y);
+            };
+            const auto& zones=map.extra["erosionZones"];
+            for(size_t i=0;i<zones.size();++i){
+                const bool picked=erosionHighlight_==-1 || erosionHighlight_==int(i);
+                editor::erosionZoneGizmo(zones[i],picked,height,[&](float3 a,float3 b,uint32_t color){
+                    float2 start,end;
+                    if(!project(a,start)||!project(b,end))return;
+                    overlay.segment(start.x,start.y,end.x,end.y,picked?5.f:3.5f,rgba(0,0,0,120));
+                    overlay.segment(start.x,start.y,end.x,end.y,picked?3.f:2.f,color);
+                },[&](float3 centre,const std::string& text,uint32_t color){
+                    float2 at;
+                    if(!project(centre,at)||at.x<0||at.y<0||at.x>overlay.W||at.y>overlay.H)return;
+                    // Engine font bytes and glyph masks stay on the render thread.
+                    thread_local StudioCaptionFont font(platform::engineAssetsDir());
+                    const float scale=std::max(.95f,std::min(overlay.W,overlay.H)/850.f);
+                    const auto caption=font.layout(text);
+                    if(caption.glyphs.empty())return;
+                    const float left=at.x-caption.advance*scale*.5f;
+                    const float baseline=at.y+font.baselineOffset()*scale;
+                    overlay.segment(left-5,at.y,2*at.x-left+5,at.y,21*scale,rgba(0,0,0,190));
+                    for(const auto& item:caption.glyphs)for(const auto& run:item.glyph->runs){
+                        const float x=left+(item.x+run.x)*scale;
+                        const float y=baseline+(run.y+.5f)*scale;
+                        const uint32_t ink=(color&0xffffff)|((((color>>24)*run.alpha)/255)<<24);
+                        overlay.segment(x,y,x+run.width*scale,y,scale,ink);
+                    }
+                });
+            }
+        }
+        if(!planetaryChart && natureLayers_.terraTreeWind && !selectedId.empty() && !hidden_.count(selectedId)){
+            const int index=studioMapEntityIndex(selectedId,doc);
+            if(index>=0 && editor::isWindGizmoTree(map.entities[size_t(index)])){
+                Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+                const auto project=[&](float3 point,float2& p){
+                    return view.worldToScreen(point,overlay.W,overlay.H,p) && std::isfinite(p.x) && std::isfinite(p.y);
+                };
+                editor::treeWindGizmo(map.entities[size_t(index)],renderer_.sceneWind(),[&](float x,float z){
+                    const float base=terrainMeshHeight(map,x,z,levelHeight,baseTerrainView_);
+                    std::optional<editor::TerrainTileSurface> dragSurface;
+                    const auto* tiles=groundTiles(doc,dragSurface);
+                    return tiles?tiles->sample(x,z,base):base;
+                },[&](float3 a,float3 b,uint32_t color){
+                    float2 start,end;
+                    if(project(a,start)&&project(b,end))overlay.segment(start.x,start.y,end.x,end.y,2.f,color);
+                },[&](float3 a,float3 b,uint32_t color){overlay.arrow(a,b,3.f,color);},
+                [&](float3 crown,uint32_t color){
+                    float2 centre;
+                    if(!project(crown,centre))return;
+                    float2 last{centre.x+7,centre.y};
+                    for(int i=1;i<=16;++i){
+                        const float angle=i*(6.2831853f/16);
+                        float2 next{centre.x+7*std::cos(angle),centre.y+7*std::sin(angle)};
+                        overlay.segment(last.x,last.y,next.x,next.y,2.f,color);
+                        last=next;
+                    }
+                });
+            }
+        }
+        if(!planetaryChart && (natureLayers_.terraSlope || natureLayers_.terraSlopeAtTarget)){
+            const int selected=studioMapEntityIndex(selectedId,doc);
+            const auto* tile=natureLayers_.terraSlope && selected>=0 && !hidden_.count(selectedId) &&
+                editor::isTerrainTile(map.entities[size_t(selected)])?&map.entities[size_t(selected)]:nullptr;
+            if(tile || natureLayers_.terraSlopeAtTarget){
+                std::optional<editor::TerrainTileSurface> dragSurface;
+                const auto* tiles=groundTiles(doc,dragSurface);
+                const auto height=[&](float x,float z){
+                    const float base=terrainMeshHeight(map,x,z,levelHeight,baseTerrainView_);
+                    return tiles?tiles->sample(x,z,base):base;
+                };
+                Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+                const auto drawSlope=[&](float x,float z){
+                    editor::terrainSlopeArrows(x,z,natureLayers_.radius,natureLayers_.spacing,height,
+                        [&](float3 a,float3 b,float strength){
+                            overlay.arrow(a,b,1.8f,rgba(int(120+135*strength),int(220-150*strength),80,210));
+                        });
+                };
+                if(tile)drawSlope(tile->x,tile->z);
+                if(natureLayers_.terraSlopeAtTarget && (!tile || tile->x!=view.target.x || tile->z!=view.target.z))
+                    drawSlope(view.target.x,view.target.z);
+            }
+        }
+        if(natureLayers_.nereidFlow && !planetaryChart){
+            const int selectedRiver=studioMapEntityIndex(selectedId,doc);
+            Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+            const size_t first=natureLayers_.nereidAllWater?0:selectedRiver<0?map.entities.size():size_t(selectedRiver);
+            const size_t end=natureLayers_.nereidAllWater?map.entities.size():std::min(first+1,map.entities.size());
+            for(size_t i=first;i<end;++i){
+                const auto& e=map.entities[i];
+                const bool picked=int(i)==selectedRiver;
+                if(!e.extra["components"].has("NereidWater"))continue;
+                if(hidden_.count(studioDocumentId(doc,editor::DocumentEntityRef::mapEntity(i))))continue;
+                const auto project=[&](float3 p,float2& pixel){
+                    return view.worldToScreen(p,overlay.W,overlay.H,pixel) && std::isfinite(pixel.x) && std::isfinite(pixel.y);
+                };
+                editor::riverFlowGizmos(e,[&](float3 a,float3 b){
+                    float2 start,end;
+                    if(project(a,start) && project(b,end))
+                        overlay.segment(start.x,start.y,end.x,end.y,picked?2:1,rgba(120,210,255,picked?200:90));
+                },[&](float3 a,float3 b,float speed){
+                    overlay.arrow(a,b,picked?2.5f:1.5f,rgba(60,int(170+85*speed),255,picked?240:120));
+                });
+            }
+        }
+        if(heatmapTiles_&&!planetaryChart)drawHeatmapTiles(renderer_,*heatmapTiles_,.35f);
+        if(fieldOutlines_&&!planetaryChart){
+            for(const auto& ring:*fieldOutlines_)drawFieldOutline(renderer_,ring.center,ring.radius,ring.color);
+        }
+        if(natureFrame_&&!planetaryChart){
+            const float step=natureLayers_.spacing;
+            editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
+                natureLayers_.radius,step,natureLayers_.physisWind,natureLayers_.physisFire,[&](float x,float z,float dx,float dz,bool fire,float strength){
+                    if(!map.worldSpace&&(x<0||z<0||x>=map.w||z>=map.h))return;
+                    const float y=(showTerrain?terrainPreviewHeight(map,x,z,levelHeight):0.f)+(fire?1.8f:1.2f);
+                    const uint32_t color=fire?rgba(255,int(150-110*strength),40):rgba(80+175*strength,210,255-130*strength);
+                    const float3 tip{x+dx,y,z+dz};
+                    if(dx||dz){
+                        renderer_.line({x,y,z},tip,color);
+                        renderer_.line(tip,{tip.x-.28f*dx-.15f*dz,y,tip.z-.28f*dz+.15f*dx},color);
+                        renderer_.line(tip,{tip.x-.28f*dx+.15f*dz,y,tip.z-.28f*dz-.15f*dx},color);
+                    }else{
+                        for(int i=0;i<8;++i){
+                            const float a=i*.78539816f,b=(i+1)*.78539816f;
+                            renderer_.line({x+.5f*std::cos(a),y,z+.5f*std::sin(a)},{x+.5f*std::cos(b),y,z+.5f*std::sin(b)},color);
+                        }
+                    }
+                });
+        }
+        if(focusBounds_ && !planetaryChart){
+            const auto [x0,z0,x1,z1]=*focusBounds_;
+            const float remaining=std::clamp(std::chrono::duration<float>(focusBoundsUntil_-now).count()/1.6f,0.f,1.f);
+            const auto point=[&](float x,float z){
+                const float ground=showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f;
+                return float3{x,ground+.35f+(1.f-remaining)*.4f,z};
+            };
+            const auto a=point(x0,z0),b=point(x1,z0),c=point(x1,z1),d=point(x0,z1);
+            const auto fill=rgba(120,220,255,uint8_t(70*remaining));
+            const auto edge=rgba(120,220,255,uint8_t(40+150*remaining));
+            renderer_.triangle(a,d,c,fill);renderer_.triangle(a,c,b,fill);
+            renderer_.line(a,b,edge);renderer_.line(b,c,edge);renderer_.line(c,d,edge);renderer_.line(d,a,edge);
+        }
+        if(worldAxes_&&!planetaryChart){
+            renderer_.line({0,0,0},{4,0,0},rgba(234,96,96));
+            renderer_.line({0,0,0},{0,4,0},rgba(105,206,119));
+            renderer_.line({0,0,0},{0,0,4},rgba(105,154,239));
+        }
+        if(gizmosVisible_&&selectionBoxVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
+        drawBrushCursor(view,framebufferWidth,framebufferHeight);
+        drawTransformGizmo(view,framebufferWidth,framebufferHeight);
+        if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,framebufferWidth,framebufferHeight);
+        if(marquee_.on) {
+            const float W=float(framebufferWidth),H=float(framebufferHeight);
+            Overlay2D o{renderer_,view,W,H,view.ortho?0.5f:view.zNear*1.4f};
+            const float x0=std::min(marquee_.x0,marquee_.x1)*W,x1=std::max(marquee_.x0,marquee_.x1)*W;
+            const float y0=std::min(marquee_.y0,marquee_.y1)*H,y1=std::max(marquee_.y0,marquee_.y1)*H;
+            o.tri(x0,y0,x1,y0,x1,y1,rgba(130,181,255,40));o.tri(x0,y0,x1,y1,x0,y1,rgba(130,181,255,40));
+            const float w=std::max(1.0f,std::min(W,H)*0.0015f);
+            o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
+            o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
+        }
     }
     if(sparseTerrain&&sparsePrepared&&!cavernsPreview_.isolate())
         sparseTerrainPreview_.submit(renderer_,pairedRimReady,true);
@@ -3524,6 +4922,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.038f; pass.clearColor[1] = 0.064f;
     pass.clearColor[2] = 0.098f; pass.clearColor[3] = 1.0f;
+    if(cleanMapOutput()){
+        pass.clearColor[0]=environment.fogColor.x;
+        pass.clearColor[1]=environment.fogColor.y;
+        pass.clearColor[2]=environment.fogColor.z;
+    }
     if(skyShot_) {
         // Splash art: real PhysicalSky (atmosphere, clouds, god rays) lit by the requested sun.
         PhysicalSkySettings sky;sky.enabled=true;sky.clouds=true;sky.godRays=true;sky.coverage=skyShot_->coverage;
@@ -3541,12 +4944,21 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             return particles.valid()?particles:base;
         });
     }
+    const auto* previousReport = post_.effectReport(post_.viewId());
+    const auto previousSequence = previousReport ? previousReport->sequence : 0;
+    setMapOutput(pass);
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
     if(spectraPreview_->active())spectraPreview_->draw(&renderer_);
     spectraSources_.draw(&renderer_);
     renderer_.resolvePrisma();
+    readMapOutput();
+    const auto* report = post_.effectReport(post_.viewId());
+    if (report && report->sequence != previousSequence) {
+        prismaReportProject_ = projectPath;
+        prismaReportMap_ = doc.path;
+    } else prismaReportProject_.clear();
     spectraSources_.finish();
     lightingRuntime_.presented();
 
@@ -3770,7 +5182,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(changedDocument){
         if(!device_->waitForResourceIdle())return;
         clearLivePlanetTerrain();
-        auto next=StudioPlanetPreview::build(doc,body);
+        auto next=StudioPlanetPreview::build(doc,body,baseTerrainView_,planetTerrainLook_.get());
         Mesh replacement;
         if(next)replacement=next->mesh.upload(*device_);
         if(!changedBody && planetRevision_!=doc.revision)clearTransformPreview();
@@ -3806,8 +5218,9 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
         camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
     }
+    applyPendingSceneLens();
     stepTween();selectedId_=selectedId;selectedPivotValid_=false;selectedBoxValid_=false;
-    selectedAxesValid_=false;selectedIsLight_=false;
+    selectedAxesValid_=false;selectedIsLight_=false;selectedOrientedCollider_=false;
     // Use the existing transform gizmo for authored rigid models. Yaw is
     // about the radial vertical (not arbitrary global Y); scale is along
     // actual model axes. Pitch/roll edits remain numeric-only.
@@ -3837,10 +5250,10 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             }
         }
     }
-    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    beginMapOutput(width,height);StudioFrameScope scope{*device_};
     renderThumbnail();
     const auto view=viewCamera();renderer_.beginScene(view,width,height);
-    renderer_.setSceneSelectionOutline(true);renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
+    renderer_.setSceneSelectionOutline(!cleanMapOutput());renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
     lightingStatus_="Planet authoring preview · rigid models and coarse surface";
     if(planetProcessOverlays_.invalidPhysis)lightingStatus_+=" · invalid PHYSIS fields";
     if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
@@ -3953,7 +5366,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                         int canonical;Fixed ca,cb;cube.faceFromDir(dir,canonical,ca,cb);
                         Vec3 east,south;game::CubeSphere::faceTangents(canonical,dir,east,south);
                         const auto& bodyDoc=doc.data.bodies[size_t(body)];
-                        const float height=StudioPlanetPreview::height(bodyDoc,face,float(x.toDouble()),float(y.toDouble()));
+                        const float height=StudioPlanetPreview::height(bodyDoc,face,float(x.toDouble()),float(y.toDouble()),baseTerrainView_);
                         const auto position=StudioPlanetPreview::f3(dir)*(planetPreview_->radius+height);
                         const auto frame=studioForestFrame(position,StudioPlanetPreview::f3(dir),StudioPlanetPreview::f3(east));
                         const render::float3 col{plant.world.at(0,0),plant.world.at(1,0),plant.world.at(2,0)};
@@ -3963,7 +5376,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 }
                 if(!plant.foliagePermille)draw.materialMask=&barkOnly;
                 draw.useVertexParameters=true;draw.vertexParameters={0,0,0,0};draw.maxVertexOffsetMetres=.01f;
-                if(current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
+                if(!cleanMapOutput()&&current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
                     draw.outline={1.f,.8f,.2f,.025f};
                 renderer_.drawModel(draw);
             }
@@ -3978,18 +5391,18 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 draw.world=dragPreview()*instance.world;
             if(auto custom=instanceMaterials_.find(instance.id);custom!=instanceMaterials_.end())draw.materials=&custom->second.materials;
             if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
-            if(instance.id==selectedId||selection_.count(instance.id))draw.outline={.25f,.62f,1.f,.035f};
-            else if(instance.id==hover_)draw.outline={.62f,.8f,1.f,.02f};
+            if(!cleanMapOutput() && (instance.id==selectedId||selection_.count(instance.id)))draw.outline={.25f,.62f,1.f,.035f};
+            else if(!cleanMapOutput() && instance.id==hover_)draw.outline={.62f,.8f,1.f,.02f};
             renderer_.drawModel(draw);
         }
         for(const auto& marker:planetPreview_->markers){
             if(hidden_.count(marker.id)||renderedModels.count(marker.id))continue;
             const auto world=mat4::translate(marker.center)*mat4::scale(marker.half*2.f);
-            if(marker.id==selectedId||selection_.count(marker.id))
+            if(!cleanMapOutput() && (marker.id==selectedId||selection_.count(marker.id)))
                 renderer_.drawSelectionMesh(cube_,world,marker.color,{.25f,.62f,1.f,1.f});
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
         }
-        if(gizmosVisible_){
+        if(!cleanMapOutput() && gizmosVisible_){
             if(!liveForest){
                 const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
                     forestSelection_.getStr("expectedRevision")==std::to_string(doc.revision);
@@ -4551,7 +5964,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 }
             }
         }
-        if(planetDragPlacement_.isObject()){
+        if(!cleanMapOutput() && planetDragPlacement_.isObject()){
             game::CubeSphere cube(planetPreview_->faceSize);
             const auto dir=StudioPlanetPreview::f3(cube.dirFromFace(int(planetDragPlacement_.getInt("face")),
                 planetDragPlacement_["x"].fx(),planetDragPlacement_["y"].fx()));
@@ -4564,12 +5977,40 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             }
         }
     }
-    drawPlanetRegionHandles(view,width,height,doc);
-    drawPlanetGravityHandles(view,width,height);
-    if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
-    if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
+    if(!cleanMapOutput() && brushVisible_ && planetPreview_ && dot(brushCenter_,brushCenter_)>1e-6f){
+        const auto up=normalize(brushCenter_);
+        const auto east=normalize(cross(up,std::abs(up.y)<.9f?float3{0,1,0}:float3{1,0,0}));
+        const auto north=cross(up,east);
+        const float angle=std::min(3.1415f,brushRadius_*1.5707963f/planetPreview_->faceSize);
+        const auto& body=doc.data.bodies[size_t(doc.data.findBody(planetPreview_->bodyId))];
+        game::CubeSphere cube(body.faceSize);
+        float3 previous{};
+        for(int i=0;i<=64;++i){
+            const float phase=i*6.2831853f/64;
+            const auto dir=up*std::cos(angle)+(east*std::cos(phase)+north*std::sin(phase))*std::sin(angle);
+            int face;Fixed a,b;
+            cube.faceFromDir({StudioPlanetPreview::fixed(dir.x),StudioPlanetPreview::fixed(dir.y),StudioPlanetPreview::fixed(dir.z)},face,a,b);
+            const auto point=dir*(planetPreview_->radius+StudioPlanetPreview::height(body,face,float(a.toDouble()),float(b.toDouble()),baseTerrainView_)+.05f);
+            if(i)renderer_.line(previous,point,rgba(120,200,255,230));
+            previous=point;
+        }
+    }
+    if(!cleanMapOutput()){
+        drawPlanetRegionHandles(view,width,height,doc);
+        drawPlanetGravityHandles(view,width,height);
+        if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
+        if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
+    }
     gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
-    renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;
+    const bool authoredPost=post_.enabled() && (!gamePostSettings_.isNull() || !mapPostSettings_.isNull());
+    setMapOutput(pass);
+    renderer_.render(pass,authoredPost?static_cast<PostProcess*>(&post_):&antialiasing_);
+    renderer_.resolvePostFx();
+    readMapOutput();
+    if (authoredPost && post_.effectReport(post_.viewId())) {
+        prismaReportProject_=projectPath;prismaReportMap_=doc.path;
+    } else prismaReportProject_.clear();
+    ++framesDrawn_;
 }
 
 void StudioScene::rebuildProxyDraws(const editor::MapDoc& doc) {
@@ -4628,13 +6069,14 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(tool_);value(localSpace_);value(gizmosVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(natureLayers_.triggerAreas);value(natureLayers_.modelDebugMode);value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(fieldOutlines_.get());value(heatmapTiles_.get());value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
-    value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
+    value(natureLayers_.mapRoutes);value(natureLayers_.playerStarts);value(natureLayers_.resourceFields);value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}

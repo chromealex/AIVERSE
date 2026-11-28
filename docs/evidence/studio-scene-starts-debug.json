@@ -1,0 +1,10 @@
+{
+  "sha": "6796c4d554c56790701926e0b1d0f9b584c234bf",
+  "argv": [
+    "bash",
+    "../starts-debug.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-starts-debug.log.txt",
+  "sha256": "4b57abfd1859b012fc01aa0d3630ea75584cf3d6190ed68f3894a77a1b6f7a97"
+}

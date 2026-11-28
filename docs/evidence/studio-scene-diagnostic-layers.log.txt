@@ -1,0 +1,6 @@
+2026-11-26 11:24:10.839 AiverseStudioHTML5[17210:84167280] [studio-web] JS: CROSS main DONE_1
+2026-11-26 11:24:10.839 AiverseStudioHTML5[17210:84167280] [studio-web] JS: CROSS main VERIFIED five Scene frames from HTML layer controls, restored preferences, selected entity:0
+Restored Scene changed sample count 0
+base axes changed Scene samples 68
+axes bounds changed Scene samples 619
+base noBox changed Scene samples 139

@@ -1,0 +1,13 @@
+{
+  "sha": "d58726849a4ca55ef1e95a5d4103139cfe65ef96",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "typecheck"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-agent-drafts-d58726849.log.txt",
+  "sha256": "faf69e7ecfd8c20b33792830e507724d015f288b5a790fdd527065901f77533f"
+}

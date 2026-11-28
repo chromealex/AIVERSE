@@ -1,0 +1,10 @@
+{
+  "sha": "b836bdce0cd3c73a927191495e4ea2475625789d",
+  "argv": [
+    "bash",
+    "/tmp/studio-capture-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-captured-bake-job.log.txt",
+  "sha256": "7b8ac2bb22fca48ab2e297c8dcc1bbf6b93c06c8cbef2ef84dfe142fd4146989"
+}

@@ -1,0 +1,14 @@
+{
+  "sha": "d664a1b1cc08d49a06d798569ee75621d4d6bbd6",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^(animation_montage|studio_session|studio_mcp_registry)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-montage-d664a1b1c.log.txt",
+  "sha256": "bfbab39489ce7c94a97a6e7fb56672c642060db629f98a1a3ad4eff7d8e78967"
+}

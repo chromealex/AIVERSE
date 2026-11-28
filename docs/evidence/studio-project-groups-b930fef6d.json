@@ -1,0 +1,14 @@
+{
+  "sha": "b930fef6d7c336502b6a20d541574eb2d180f909",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-project-groups-b930fef6d.log.txt",
+  "sha256": "74b65cdf3beea01a93d97f899c03eb553f13cf9fa58c197688433fa553671693"
+}

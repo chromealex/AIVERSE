@@ -905,6 +905,38 @@ int vProgressionReroll(lua_State* L, Vm& vm) { return vProgressionCmd(L, vm, kPr
 ViewScripts::ViewScripts() : impl_(std::make_unique<Impl>(*this)) {}
 ViewScripts::~ViewScripts() { detach(); }
 std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return impl_->paint; }
+Json animationRuntimeStatus(const EntityFxStore* store) {
+    Json rows=Json::array();
+    if (!store) return rows;
+    std::vector<uint64_t> keys;
+    keys.reserve(store->animations.size());
+    for (const auto& [key,entry]:store->animations) keys.push_back(key);
+    const auto count=std::min<size_t>(256,keys.size());
+    std::partial_sort(keys.begin(),keys.begin()+count,keys.end());
+    for (size_t i=0;i<count;++i) {
+        const auto key=keys[i];
+        const auto& entry=store->animations.at(key);
+        const auto& c=entry.locomotion;
+        Json row=Json::object();
+        row.set("entity",Json::number(int64_t(key)));
+        row.set("entityId",Json::string(std::to_string(key)));
+        row.set("error",Json::string(entry.error));
+        row.set("climbing",Json::fromBool(c.active));
+        row.set("attached",Json::fromBool(c.attached));
+        row.set("stanceFeet",Json::number(int64_t(c.supports)));
+        row.set("steppingFeet",Json::number(int64_t(c.stepping)));
+        row.set("footError",Json::number(double(c.footError),6));
+        row.set("penetration",Json::number(double(c.penetration),6));
+        Json position=Json::array(),normal=Json::array();
+        for(float v:{c.position.x,c.position.y,c.position.z})position.push(Json::number(double(v),6));
+        for(float v:{c.normal.x,c.normal.y,c.normal.z})normal.push(Json::number(double(v),6));
+        row.set("bodyPosition",std::move(position));
+        row.set("surfaceNormal",std::move(normal));
+        rows.push(std::move(row));
+    }
+    return rows;
+}
+
 std::shared_ptr<EntityFxStore> ViewScripts::entityFx() const { return impl_->fx; }
 
 void ViewScripts::setSelection(const std::vector<Entity>& selected) { impl_->selection = selected; }

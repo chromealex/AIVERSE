@@ -24,20 +24,59 @@ inline int64_t fpsLightingIndex(const Json& params, const Json& items) {
         throw std::runtime_error("Unknown light index");
     return index;
 }
+inline bool validStudioLightProperty(const std::string& key,const Json& value) {
+    if (key=="color") {
+        if (!value.isArray() || value.size()!=3) return false;
+        for (const auto& channel:value.items())
+            if (!channel.isNumber() || !std::isfinite(channel.toDouble()) ||
+                channel.toDouble()<0 || channel.toDouble()>1) return false;
+        return true;
+    }
+    return validFpsLightingChange("studio.lightUpdate",key,value.toDouble(),value.isNumber(),
+                                  value.isString(),value.str(),value.type()==Json::Type::Bool);
+}
+inline Json studioMapLightingPatch(const Json& params) {
+    const auto key=params.getStr("key");
+    const auto& value=params["value"];
+    if (key=="weather") {
+        if (!value.isObject() || value.size()!=3) throw std::runtime_error("Invalid weather settings");
+        Json patch=Json::object();
+        for (const char* field:{"time","clouds","storm"}) {
+            if (!value[field].isNumber() || !validLightingScalar(field,value[field].toDouble()))
+                throw std::runtime_error("Invalid weather setting");
+            patch.set(field,value[field]);
+        }
+        patch.set("dayLength",Json::number(int64_t(0)));
+        return patch;
+    }
+    const bool preset=key=="preset" && value.isString() &&
+        (value.str().empty() || value.str()=="desert" || value.str()=="snow" ||
+         value.str()=="volcanic" || value.str()=="overcast" || value.str()=="cave");
+    const bool remove=key=="remove" && value.type()==Json::Type::Bool && value.boolean();
+    if (!preset && !remove && !(value.isNumber() && validLightingScalar(key,value.toDouble())))
+        throw std::runtime_error("Invalid lighting parameter");
+    Json patch=Json::object();
+    patch.set(key,value);
+    return patch;
+}
+inline Json studioLightPosition(const Json& params,double defaultX,double defaultZ) {
+    Json result=Json::object();
+    for (const char* key:{"x","z"}) {
+        const auto& coordinate=params[key];
+        const double fallback=std::string_view(key)=="x"?defaultX:defaultZ;
+        const double value=params.has(key)?coordinate.toDouble():fallback;
+        if ((params.has(key) && !coordinate.isNumber()) || !validLightScalar(key,value))
+            throw std::runtime_error("Map coordinates out of range");
+        result.set(key,Json::number(value,3));
+    }
+    return result;
+}
 inline Json editFpsLighting(Json document, const std::string& method, const Json& params) {
     if (!document.isObject()) throw std::runtime_error("FPS project document unavailable");
     if (method=="studio.lightingSet") {
-        const std::string key=params.getStr("key");
-        const Json& value=params["value"];
-        if (!validFpsLightingChange(method,key,value.toDouble(),value.isNumber(),false,{},false))
-            throw std::runtime_error("Invalid lighting parameter");
-        Json block=document["lighting"].isObject() ? document["lighting"] : Json::object();
-        block.set(key,value);
-        document.set("lighting",std::move(block));
+        editor::patchMapLighting(document,studioMapLightingPatch(params));
     } else if (method=="studio.lightAdd") {
-        Json item=Json::object();
-        item.set("x",Json::number(int64_t(0)));
-        item.set("z",Json::number(int64_t(0)));
+        Json item=studioLightPosition(params,0,0);
         item.set("height",Json::number(int64_t(1)));
         item.set("radius",Json::number(int64_t(4)));
         item.set("intensity",Json::number(1.5,3));
@@ -49,8 +88,7 @@ inline Json editFpsLighting(Json document, const std::string& method, const Json
         else {
             const std::string key=params.getStr("key");
             const Json& value=params["value"];
-            if (!validFpsLightingChange(method,key,value.toDouble(),value.isNumber(),
-                                        value.isString(),value.str(),value.type()==Json::Type::Bool))
+            if (!validStudioLightProperty(key,value))
                 throw std::runtime_error("Invalid light property");
             Json patch=Json::object();
             patch.set(key,value);

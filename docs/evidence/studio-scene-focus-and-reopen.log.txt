@@ -1,0 +1,20 @@
+2026-11-26 14:29:41.648 AiverseStudioHTML5[31249:84981339] [studio-web] JS: CROSS main DONE_1
+2026-11-26 14:29:41.648 AiverseStudioHTML5[31249:84981339] [studio-web] JS: CROSS main VERIFIED focus, retained distance and hidden panel
+Same-map reopen canceled the queued PNG, retry returned 513x389. Focus: {'ok': True}
+Traceback (most recent call last):
+  File "/tmp/planet-focus-client.py", line 87, in <module>
+    preview(scene=True);wait_for('CROSS main FOCUS')
+  File "/tmp/planet-focus-client.py", line 34, in wait_for
+    raise RuntimeError(text[-1500:])
+RuntimeError: 2026-11-26 14:29:47.154 AiverseStudioHTML5[31669:84983303] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/planet-focus-ui-VldIIm/Catalog.app/Contents/Resources/studio-web
+2026-11-26 14:29:47.358 AiverseStudioHTML5[31669:84983303] [studio-web] served index.html (5761 bytes)
+2026-11-26 14:29:47.364 AiverseStudioHTML5[31669:84983303] [studio-web] served assets/index-X2HIlOPu.js (1712202 bytes)
+2026-11-26 14:29:47.399 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main boot
+2026-11-26 14:29:47.408 AiverseStudioHTML5[31669:84983303] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 14:29:51.168 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main LINK_PORT 47321
+2026-11-26 14:29:53.178 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 14:29:53.194 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 14:29:53.211 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 14:29:55.037 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main CAMERA_READY
+2026-11-26 14:29:55.819 AiverseStudioHTML5[31669:84983303] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:91:134 Error: planet focus {"x":-7.527,"y":-18.173,"z":3.615,"distance":18,"yaw":2.01846,"pitch":1.14008,"ortho":false,"fov":0.75}
+

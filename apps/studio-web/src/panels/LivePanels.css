@@ -31,3 +31,24 @@
 /* Play mode tint (Unity): the editor shows that a game is running. */
 .studio.is-playing .titlebar{box-shadow:inset 0 -2px 0 var(--au-accent)}
 .studio.is-playing .nested-tabs{background:color-mix(in srgb,var(--au-accent) 9%,transparent)}
+.live-hier__pager{display:flex;align-items:center;justify-content:space-between;gap:4px;border-top:1px solid var(--au-line);padding:3px 5px;flex:none}
+.live-hier__pager .live__count{padding:0 3px;font-variant-numeric:tabular-nums}
+.live-hier__pager nav{display:flex;gap:var(--au-space-1)}
+.live-hier__pager .au-button--icon{width:26px;height:26px;min-height:26px}
+.live-hier__row{flex:none}
+
+.live-hier__grouping{display:flex;align-items:center;gap:8px;padding:0 6px 6px;color:var(--au-text-muted);font-size:var(--au-font-sm)}
+.live-hier__grouping select{flex:1;min-width:0}
+.live-hier__path{padding:5px 9px;overflow-wrap:anywhere;border-block:1px solid var(--au-line);font-size:var(--au-font-sm)}
+.live-hier__path button{padding:2px;border:0;background:none;color:var(--au-accent);cursor:pointer}
+.live-hier__group{min-height:30px}
+.live-hier__group b{overflow-wrap:anywhere;min-width:0}
+.live-hier__entry{display:flex;align-items:center;flex:none}
+.live-hier__entry>.live-hier__row{flex:1;min-width:0}
+.live-hier__entry>.hier__disclosure[aria-expanded="true"] svg{transform:rotate(90deg)}
+.live-hier__entry[data-depth]:not(:has(>.hier__disclosure))::before{content:"";flex:0 0 22px}
+
+.live-inspector{display:flex;flex-direction:column;min-height:0}
+.live-inspector__selection{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--au-line)}
+.live-inspector__selection span{flex:none;color:var(--au-text-muted);font-size:var(--au-font-xs)}
+.live-inspector__selection select{flex:1;min-width:0}

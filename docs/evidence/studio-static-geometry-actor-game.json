@@ -1,0 +1,10 @@
+{
+  "sha": "57209b7bc1043bd66002aab44b416991a988ac8c",
+  "argv": [
+    "bash",
+    "/tmp/actor-geometry-acceptance.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-static-geometry-actor-game.log.txt",
+  "sha256": "29a2bd33aa11694386d68fbfc60d78e99c45514c1f6fad006b84e4b830bee6c7"
+}

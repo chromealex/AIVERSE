@@ -1,0 +1,10 @@
+{
+  "sha": "f020d212891902e8b500ef8a0ac5a2591391dc54",
+  "argv": [
+    "bash",
+    "/tmp/seat-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-game-local-roles.log.txt",
+  "sha256": "ceac3af3cf881ea122b66308914ad0929dfaf9496d0f68b5b504be668080e9d4"
+}

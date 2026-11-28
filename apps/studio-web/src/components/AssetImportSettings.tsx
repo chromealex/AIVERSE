@@ -1,3 +1,5 @@
+import { assetKind } from '../assetTree';
+import { StudioButton } from '../ui';
 import { copyText } from '../clipboard';
 import {useEffect,useState} from 'react';
 import {X, FileCog, ClipboardCopy, Lock, LockOpen} from 'lucide-react';
@@ -31,9 +33,9 @@ function SettingToggle({label,value,disabled,onChange}:{
       onChange={e=>onChange(e.target.checked)}/>
   </label>;
 }
-export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,onError,locked,onToggleLock}:{
+export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,onError,locked,onToggleLock,onOpenMaterial}:{
   asset:StudioAsset;refreshToken?:number;onClose:()=>void;onSaved:()=>void;onError:(message:string)=>void;
-  locked:boolean;onToggleLock:()=>void;
+  locked:boolean;onToggleLock:()=>void;onOpenMaterial:(path:string)=>void;
 }){
   const [detail,setDetail]=useState<StudioAssetDetail|null>(null);
   const [busy,setBusy]=useState(false);
@@ -41,6 +43,7 @@ export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,
   const [references,setReferences]=useState<StudioAssetReference[]>([]);
   const [referenceError,setReferenceError]=useState('');
   const guid=asset.guid;
+  const material=assetKind(asset.path)==='material';
   useEffect(()=>{
     let disposed=false;
     setDetail(null);setLoading(true);
@@ -80,7 +83,7 @@ export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,
   const platform=(key:string):string=>
     typeof platforms[key]==='string'?String(platforms[key]):'auto';
   return <aside className="studio-asset-import-settings" aria-label="Asset import settings">
-    <header><FileCog size={16}/><strong>Import Settings</strong>
+    <header><FileCog size={16}/><strong>{material?'Material file':'Import Settings'}</strong>
       <button type="button" onClick={onToggleLock} aria-pressed={locked}
         title={locked ? 'Unlock asset import settings from Assets selection' : 'Lock asset import settings to this asset'}
         aria-label={locked ? 'Unlock import settings' : 'Lock import settings'}>
@@ -92,7 +95,7 @@ export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,
       !detail?<div className="studio-asset-settings-note">No metadata available. Refresh Assets.</div>:
       <div className="studio-asset-settings-body">
         <div className="studio-asset-setting-path" title={detail.path}>{detail.path}</div>
-        <div className="studio-asset-setting-kind">{detail.importer}</div>
+        <div className="studio-asset-setting-kind">{material?'Material':detail.importer}</div>
         <div className="studio-asset-guid">
           <span>GUID</span><code title={detail.guid}>{detail.guid}</code>
           <button type="button" title="Copy GUID" aria-label="Copy asset GUID"
@@ -132,12 +135,13 @@ export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,
             options={['0','0.25','0.5','0.75','0.8','1']} disabled={busy}
             onChange={v=>void save('quality',Number(v))}/>
         </>}
-        {detail.importer==='data'&&<p className="studio-asset-settings-note">
+        {material&&<StudioButton onClick={()=>onOpenMaterial(asset.path)}>Edit material</StudioButton>}
+        {!material&&detail.importer==='data'&&<p className="studio-asset-settings-note">
           Data assets have no compression settings yet.</p>}
-        <p className="studio-asset-settings-note">
+        {!material&&<p className="studio-asset-settings-note">
           Settings are stored in the adjacent .meta file. Actual GPU
           conversion and platform packaging remain separate build steps.
-        </p>
+        </p>}
       </div>}
     <section className="studio-asset-references" aria-label="Asset usages">
       <strong>Used by ({references.length})</strong>

@@ -1,0 +1,3 @@
+2026-11-26 09:45:15.655 AiverseStudioHTML5[55108:83722245] [studio-web] JS: CROSS main DONE_1
+2026-11-26 09:45:15.654 AiverseStudioHTML5[55108:83722245] [studio-web] JS: CROSS main VERIFIED two imported clips, reset on switching, scrubbed poses, play/pause native clock and slider, static model, Scene closed
+Pose pixels rest/right/left and changed masks: 8638 8501 8640 1155 1935

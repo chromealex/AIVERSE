@@ -21,15 +21,14 @@ meant for iOS, Android and web as well.
 ```sh
 cmake -S /path/to/AIVERSE -B build/my-game -DCMAKE_BUILD_TYPE=Release \
   -DAIVERSE_CONTENT_DIR=/path/to/project
-cmake --build build/my-game --target aiverse_client aiverse_editor aiverse_headless
+cmake --build build/my-game --target aiverse_client aiverse_headless
 build/my-game/aiverse_headless --project /path/to/project --seed 3
 ```
 
 `aiversebuild --target <target> --project /path/to/project` picks up `native/` too. When sources are exported, the C++
 travels with the project even if the data is packed into `.rpak`: the sources sit in `native/` next to the root
 CMakeLists. C++ is not included in the resource pack. To develop several games you can build a shared set of modules with
-`-DAIVERSE_NATIVE_DIR=/path/to/modules`. An empty value restores picking `native/` from `AIVERSE_CONTENT_DIR`. In the
-editor you must open the rebuilt version; the regular editor offers to build it itself (see "Editor with project modules").
+`-DAIVERSE_NATIVE_DIR=/path/to/modules`. An empty value restores picking `native/` from `AIVERSE_CONTENT_DIR`. For the HTML Studio build, use **Build → Project C++ modules** as described below.
 
 ## Inspecting native ECS components in the editor
 
@@ -47,41 +46,22 @@ for the full contract and example.
 
 ## Editor with project modules
 
-The regular editor does not contain the project's C++. If, when a project is opened (hub, recent projects, command-line
-argument, double click on `.aiverse`) or when Play is pressed, it lacks modules from `nativeModules`, the editor does the
-following:
+On macOS, Windows and Linux, open **Build → Project C++ modules** in HTML Studio. The list shows each module required by the open project's rules and whether the running Studio contains it. Choose **Build Studio with project modules** to start a background build. Follow the output in the Build window. Choose **Show log file** to locate the active transcript in the engine's `logs/native-editor-*.log`.
 
-- if `<project>/Builds/.temp/editor-<platform>` already holds a built editor that is newer than the `native/` sources and
-  the engine itself and contains all the needed modules, the editor restarts into it on the same project without asking
-  (it asks about unsaved changes, as when opening another project); a line about the switch goes to the Console and
-  `logs/editor.log`;
-- otherwise it shows a "Project C++ modules" banner listing the missing modules with a "Build the editor with project
-  modules" button. The build runs in the background, output goes to the Console window and `logs/native-editor-*.log`;
-  after a successful build the editor restarts into the built one by itself.
+The build configures the engine with `-DAIVERSE_CONTENT_DIR=<project>` in
+`<project>/Builds/.temp/editor-<platform>` and builds the Release targets
+`aiverse_studio`, `aiverse_headless` and `aiverse_client`. Each receives the project's
+native modules. Set `AIVERSE_NATIVE_BUILD_JOBS` to control compilation parallelism.
+On Linux the project editor is built at `apps/studio-native/AiverseStudio` inside the build directory.
 
-The build runs `cmake -S <engine> -B <project>/Builds/.temp/editor-<platform> -DAIVERSE_CONTENT_DIR=<project>
--DCMAKE_BUILD_TYPE=Release` and the `aiverse_editor` + `aiverse_headless` + `aiverse_client` targets
-(`AIVERSE_NATIVE_BUILD_JOBS` sets the number of jobs). The client (`AiverseGame`, built with
-`-DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF`: no copy of the project next to it, it runs on the project folder) has the project's
-modules too, so "launch client" / Play as in the client run the project's C++ plugins; a project build made before
-without the client is not "ready" until it is rebuilt. CMake and Ninja are found the same way as for the Build window (`aiversebuild --check-toolchain`:
-Homebrew, `~/.aiverse/toolchains`, etc.); if CMake is missing, the banner offers to install it.
+When the build is ready, save any project changes and choose **Open project Studio** to open the same project in a new window. The button tooltip contains the executable or bundle path. To open the project
+on macOS, run `open -n "<path to AiverseStudioHTML5.app>" --args --project "<project directory>"`.
+On Windows, run `"<path to AiverseStudio.exe>" --project "<project directory>"`.
+The Mac project bundle uses the identifier `com.aiverse.studio.html5.project`.
 
-The whole CMake build folder lives in the hidden `Builds/.temp/` (together with `aiversebuild`'s intermediate files):
-only finished builds remain in `Builds/` itself.
-
-The engine and its repository are not changed. The `Builds/` folder is ignored by the engine's git at any depth (including
-projects inside `templates/`), and a `.gitignore` with `*` is put into the build folder itself in case the project lives
-in its own repository. The module registry is generated into the build folder; the engine's `build/` folders and the
-regular editor are not touched. The built editor is a single-project tool: it does not register itself as the `.aiverse`
-handler (files are still opened by the main editor; on macOS its `AiverseEditor.app` has its own bundle id
-`com.aiverse.editor.project`), it is started only by switching and receives `--native-editor` (`AIVERSE_NATIVE_EDITOR=1`),
-so it does not switch further itself. It takes `aiversebuild` and `aiversemcp` from the regular build
-(`--tools-from`) and its own `AiverseGame`.
-
-Agents do the same over MCP: `native_status` (what is missing, where the build is, whether it is up to date) and
-`native_build` (`{"wait": true}` waits for the end and returns the binary path; without it, follow through
-`build_status`). Restarting into the built editor is possible only from the editor window.
+Over MCP, use `native_status` to inspect the required, compiled and missing modules
+and the project build paths. Start the build with `native_build` and poll `build_status`.
+For a standalone MCP process, `native_build` with `{"wait": true}` waits for completion.
 
 ## Registration
 

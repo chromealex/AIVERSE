@@ -4,13 +4,15 @@ import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '.
 import PropertyField from '../components/PropertyField';
 import {materialFields} from '../panels/materialSchema';
 import type {MaterialData,MaterialPatch,MaterialKey,FieldValue} from '../panels/materialSchema';
+import {revealProjectAsset} from '../assetNavigation';
+import {safeAssetPath} from '../assetTree';
 import GraphCanvas from './GraphCanvas';
 import TextureGraphPanel from './TextureGraphPanel';
 import {materialGraph,textureRecipeParams,textureChannelForOutput} from './materialGraph';
 import type {TextureRecipe,TextureOutput} from './materialGraph';
 
 const object=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
-export default function MaterialGraphPanel({documentEpoch,name,material,draft,projectPath,disabled,onEdit,mode}:{documentEpoch?:string;name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void;mode:'properties'|'texture'|'dependencies'|'quick'}){
+export default function MaterialGraphPanel({documentEpoch,name,material,draft,projectPath,disabled,onEdit,onOpenMaterial,mode}:{documentEpoch?:string;name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onOpenMaterial:(name:string)=>void;onEdit:(key:MaterialKey,value:FieldValue)=>void;mode:'properties'|'texture'|'dependencies'|'quick'}){
  const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [selected,setSelected]=useState(''),[patterns,setPatterns]=useState<string[]>([]);
  const [recipe,setRecipe]=useState<TextureRecipe>({pattern:'',output:'color',seed:1,size:256,scale:8,name:''});
@@ -45,12 +47,41 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}
  };
  const view=materialGraph(name,material,draft);
+ const textureNode=view.nodes.find(node=>node.id===selected && node.id.startsWith('shaderTexture:'));
  const fields=materialFields(material,draft).filter(f=>selected==='material'||selected==='factors'?f.type!=='asset':selected==='texture:'+f.key);
+ const reference=textureNode?.label ?? fields.find(f=>f.type==='asset')?.value;
+ const [revealError,setRevealError]=useState('');
+ const revealRequest=useRef(0);
+ useEffect(()=>{
+  setRevealError('');
+  return ()=>{revealRequest.current++;};
+ },[selected,name,reference,mode]);
+ const revealTexture=async(value:string)=>{
+  const token=epoch.current,request=++revealRequest.current;
+  try{
+   let relative:string|null;
+   if(/^[0-9a-f]{16,64}$/i.test(value)){
+    relative=safeAssetPath((await invoke('studio.assetByGuid',{guid:value})).path);
+   }else{
+    relative=safeAssetPath(value.replace(/^content\//,''));
+    if(!relative)throw new Error('Invalid texture path: '+value);
+    const catalog=await invoke('studio.assets',{});
+    if(!catalog.files.some(file=>file.path===relative))throw new Error('Texture not found in Assets: '+value);
+   }
+   if(epoch.current!==token||request!==revealRequest.current)return;
+   if(!relative)throw new Error('Texture file is unavailable.');
+   setRevealError('');revealProjectAsset(projectPath,relative);
+   window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
+  }catch(e){if(epoch.current===token && request===revealRequest.current)setRevealError(e instanceof Error?e.message:String(e));}
+ };
  return <div className="material-graph-modes">
   <div hidden={mode!=='dependencies'} className="material-dependency-view"><StudioSection title="Material dependencies">
   <div className="material-dependency-canvas">
-   <GraphCanvas view={view} selected={selected} label="Material dependency graph" readOnly onSelect={setSelected} onMove={()=>{}}/>
+   <GraphCanvas view={view} selected={selected} label="Material dependency graph" enhancedNavigation readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
+  {selected==='base'&&typeof material.base==='string'&&<StudioButton size="sm" disabled={disabled} onClick={()=>onOpenMaterial(String(material.base))}>Open base material: {material.base}</StudioButton>}
+  {typeof reference==='string' && reference && <div className="material-texture-reference"><code>{reference}</code><StudioButton size="sm" onClick={()=>void revealTexture(reference)}>Show texture in Assets</StudioButton></div>}
+  {revealError&&<StudioAlert tone="danger">{revealError}</StudioAlert>}
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
   </StudioSection></div>

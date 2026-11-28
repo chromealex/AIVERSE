@@ -1,31 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Layers, RefreshCw, Save, Search, ShieldAlert } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
-import AssetReferencePicker from '../components/AssetReferencePicker';
+import { MaterialRecipeFields, useMaterialRecipe } from '../components/MaterialRecipeFields';
 import PropertyField from '../components/PropertyField';
 import MaterialGraphPanel from '../graphs/MaterialGraphPanel';
 import {StudioButton} from '../ui';
 import { StudioLoader } from '../ui';
-import { editablePatch, materialFields, materialNames, materialSwatchColor, MATERIAL_PRESETS } from './materialSchema';
-import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, MaterialPreset } from './materialSchema';
+import { editablePatch, materialFields, materialNames, materialSwatchColor } from './materialSchema';
+import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch } from './materialSchema';
+import { revealProjectAsset } from '../assetNavigation';
 import './MaterialsPanel.css';
 
+import SpectraDockViewport from './SpectraDockViewport';
 const EMPTY:MaterialLibrary={library:{}};
 export default function MaterialsPanel({documentEpoch,projectPath,previewMaterial,textureOnly=false,openTextureGraph}:{documentEpoch?:string;projectPath:string;previewMaterial?:string|null;textureOnly?:boolean;openTextureGraph?:()=>void}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
+ const requestedFile=useRef<{project:string;path:string}|null>(null);
  const [name,setName]=useState('');
  const [query,setQuery]=useState('');
  const [newName,setNewName]=useState('');
- const [newPreset,setNewPreset]=useState<MaterialPreset>('matte');
- const [colorMap,setColorMap]=useState('');
- const [normalMap,setNormalMap]=useState('');
- const [repeatMetres,setRepeatMetres]=useState('1');
+ const recipe=useMaterialRecipe();
  const [creating,setCreating]=useState(false);
  const [draft,setDraft]=useState<MaterialPatch>({});
  const [pending,setPending]=useState<string|null>(null);
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
+ const [targetExpanded,setTargetExpanded]=useState(false);
  const [previewing,setPreviewing]=useState(false);
+ const [previewError,setPreviewError]=useState('');
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
  const [nonce,setNonce]=useState(0);
@@ -37,9 +39,22 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  const props=useMemo(()=>materialFields(selected,draft),[selected,draft]);
  const reload=()=>setNonce(n=>n+1);
 
- useEffect(()=>onNativeEvent(event=>{
-  if(event==='workspace.changed')reload();
- }),[]);
+ useEffect(()=>{
+  let revision=0;
+  const unsubscribe=onNativeEvent((event,payload)=>{
+   if(event==='material.previewError'&&payload&&typeof payload==='object'&&'message' in payload){
+    setPreviewError(String(payload.message));return;
+   }
+   if(event==='material.preview'||event==='workspace.changed')setPreviewError('');
+   if(event==='workspace.changed'){reload();return;}
+   if(event!=='assets.changed'||!connected||!projectPath)return;
+   const request=++revision;
+   void invoke('studio.materials',{}).then(data=>{
+    if(request===revision)setLibrary(data);
+   }).catch(e=>{if(request===revision)setError(String(e));});
+  });
+  return ()=>{++revision;unsubscribe();};
+ },[connected,projectPath]);
  useEffect(()=>{
   let canceled=false;
   setLoading(true);setError('');
@@ -57,25 +72,41 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   return ()=>{canceled=true};
  },[projectPath,nonce,connected]);
  useEffect(()=>{setDraft({});setPending(null);setName('');setMessage('');},[projectPath]);
+ const requestedPreview=useRef<string|null>(null);
+ useEffect(()=>{requestedPreview.current=null;},[projectPath]);
+ useEffect(()=>{
+  if(previewMaterial===requestedPreview.current)requestedPreview.current=null;
+ },[previewMaterial]);
+ const selectMaterial=(next:string)=>{
+  setName(next);
+  if(textureOnly||!name||(previewMaterial!==name&&requestedPreview.current!==name))return;
+  requestedPreview.current=next;
+  void invoke('studio.materialPreview',{name:next}).catch(e=>{
+   if(requestedPreview.current===next){requestedPreview.current=null;setError(String(e));}
+  });
+ };
  const switchTo=(next:string)=>{
   if(next===name)return;
-  if(changes>0){setPending(next);setMessage('Unsaved draft. Apply or discard changes to switch materials.');return;}
-  setName(next);setError('');setMessage('');setPending(null);setDraft({});
+  if(changes>0){setPending(next);setMessage('Open '+next+'? Save or discard the changes to '+name+', or keep editing.');return;}
+  selectMaterial(next);setError('');setMessage('');setPending(null);setDraft({});
  };
  const edit=(key:string,value:string|number|boolean)=>{
   setDraft(current=>({...current,[key as MaterialKey]:value}));
   setMessage('');
  };
- const recipeValid=newPreset!=='triplanar' || (colorMap.trim() && Number(repeatMetres)>=0.001 && Number(repeatMetres)<=100000);
+
  const create=async()=>{
-  if(busy||loading||!connected||!projectPath)return;
+  if(busy||loading||!connected||!projectPath||!recipe.valid)return;
   if(changes>0){setError('Apply or discard the current material draft first.');return;}
   if(!/^[A-Za-z0-9_-]{1,64}$/.test(newName)){setError('Use 1–64 letters, digits, underscore or hyphen.');return;}
   setBusy(true);setError('');setMessage('');
   try{
-   const response=await invoke('studio.materialCreate',{name:newName,preset:newPreset,...(newPreset==='triplanar'?{colorGuid:colorMap,normalGuid:normalMap,repeatMetres:Number(repeatMetres)}:{})});
-   setLibrary(response);setName(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
-   setMessage('New material saved to materials.json. MapDoc Undo does not include this edit.');
+   const response=await invoke('studio.materialCreate',{name:newName,...recipe.params});
+   setQuery(current=>newName.toLowerCase().includes(current.toLowerCase())?current:'');
+   setLibrary(response);selectMaterial(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
+   const file=response.files?.[newName];
+   if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
+   setMessage(file ? 'Created '+file : 'Material created.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
@@ -84,17 +115,48 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   setBusy(true);setError('');setMessage('');
   try {
    const response=await invoke('studio.materialPatch',{name,patch:editablePatch(draft)});
-   setLibrary(response);setDraft({});setPending(null);
-   setMessage('Saved to materials.json. MapDoc Undo does not include this edit.');
+   setLibrary(response);setDraft({});
+   if(pending!==null){selectMaterial(pending);setPending(null);}
+   setMessage('Material file saved.');
   } catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
+ const convert=async()=>{
+  setBusy(true);setError('');
+  try{setLibrary(await invoke('studio.materialsToFiles',{}));setMessage('Material files saved in content/materials.');}
+  catch(e){setError(String(e));}finally{setBusy(false);}
+ };
+ useEffect(()=>{
+  if(textureOnly || !projectPath)return;
+  const key='studio.materialToOpen:'+projectPath;
+  const open=(path:string|null)=>{
+   if(!path)return;
+   requestedFile.current={project:projectPath,path};
+   const match=Object.entries(library.files??{}).find(([,file])=>file===path);
+   if(match){
+    requestedFile.current=null;
+    if(localStorage.getItem(key)===path)localStorage.removeItem(key);
+    setQuery(value=>match[0].toLowerCase().includes(value.toLowerCase())?value:'');
+    setMaterialMode('properties');
+    switchTo(match[0]);
+   }
+  };
+  const onStorage=(event:StorageEvent)=>{if(event.key===key)open(event.newValue);};
+  const onOpen=()=>open(localStorage.getItem(key));
+  open(localStorage.getItem(key) ?? (requestedFile.current?.project===projectPath?requestedFile.current.path:null));
+  window.addEventListener('studio:open-material',onOpen);
+  window.addEventListener('storage',onStorage);
+  return ()=>{
+   window.removeEventListener('studio:open-material',onOpen);
+   window.removeEventListener('storage',onStorage);
+  };
+ },[library,projectPath,changes,textureOnly,name,previewMaterial]);
  const preview=async()=>{
   if(busy||previewing||!connected||!projectPath||!name||changes>0)return;
   setPreviewing(true);setError('');
   try{
     await invoke('studio.materialPreview',{name:previewMaterial===name?'':name});
-    setMessage(previewMaterial===name?'Material preview cleared.':'PBR sphere selected in Scene view (textures/graphs excluded).');
+    setMessage(previewMaterial===name?'Material preview cleared.':'Material preview enabled.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setPreviewing(false);}
  };
@@ -148,21 +210,29 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  };
  const discard=()=>{
   setDraft({});
-  if(pending!==null){setName(pending);setPending(null);}
+  if(pending!==null){selectMaterial(pending);setPending(null);}
   setMessage('Draft discarded.');
  };
+ const [libraryExpanded,setLibraryExpanded]=useState(false);
+ const showTarget=!textureOnly||targetExpanded||!name||changes>0;
  return <section className="materials-editor">
   <div className="materials-heading">
-   <span><Layers size={16}/> {textureOnly?'Texture Graph · target material':'Material Library'}</span>
+   {textureOnly?<StudioButton size="sm" title={name} aria-expanded={showTarget} disabled={!name||changes>0}
+    onClick={()=>setTargetExpanded(v=>!v)}>Target material · {name||'Choose material'} {showTarget?'▴':'▾'}</StudioButton>:<><span className="materials-heading-label"><Layers size={16}/> Material Library</span>
+    <StudioButton className="materials-library-toggle" size="sm" aria-expanded={!name||libraryExpanded}
+      disabled={!name} onClick={()=>setLibraryExpanded(v=>!v)}>Material Library {!name||libraryExpanded?'▴':'▾'}</StudioButton></>}
    <button className="icon-button" aria-label="Reload materials" title="Reload materials"
     disabled={busy||loading||changes>0} onClick={reload}><RefreshCw size={15}/></button>
   </div>
-  <p className="materials-warning"><ShieldAlert size={15}/>
-   Apply writes directly to materials.json. The MapDoc Undo stack cannot revert these edits.</p>
+  {names.some(n=>!library.files?.[n])&&<button disabled={busy||changes>0} onClick={()=>void convert()}>Convert library to material files</button>}
+  {showTarget&&<p className="materials-warning"><ShieldAlert size={15}/>
+   Apply saves the material file. Map Undo applies to scene edits.</p>}
   {!connected&&<p className="materials-notice">DEMO — no native material library; editing is disabled.</p>}
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
   {message&&<p role="status" className="materials-notice">{message}</p>}
+  {name&&previewMaterial===name&&previewError&&<p role="alert" className="materials-error">{previewError}</p>}
+  {name&&previewMaterial===name&&<SpectraDockViewport id="material" label="Material GPU preview"/>}
   {library.publicationInspectionError&&<p role="alert" className="materials-error">Publication inspection: {library.publicationInspectionError}</p>}
   {!!library.pendingPublications?.length&&<details className="materials-warning">
    <summary>Pending material publications ({library.pendingPublications.length})</summary>
@@ -179,23 +249,16 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   </details>}
   {!!library.quarantinedPublications?.length&&<details className="materials-warning"><summary>Quarantined material publications ({library.quarantinedPublications.length})</summary>{library.quarantinedPublications.map(p=><div key={p.id}>{p.id}{p.reason&&<small> — {p.reason}</small>}{p.restorable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('restore',p.id)}>Restore to pending</StudioButton>}</div>)}</details>}
   <div className="materials-main">
-   <aside className="materials-list">
+   {showTarget&&<aside className="materials-list" data-collapsed={!textureOnly && !!name && !libraryExpanded || undefined}>
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}
       onClick={()=>setCreating(value=>!value)}>{creating?'Cancel new material':'+ New material'}</button>
-    {creating&&<div className="materials-new-form">
-      <label>Name<input aria-label="New material name" value={newName}
+    {creating&&<form className="materials-new-form" onSubmit={event=>{event.preventDefault();void create();}}>
+      <label>Name<input autoFocus aria-label="New material name" value={newName}
         placeholder="matte_stone" maxLength={64} onChange={e=>setNewName(e.target.value)}/></label>
-      <label>Preset<select aria-label="Material preset" value={newPreset}
-        onChange={e=>setNewPreset(e.target.value as MaterialPreset)}>
-        {MATERIAL_PRESETS.map(p=><option key={p} value={p}>{p}</option>)}
-      </select></label>
-      {newPreset==='triplanar'&&<>
-        <div className="property-row"><span>Colour texture</span><AssetReferencePicker label="Colour texture" value={colorMap} kinds={['image']} disabled={busy} onChange={setColorMap}/></div>
-        <div className="property-row"><span>Normal texture (optional)</span><AssetReferencePicker label="Normal texture (optional)" value={normalMap} kinds={['image']} disabled={busy} onChange={setNormalMap}/></div>
-        <label>Repeat length (metres)<input type="number" min="0.001" max="100000" step="any" value={repeatMetres} onChange={e=>setRepeatMetres(e.target.value)}/></label>
-      </>}
-      <button disabled={busy||!newName||!recipeValid||changes>0} onClick={()=>void create()}>Create and save</button>
-    </div>}
+      <MaterialRecipeFields recipe={recipe} busy={busy}/>
+      {changes>0&&<small>Save or discard your edits to {name} before creating this material.</small>}
+      <button type="submit" disabled={busy||!newName||!recipe.valid||changes>0}>Create and save</button>
+    </form>}
     <label className="materials-search"><Search size={14}/>
      <input placeholder="Filter materials…" aria-label="Filter materials"
       value={query} onChange={e=>setQuery(e.target.value)}/>
@@ -209,33 +272,41 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
        <span title={n}>{n}</span>
       </button>)
     }
-   </aside>
+   </aside>}
    <div className={'materials-detail'+(materialMode==='texture'?' materials-detail--graph':'')}>
     {!name||!names.includes(name)?<div className="materials-empty">{name?'Selected material is no longer present. Discard the draft and choose another material.':'Select a material from the library.'}</div>:
-     <><div className="materials-selected">
+     <>{showTarget&&<div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
-      <strong>{name}</strong><small>Library PBR factors</small>
-     </div>
-     <div className="materials-modes" role="group" aria-label="Material workspace">
-      {(textureOnly?(['texture'] as const):(['properties','dependencies','quick'] as const)).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='texture'?'Texture Graph':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
-      {!textureOnly&&<StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>}
-     </div>
-     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
+      <div className="materials-file-info"><strong>{name}</strong>
+       {library.files?.[name]&&<small>{library.files[name]}</small>}
+      </div>{library.files?.[name]&&<button title={library.files[name]} onClick={()=>{
+       revealProjectAsset(projectPath, library.files![name].slice('content/'.length));
+       window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
+      }}>Show in Assets</button>}
+     </div>}
+     {!textureOnly&&<div className="materials-modes" role="group" aria-label="Material workspace">
+      {(['properties','dependencies','quick'] as const).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
+      <StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>
+     </div>}
+     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} onOpenMaterial={base=>{
+       if(!names.includes(base)){setError('Base material not found: '+base);return;}
+       switchTo(base);
+     }} mode={materialMode}/></div>}
      <div className="materials-fields" hidden={materialMode!=='properties'}>
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}
      </div></>}
    </div>
   </div>
-  <footer className="materials-footer">
+  {showTarget&&<footer className="materials-footer">
    <span>{changes>0 ? changes+' pending PBR edits' : 'No pending edits'}</span>
    <button className="materials-preview" disabled={!connected||!projectPath||!name||changes>0||busy||previewing}
-     title="Preview basic PBR factors on the native Scene GPU sphere; texture and shader graph preview not supported"
-     onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Exit PBR preview':'Preview in Scene'}</button>
-   {pending!==null&&<button className="materials-discard" onClick={discard}>Discard &amp; switch</button>}
-   <button className="materials-discard" onClick={discard} disabled={changes===0}>Discard</button>
+     title="Preview the saved material on a GPU-rendered sphere"
+     onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Hide preview':'Preview material'}</button>
+   {pending!==null&&<button className="materials-discard" disabled={busy} onClick={()=>{setPending(null);setMessage('');}}>Keep editing</button>}
+   <button className="materials-discard" onClick={discard} disabled={busy||changes===0}>{pending===null?'Discard':'Discard & switch'}</button>
    <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath||!names.includes(name)}
-    onClick={()=>void apply()}><Save size={14}/> Apply &amp; save</button>
-  </footer>
+    onClick={()=>void apply()}><Save size={14}/> {pending===null?'Apply & save':'Save & switch'}</button>
+  </footer>}
  </section>;
 }

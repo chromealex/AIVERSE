@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include "engine/bake/BakeScene.h"
+#include "engine/bake/CapturedBake.h"
 #include "engine/bake/Half.h"
 #include "engine/bake/LightmapUnwrap.h"
 #include "engine/bake/SceneBuilder.h"
@@ -262,6 +263,48 @@ static void testUnwrapAndSidecar() {
     CHECK(render::meshHasLightmapUv(*again, 0));
 }
 
+static void testCapturedBake() {
+    CapturedBake input;
+    CapturedBake::Draw draw;
+    draw.path="prop.obj";
+    draw.nodeWorld={mat4::identity(),mat4::identity()};
+    input.draws={draw};
+    auto previous=input.draws;
+    input.draws[0].nodeWorld[1]=mat4::translate({1,0,0});
+    draw.path="shape:cube";
+    input.draws.push_back(draw);
+    markStaticNodes(input,previous);
+    CHECK(input.draws.size()==1 && input.draws[0].still==std::vector<uint8_t>({1,0}));
+
+    input.draws.clear();
+    input.folder="maps/court.bake";
+    input.settings=fast();
+    input.ex=input.ez=input.step=1;
+    input.nx=input.nz=2;
+    input.heights={0,0,0,0};
+    std::map<std::string,std::string> files;
+    const ReadFn read=[&](const auto& path,auto& bytes) {
+        auto it=files.find(path);
+        if(it==files.end())return false;
+        bytes=it->second;return true;
+    };
+    int writes=0;
+    const WriteFn write=[&](const auto& path,const auto& bytes){++writes;files[path]=bytes;return true;};
+    auto first=runCapturedBake(input,read,write,{});
+    CHECK(first.error.empty() && !first.unchanged && writes>0);
+    LightmapData loaded;
+    std::string error;
+    CHECK(loadLightmapData(input.folder,read,loaded,error) && loaded.hash==first.hash && !loaded.pages.empty());
+    input.oldHash=first.hash;
+    writes=0;
+    CHECK(runCapturedBake(input,read,write,{}).unchanged && writes==0);
+    input.force=true;
+    CHECK(!runCapturedBake(input,read,write,[](const auto&,float){return false;}).error.empty() && writes==0);
+    CHECK(runCapturedBake(input,read,write,{}).error.empty() && writes>0);
+    input.heights.pop_back();
+    CHECK(!runCapturedBake(input,read,write,{}).error.empty());
+}
+
 static void testSmallHelpers() {
     for (float f : {0.0f, 1.0f, -2.5f, 0.3333f, 1234.5f, 1e-5f}) CHECK(std::fabs(halfToFloat(floatToHalf(f)) - f) <= std::fabs(f) * 1e-3f + 1e-7f);
     uint8_t px[4];
@@ -280,6 +323,7 @@ static void testSmallHelpers() {
 }
 
 int main() {
+    testCapturedBake();
     testSmallHelpers();
     testOpenSky();
     testSunSubtractiveAndShadow();

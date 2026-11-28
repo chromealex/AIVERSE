@@ -2,9 +2,12 @@
 #include "engine/data/Json.h"
 namespace aiverse::editor::animation {
 Json makeGraph();
+Json rigItemPresets();
 Json makeNode(const std::string& kind,const std::string& id,const std::string& input="bind");
 Json makeContacts(const std::string& root,const std::string& foot);
 Json makeUnit(const std::string& op);
+void renameState(Json& graph,const std::string& id,const std::string& name);
+void removeState(Json& graph,const std::string& id);
 void sort(Json& graph); // Stable topological ordering; throws without changing input on failure.
 void connect(Json& graph,const std::string& source,const std::string& target,const std::string& port);
 void rename(Json& graph,const std::string& from,const std::string& to);

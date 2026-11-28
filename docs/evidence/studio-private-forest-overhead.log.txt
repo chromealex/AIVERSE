@@ -1,0 +1,9 @@
+In file included from /tmp/nature-pointer.mm:2:
+/private/tmp/aiverse-studio-only/engine/render/Math3D.h:5:18: warning: nested namespace definition is a C++17 extension; define each namespace separately [-Wc++17-extensions]
+    5 | namespace aiverse::render {
+      |                  ^~~~~~~~
+      |                   { namespace render
+1 warning generated.
+2026-11-26 23:05:49.184 AiverseStudioHTML5[26910:86055046] [studio-web] JS: CROSS main DONE_1
+2026-11-26 23:05:49.101 AiverseStudioHTML5[26910:86055046] [studio-web] JS: CROSS main VERIFIED native orbit and zoom preserved across toggle
+2026-11-26 23:05:49.184 AiverseStudioHTML5[26910:86055046] [studio-web] JS: CROSS main VERIFIED separate nature window on/off, trees 616

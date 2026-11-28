@@ -1,0 +1,10 @@
+{
+  "sha": "76d80d3a7eb1aaff0ad0afb570082ee88324ed6e",
+  "argv": [
+    "bash",
+    "/tmp/physis-pick.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-pointer-recenter.log.txt",
+  "sha256": "8834fe6678606c621a572a82f2d785242d0be08699c6c514364fb089480c0322"
+}

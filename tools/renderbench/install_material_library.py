@@ -15,32 +15,61 @@ def install(project, library=LIBRARY):
         raise ValueError('project must contain game.json')
     material_file=project/'materials.json'
     shaders=project/'shaders'
-    if material_file.is_symlink() or shaders.is_symlink():
-        raise ValueError('material library destinations must not be symlinks')
-    doc=json.loads(material_file.read_text()) if material_file.exists() else {'materials':{}}
+    material_dir=project/'content'/'materials'
+    for directory in (shaders, material_dir.parent, material_dir):
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            raise ValueError(f'invalid library directory: {directory}')
+    if material_file.is_symlink():
+        raise ValueError('material index must not be a symlink')
+    original=material_file.read_bytes() if material_file.exists() else None
+    doc=json.loads(original) if original is not None else {'materials':{}}
     if not isinstance(doc,dict) or not isinstance(doc.get('materials'),dict):
         raise ValueError('materials.json must contain a materials object')
     presets=json.loads((library/'materials.json').read_text())['materials']
-    graphs={name:json.loads((library/'shaders'/f'{name}.json').read_text()) for name in presets}
-    for name,g in graphs.items():
-        if name in doc['materials'] or (shaders/f'{name}.json').exists() or (shaders/f'{name}.json').is_symlink():
-            raise ValueError(f'already exists: {name}; existing materials and graphs are never overwritten')
-        if presets[name]['shaderGraph']!=g:
+    files={}
+    for name,material in presets.items():
+        if not name or Path(name).name!=name or name in doc['materials']:
+            raise ValueError(f'invalid or existing material: {name}')
+        graph_name=f'{name}.json'
+        graph=json.loads((library/'shaders'/graph_name).read_text())
+        if material['shaderGraph']!=graph:
             raise ValueError(f'graph snapshot differs: {name}')
-    # Check all conflicts before writing; retain an exact backup of an existing library.
+        asset=material_dir/f'{name}.material.json'
+        files[shaders/graph_name]=graph
+        files[asset]=material
+        doc['materials'][name]=asset.relative_to(project).as_posix()
     backup=project/'materials.before-shader-library.json'
-    if material_file.exists():
-        with backup.open('xb') as f:f.write(material_file.read_bytes())
+    destinations=list(files)
+    if original is not None:
+        destinations.append(backup)
+    for path in destinations:
+        if path.exists() or path.is_symlink():
+            raise ValueError(f'already exists: {path}')
     shaders.mkdir(exist_ok=True)
-    for name,g in graphs.items():
-        with (shaders/f'{name}.json').open('x') as f:json.dump(g,f,indent=2);f.write('\n')
-    doc['materials'].update(presets)
-    fd,temp=tempfile.mkstemp(prefix='.materials-',suffix='.json',dir=project)
+    material_dir.mkdir(parents=True,exist_ok=True)
+    created=[]
     try:
-        with os.fdopen(fd,'w') as f:json.dump(doc,f,indent=2);f.write('\n')
-        os.replace(temp,material_file)
-    finally:
-        if os.path.exists(temp):os.unlink(temp)
+        if original is not None:
+            with backup.open('xb') as stream:
+                created.append(backup)
+                stream.write(original)
+        for path,document in files.items():
+            with path.open('x',encoding='utf-8') as stream:
+                created.append(path)
+                json.dump(document,stream,indent=2)
+                stream.write('\n')
+        fd,temp=tempfile.mkstemp(prefix='.materials-',suffix='.json',dir=project)
+        try:
+            with os.fdopen(fd,'w',encoding='utf-8') as stream:
+                json.dump(doc,stream,indent=2)
+                stream.write('\n')
+            os.replace(temp,material_file)
+        finally:
+            Path(temp).unlink(missing_ok=True)
+    except Exception:
+        for path in reversed(created):
+            path.unlink(missing_ok=True)
+        raise
     return list(presets)
 
 

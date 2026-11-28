@@ -1,0 +1,10 @@
+{
+  "sha": "4a0f7105706b5509e21d700da9f6de021ea6afa3",
+  "argv": [
+    "bash",
+    "/tmp/select-rules.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-editor-select-rules.log.txt",
+  "sha256": "44aad8518970e497bedbd2922519a4a68aec13057ade848d93edccc4d2725a09"
+}

@@ -40,14 +40,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ## 빠른 시작 (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-에디터에서 다른 게임 열기: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+에디터에서 다른 게임 열기: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 게임을 다른 데이터 세트로 실행하려면 `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`를 지정합니다.
 
 ### 여러 에디터를 동시에 사용하기
@@ -216,11 +215,18 @@ Unreal의 `.uproject`나 `project.godot`처럼 더블 클릭으로 열 수 있�
 
 - 프로젝트와 함께 만들어집니다(허브의 "새 프로젝트", MCP `create_project`). 이것이 없는 예전 프로젝트는 에디터에서 처음 열 때 만들어집니다.
   `templates/*/`의 템플릿에는 이미 있습니다(새 프로젝트로 복사되지 않으며, 새 프로젝트는 자기 것을 가집니다).
-- 에디터가 프로젝트 경로를 받는 곳이면 어디서나 `.aiverse`와 폴더 모두 쓸 수 있습니다: `aiverse_editor "My Strategy.aiverse"`,
+- 에디터가 프로젝트 경로를 받는 곳이면 어디서나 `.aiverse`와 폴더 모두 쓸 수 있습니다: `AiverseStudio.exe --project "My Strategy.aiverse"`,
   `--project`, 허브의 "열기…"(`.aiverse`와 프로젝트 폴더를 표시), 최근 항목, MCP `open_game`, `aiversebuild --project x.aiverse`.
   `.aiverse`는 빌드에 포함되지 않습니다.
 - AIVERSE로 이름이 바뀌기 전에 만든 프로젝트는 `<이름>.rtsproj`를 그대로 유지합니다. 어디서나 똑같이 열리고, 제자리에서
   다시 저장되며 이름이 바뀌지 않습니다. 폴더에 둘 다 있으면 `.aiverse`가 우선합니다.
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>기존 ImGui 편집기의 파일 연결</summary>
+
 - **더블 클릭.** 시작할 때 연결이 없거나 다른 에디터 인스턴스에 연결되어 있으면, 에디터는 `.aiverse`를 자신과 연결합니다(사용자 단위,
   관리자 권한 불필요). 사용자가 고른 다른 프로그램은 덮어쓰지 않습니다. 수동으로는 "프로젝트 → 에디터를 .aiverse 기본 앱으로". 상태는
   허브의 왼쪽 아래에 표시됩니다. 끄려면 `AIVERSE_FILE_ASSOC=off`.
@@ -233,6 +239,8 @@ Unreal의 `.uproject`나 `project.godot`처럼 더블 클릭으로 열 수 있�
   - **Linux:** 타입 `application/x-aiverse-project`(`~/.local/share/mime/packages/aiverse-project.xml`),
     `~/.local/share/applications/aiverse-editor.desktop`(`Exec=<에디터> %f`), 아이콘은 `~/.local/share/icons/hicolor`, 기본 앱은
     `~/.config/mimeapps.list`. `update-mime-database`, `update-desktop-database`, `xdg-mime`이 설치되어 있으면 호출합니다.
+
+</details>
 
 ## 게임 만들기(마법사)
 

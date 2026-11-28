@@ -1,0 +1,10 @@
+{
+  "sha": "babc1c43d3896e8ae8f59b1b1fd11af935c65d1d",
+  "argv": [
+    "bash",
+    "/tmp/live-focus.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-live-camera-focus.log.txt",
+  "sha256": "1c8896de46bb7e29d484949ff697d155e6bf02a59cc157e18f49d62744177e85"
+}

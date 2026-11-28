@@ -1,0 +1,10 @@
+{
+  "sha": "636b09c9e6dc164fda633d345b3d8597544929f3",
+  "argv": [
+    "bash",
+    "/tmp/author-geometry-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-static-geometry-authoring.log.txt",
+  "sha256": "ee4a9e60b801c8efda78ba9baf3acd9bb6a70875fd92ca36a7ac9a8e407e551f"
+}

@@ -1,0 +1,10 @@
+{
+  "sha": "d343bc7a785a62c5971e3f8c7ed24c2cc393694f",
+  "argv": [
+    "bash",
+    "/tmp/physis-live-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-local-playtest.log.txt",
+  "sha256": "41070eb37e867d1f1f0bf6831fd10d18557483b76a5a3f8f31471f295b2deb9f"
+}

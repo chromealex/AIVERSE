@@ -13,7 +13,7 @@
 #include "engine/fx/SpectraFxGpuEmitterLibrary.h"
 #include "engine/fx/SpectraFxGpuRoutes.h"
 #include "engine/fx/SpectraFxSceneHost.h"
-#include "SpectraFxGpuPreviewPolicy.h"
+#include "apps/editor/core/SpectraFxGpuPreviewPolicy.h"
 #include "engine/render/Renderer3D.h"
 #include <cmath>
 #include <cstdint>

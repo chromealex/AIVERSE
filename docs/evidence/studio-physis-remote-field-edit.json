@@ -1,0 +1,10 @@
+{
+  "sha": "b7f624c341654142b25164f98228a3cddce53aee",
+  "argv": [
+    "bash",
+    "/tmp/physis-remote-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-remote-field-edit.log.txt",
+  "sha256": "1f89de9c4f8e03650ff9533f3d1815ab8121c116f1e9f1168f539eaeb14ff9d1"
+}

@@ -1,0 +1,11 @@
+.raid-page { display: grid; gap: var(--au-space-3); width: min(100%, 54rem); margin-inline: auto; }
+.raid-page header, .raid-page section { padding: var(--au-space-3); }
+.raid-page section { background: var(--au-panel-raised); border: 1px solid var(--au-line); border-radius: var(--au-radius-md); }
+.raid-page :is(h2,h3,h4,p) { margin: 0 0 var(--au-space-2); }
+.raid-page :is(header p,li span,label) { color: var(--au-text-muted); }
+.raid-page ul { list-style: none; margin: 0; padding: 0; }
+.raid-page li { display: flex; flex-wrap: wrap; gap: var(--au-space-2); padding-block: 5px; overflow-wrap: anywhere; }
+.raid-page form { display: flex; flex-wrap: wrap; gap: var(--au-space-2); align-items: end; margin-block: var(--au-space-2); }
+.raid-page label { display: grid; gap: 4px; flex: 1 1 5rem; min-width: 0; }
+.raid-page label:has([name=id]) { flex-grow: 2; }
+.raid-page input { width: 100%; min-width: 0; }

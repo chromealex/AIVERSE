@@ -1,0 +1,11 @@
+2026-11-26 00:20:38.581 AiverseStudioHTML5[75598:81848409] [studio-web] JS: CROSS main DONE_1
+2026-11-26 00:20:38.581 AiverseStudioHTML5[75598:81848409] [studio-web] JS: CROSS main VERIFIED HTML pointer drag cancellation, A, Shift-B, C, Escape, undo, redo, save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/road-html-qa-lb9RHs/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/road-html-qa-lb9RHs/Catalog.app: replacing existing signature
+2026-11-26 00:20:50.014 AiverseStudioHTML5[77883:81859817] [studio-web] JS: CROSS main DONE_2
+2026-11-26 00:20:50.014 AiverseStudioHTML5[77883:81859817] [studio-web] JS: CROSS main VERIFIED reopened map
+Saved and reopened chain [['outpost_1', 'scout_1'], ['scout_1', 'outpost_2']]
+Composited Scene pixels: terrain 0 movement roads and gizmos 0
+Traceback (most recent call last):
+  File "<stdin>", line 15, in <module>
+AssertionError

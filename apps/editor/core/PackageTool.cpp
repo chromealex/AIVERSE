@@ -20,8 +20,12 @@ std::string quote(const std::string& value) {
 } // namespace
 
 Json runPackageTool(const std::string& engineDir, const std::vector<std::string>& args) {
-    const auto script = std::filesystem::path(engineDir) / "tools/pkg/aiverse_pkg.py";
-    if (!std::filesystem::exists(script)) throw std::runtime_error("tools/pkg/aiverse_pkg.py not found in the engine directory");
+    return runPythonJsonTool(engineDir, "tools/pkg/aiverse_pkg.py", args);
+}
+
+Json runPythonJsonTool(const std::string& engineDir, const std::string& relativeScript, const std::vector<std::string>& args) {
+    const auto script = std::filesystem::path(engineDir) / relativeScript;
+    if (!std::filesystem::exists(script)) throw std::runtime_error(relativeScript + " not found in the engine directory");
     const char* python = std::getenv("AIVERSE_PYTHON");
 #if defined(_WIN32)
     if (!python) python = "python";
@@ -48,8 +52,8 @@ Json runPackageTool(const std::string& engineDir, const std::vector<std::string>
 #endif
     Json r;
     try { r = Json::parse(output); }
-    catch (const std::exception&) { throw std::runtime_error("aiverse_pkg.py: " + output.substr(0, 2000)); }
-    if (r.has("error")) throw std::runtime_error(r["error"].str("aiverse_pkg.py failed"));
+    catch (const std::exception&) { throw std::runtime_error(relativeScript + ": invalid Python response " + output.substr(0, 2000)); }
+    if (r.has("error")) throw std::runtime_error(r["error"].str(relativeScript + " failed"));
     return r["result"];
 }
 

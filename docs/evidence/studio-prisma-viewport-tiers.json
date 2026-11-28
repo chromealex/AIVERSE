@@ -1,0 +1,10 @@
+{
+  "sha": "d849f5a6e80e6db18b742ca9a068c8f24d9ae6fe",
+  "argv": [
+    "bash",
+    "/tmp/pfx-tier-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-prisma-viewport-tiers.log.txt",
+  "sha256": "31440992f8bda58cd69398a2b849241ddd41f0afdaab41b3d26256ed81431257"
+}

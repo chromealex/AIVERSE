@@ -44,6 +44,21 @@ int main() {
         editAuthoredWaterFlow(authored,Json::parse(R"({"id":7,"mode":"manual","flow":[1,0,0]})"));
         require(!authored.data.extra.has("nereidWater"));require(authored.data.entities[2].extra["components"]["NereidWater"]["flow"][0].integer()==1);
         authored.undo();require(!authored.data.entities[2].extra["components"]["NereidWater"].has("flow"));
+        authored.data.entities[0].id.clear();
+        authored.data.entities[2].id.clear();
+        auto secondRiver=authored.data.entities[2];
+        secondRiver.x+=12;
+        secondRiver.extra.member("components").member("NereidWater").set("id",Json::number(int64_t(8)));
+        authored.data.entities.push_back(secondRiver);
+        const auto unnamedBaseline=authored.toJson();
+        editAuthoredWaterFlow(authored,Json::parse(R"({"id":8,"mode":"manual","flow":[-3,0,0]})"));
+        require(!authored.data.entities[0].extra["components"].has("NereidWater"));
+        require(authored.data.entities[2].extra==river.extra);
+        require(authored.data.entities[3].extra["components"]["NereidWater"]["flow"][0].integer()==-3);
+        require(world::parseNereidWaterManifest(authoredWaterDocument(authored)).surfaces.size()==2);
+        const auto secondRiverEdited=authored.toJson();
+        authored.undo();require(authored.toJson()==unnamedBaseline);
+        authored.redo();require(authored.toJson()==secondRiverEdited);
     }
     DocEntity sedan;
     sedan.id = "sedan_01";

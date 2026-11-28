@@ -1,0 +1,21 @@
+Clicked QA Scene at (4197.4400000000005, 505.1727078891258)
+
+
+
+
+
+
+
+
+
+content
+0
+content/ is empty
+Import assets or drag files here from the Finder.
+0 assets
+content/
+0 errors0
+Courtyard
+¬∑ saved
+edit mode
+‚óè Native host @aiverse-studio://shell/index.html:58:13

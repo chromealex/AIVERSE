@@ -1,0 +1,6 @@
+Sampling process 95589 for 1 second with 1 millisecond of run time between samples
+Sampling completed, processing symbols...
+Sample analysis of process 95589 written to file /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/mac-export-current-Z2kjP6/rosetta-sample.txt
+Code Type:       X86-64 (translated)
+[pack] mounted /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/mac-export-current-Z2kjP6/Harbor's study/Builds/macos/Watchtower_orders.app/Contents/Resources/content/content.rpak (58 files)
+../mac-export-rosetta-lobby.sh: line 19: 95589 Terminated: 15          /usr/bin/arch -x86_64 "$app/Contents/MacOS/$exe" > "$r/rosetta-game.log" 2>&1

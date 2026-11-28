@@ -1,0 +1,10 @@
+{
+  "sha": "9e046befc616ae92c90d48c4e2cf77546487f35f",
+  "argv": [
+    "bash",
+    "/tmp/light-runtime-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-light-runtime-palette.log.txt",
+  "sha256": "9ad4badd3cf2736dc30e8b5b91a3546e6f43df3b7f150d49d4c7a8cc5cc5a82d"
+}

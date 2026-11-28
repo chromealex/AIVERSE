@@ -1,0 +1,10 @@
+{
+  "sha": "62ac479d83fc8129b52025b16b515416819e6d0e",
+  "argv": [
+    "bash",
+    "/tmp/studio-editor-open.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-editor-open.log.txt",
+  "sha256": "ae68b348e4a8f7a55038314952c8a9376c652654c72981e34b2a3e2b76c27f20"
+}

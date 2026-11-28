@@ -40,14 +40,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ## Démarrage rapide (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Un autre jeu dans l’éditeur : `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Un autre jeu dans l’éditeur : `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 Pour que le jeu démarre avec un autre jeu de données, passez `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Plusieurs éditeurs à la fois
@@ -233,11 +232,17 @@ et stocke des informations de l’éditeur :
 - Il est créé avec le projet (hub « Nouveau projet », MCP `create_project`) ; un ancien projet sans lui en reçoit un à la
   première ouverture dans l’éditeur. Les modèles de `templates/*/` en ont déjà un (il n’est pas copié dans un nouveau projet :
   celui-ci reçoit le sien).
-- Partout où l’éditeur accepte un chemin de projet, `.aiverse` comme le dossier conviennent : `aiverse_editor "My
-  Strategy.aiverse"`, `--project`, « Ouvrir… » dans le hub (montre les `.aiverse` et les dossiers de projets), projets récents,
+- Partout où l’éditeur accepte un chemin de projet, `.aiverse` comme le dossier conviennent : `AiverseStudio.exe --project "My Strategy.aiverse"`, `--project`, « Ouvrir… » dans le hub (montre les `.aiverse` et les dossiers de projets), projets récents,
   MCP `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` n’entre pas dans un build.
 - Les projets créés avant le renommage en AIVERSE gardent leur `<Nom>.rtsproj` : il s’ouvre partout de la même façon, est
   réécrit sur place et jamais renommé ; si le dossier contient les deux, `.aiverse` l’emporte.
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Associations de fichiers de l’ancien éditeur ImGui</summary>
+
 - **Double clic.** Au démarrage, l’éditeur associe `.aiverse` à lui-même (par utilisateur, sans droits d’administrateur) s’il
   n’y a pas d’association ou si elle pointe vers une autre instance de l’éditeur ; il ne remplace pas un autre programme que
   vous avez choisi. À la main : « Projet → Faire de l’éditeur l’application par défaut pour .aiverse » ; l’état s’affiche en
@@ -254,6 +259,8 @@ et stocke des informations de l’éditeur :
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<éditeur> %f`), icônes dans `~/.local/share/icons/hicolor`,
     application par défaut dans `~/.config/mimeapps.list` ; `update-mime-database`, `update-desktop-database`, `xdg-mime`
     sont appelés s’ils sont installés.
+
+</details>
 
 ## Créer un jeu (assistant)
 

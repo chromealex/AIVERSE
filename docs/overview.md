@@ -53,14 +53,13 @@ shared `apps/studio-native/StudioHost` (`mac/Main.mm` Cocoa + Metal, `win/Main.c
 Floating panel windows and drag-and-drop from Explorer are macOS-only for now.
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Another game in the editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Another game in the editor: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 To make the game start with a different data set, pass `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Several editors at once
@@ -348,20 +347,24 @@ and stores editor information:
 - It is created with the project (hub "New project", MCP `create_project`); an older project without it gets one
   on first open in the editor. Templates in `templates/*/` already have one (it is not copied into a new project:
   that gets its own).
-- Everywhere the editor accepts a project path, both `.aiverse` and the folder work: `aiverse_editor "My
-  Strategy.aiverse"`, `--project`, "Open…" in the hub (shows `.aiverse` and project folders), recent projects,
+- Everywhere the editor accepts a project path, both `.aiverse` and the folder work: `AiverseStudio.exe --project "My Strategy.aiverse"`, `--project`, "Open…" in the hub (shows `.aiverse` and project folders), recent projects,
   MCP `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` does not go into a build.
 - Projects made before the AIVERSE rename keep their `<Name>.rtsproj`: it opens the same way everywhere, is rewritten
   in place and is never renamed; when a folder has both, `.aiverse` wins.
+- **HTML5 Studio**
+  - **macOS HTML Studio:** Finder can open both project extensions with AiverseStudioHTML5.app.
+    Choose Studio under Open With, or run `open -a AiverseStudioHTML5 x.aiverse`.
+    On launch Studio opens the selected project. Opening a different project while Studio is running
+    starts a separate instance so the current workspace and its drafts stay available.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Legacy ImGui editor file associations</summary>
+
 - **Double click.** On start the editor associates `.aiverse` with itself (per user, without admin rights) if there
   is no association or it points to another editor instance; it does not override another program you chose.
   Manually: "Project → Make the editor the default app for .aiverse"; the state is shown at the bottom left of the hub.
   Disable with `AIVERSE_FILE_ASSOC=off`.
-  - **macOS:** the `com.aiverse.project` type is declared in the Info.plist of `AiverseEditor.app`
-    (`platform/macos/EditorInfo.plist.in`; the `rtsproj.icns` document icon is drawn by `aiverse_projicon` from the
-    editor logo `apps/editor/branding/icon_1024.png`); the editor registers the bundle in LaunchServices
-    (`lsregister -f`) and becomes the default handler. A double click and `open -a AiverseEditor x.aiverse` open the
-    project in the running editor (if the map has unsaved changes, it asks whether to save).
   - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (icon
     `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, command `"<aiverse_editor.exe>" "%1"`). If Windows already has
     another program chosen for `.aiverse`, the hub suggests "Open with → Always".
@@ -369,6 +372,8 @@ and stores editor information:
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<editor> %f`), icons in
     `~/.local/share/icons/hicolor`, the default app in `~/.config/mimeapps.list`;
     `update-mime-database`, `update-desktop-database`, `xdg-mime` are called if installed.
+
+</details>
 
 ## Make a game (wizard)
 

@@ -1,0 +1,10 @@
+{
+  "sha": "d1d631e44e0cc6dedc73a705a169e2b603b2905a",
+  "argv": [
+    "bash",
+    "/tmp/physis-demo-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-demo-layout.log.txt",
+  "sha256": "439798d472a94990d32de58f5537c43e0004ad7c5b52fd0a5f7e85603c0bf50b"
+}

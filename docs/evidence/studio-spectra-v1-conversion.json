@@ -1,0 +1,10 @@
+{
+  "sha": "2f7ac5eb9132f7809d9d8f50b97785b5cc614ed2",
+  "argv": [
+    "bash",
+    "/tmp/studio-graph-conversion-tests.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-spectra-v1-conversion.log.txt",
+  "sha256": "6bac16498c394cefc6487f9159539cf256b241a80e50654ff88fa8db1ac89ba6"
+}

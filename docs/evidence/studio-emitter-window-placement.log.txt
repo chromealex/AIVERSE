@@ -1,0 +1,11 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+2026-11-26 08:54:48.828 AiverseStudioHTML5[18350:83550557] [studio-web] JS: CROSS emitter-preview DONE_1
+2026-11-26 08:54:48.828 AiverseStudioHTML5[18350:83550557] [studio-web] JS: CROSS emitter-preview VERIFIED unsaved Metal GPU emitter, frozen time, exact single step, paused restart, resume, orbit/zoom/reset, CPU fallback selection, invalid draft and recovery, closed Scene, no disk write

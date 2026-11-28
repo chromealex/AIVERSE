@@ -1,0 +1,13 @@
+{
+  "sha": "d1a22e1d552117f84f06404d2bacd7c7e6c5b919",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-actor-simulation-d1a22e1d5.log.txt",
+  "sha256": "2e1a1aaee301b7c2d421f688aa07b732f70106a6f0b3a3f73b14e407606ac370"
+}

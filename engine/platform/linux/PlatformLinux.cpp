@@ -1,6 +1,7 @@
 // Linux: X11 window + EGL + OpenGL ES 3, or Vulkan on request (GraphicsSettings.h). Used for development and CI
 // (works under Xvfb with Mesa: llvmpipe for GL, lavapipe for Vulkan).
 // Debug hooks (env):  AIVERSE_SCREENSHOT=out.ppm  AIVERSE_EXIT_AFTER_FRAMES=N  -> capture frame N and exit.
+#include "LinuxKey.h"
 #include "../PlatformCommon.h"
 #include "../GraphicsSettings.h"
 #include "../../gfx/Gfx.h"
@@ -47,26 +48,6 @@ uint8_t mods(unsigned s) {
     return m;
 }
 
-Key mapKey(KeySym k) {
-    if (k >= XK_a && k <= XK_z) return Key(int(Key::A) + int(k - XK_a));
-    if (k >= XK_A && k <= XK_Z) return Key(int(Key::A) + int(k - XK_A));
-    if (k >= XK_0 && k <= XK_9) return Key(int(Key::Num0) + int(k - XK_0));
-    if (k >= XK_F1 && k <= XK_F12) return Key(int(Key::F1) + int(k - XK_F1));
-    switch (k) {
-        case XK_Escape: return Key::Escape; case XK_Return: return Key::Enter; case XK_Tab: return Key::Tab;
-        case XK_BackSpace: return Key::Backspace; case XK_Delete: return Key::Delete; case XK_Insert: return Key::Insert;
-        case XK_space: return Key::Space; case XK_Left: return Key::Left; case XK_Right: return Key::Right;
-        case XK_Up: return Key::Up; case XK_Down: return Key::Down; case XK_Home: return Key::Home; case XK_End: return Key::End;
-        case XK_Page_Up: return Key::PageUp; case XK_Page_Down: return Key::PageDown;
-        case XK_Shift_L: return Key::LeftShift; case XK_Shift_R: return Key::RightShift;
-        case XK_Control_L: return Key::LeftCtrl; case XK_Control_R: return Key::RightCtrl;
-        case XK_Alt_L: return Key::LeftAlt; case XK_Alt_R: return Key::RightAlt;
-        case XK_Super_L: return Key::LeftSuper; case XK_Super_R: return Key::RightSuper;
-        case XK_minus: return Key::Minus; case XK_equal: return Key::Equal; case XK_comma: return Key::Comma;
-        case XK_period: return Key::Period; case XK_slash: return Key::Slash; case XK_semicolon: return Key::Semicolon;
-        default: return Key::Unknown;
-    }
-}
 
 void saveScreenshot(const std::string& path, int w, int h) {
     std::vector<uint8_t> px(size_t(w) * size_t(h) * 4);
@@ -281,7 +262,7 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
             case KeyPress: case KeyRelease: {
                 KeySym ks = XLookupKeysym(&xe.xkey, 0);
                 e.type = xe.type == KeyPress ? EventType::KeyDown : EventType::KeyUp;
-                e.key = mapKey(ks); e.mods = mods(xe.xkey.state);
+                e.key = linuxKeyFromKeysym(ks); e.mods = mods(xe.xkey.state);
                 detail::dispatch(e);
                 if (xe.type == KeyPress && e.key == Key::F11 && state().cfg.allowFullscreen) detail::applyFullscreen(!state().fullscreen);
                 if (xe.type == KeyPress) {

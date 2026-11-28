@@ -1,5 +1,9 @@
 # AIVERSE Studio UI — Visual Design System v1
 
+## Window layout in HTML5 Studio
+
+Each docked, floating and standalone tool uses its available panel width as the layout boundary. Place file actions near the document name, keep primary controls reachable in narrow docks and allow long forms to scroll. At wider sizes, keep the model preview alongside its properties. A tool with a GPU preview owns the drawable in its own window so artists can keep working in Scene independently.
+
 > **Approved visual baseline: First Cinematic Concept (2026-11-20).** The user selected the FIRST, more atmospheric AIVERSE Studio design, not the later stricter/flat variant. For layout, screen-level rules, palette and visual acceptance criteria, read [Visual Direction](studio-visual-direction.md). For file paths, panel generation and agent steps, read [UI Agent Guide](studio-ui-agent-guide.md).
 >
 > This document specifies the **existing code library**. A chosen reference design is not proof that every window has already been migrated to it.

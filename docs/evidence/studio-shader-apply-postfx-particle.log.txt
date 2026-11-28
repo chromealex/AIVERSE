@@ -1,0 +1,5 @@
+2026-11-25 23:30:31.493 AiverseStudioHTML5[33948:81635972] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-25 23:30:30.932 AiverseStudioHTML5[33948:81635972] [studio-web] JS: CROSS bindingproof VERIFIED postfx saved and applied
+2026-11-25 23:30:31.493 AiverseStudioHTML5[33948:81635972] [studio-web] JS: CROSS bindingproof VERIFIED particle saved and applied
+Shader edits left game rules unchanged.
+Game postfx and particle emitter 1 contain their saved graph snapshots. Emitter 0 has no shader graph.

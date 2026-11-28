@@ -1,0 +1,10 @@
+{
+  "sha": "b350a89f53f545d2b7fdbbc2526d2fceac516e60",
+  "argv": [
+    "bash",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/rig-ui.sh"
+  ],
+  "exit_code": 127,
+  "log": "docs/evidence/studio-scene-wind-modes-mac.log.txt",
+  "sha256": "5f8b15316bebfacc036d6ac864ff5e7fa9c3a1a407a3a8bdfa9601be5bf302fe"
+}

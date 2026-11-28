@@ -1,0 +1,3 @@
+2026-11-26 08:19:04.835 AiverseStudioHTML5[95663:83437571] [studio-web] JS: CROSS main DONE_1
+2026-11-26 08:19:04.835 AiverseStudioHTML5[95663:83437571] [studio-web] JS: CROSS main VERIFIED project + two map-local files sharing an instance id, stale document and stale file rejected, empty world no fallback, legacy project scope, reopen persisted
+Yard saved STRATA, project and hangar files stayed byte-identical.

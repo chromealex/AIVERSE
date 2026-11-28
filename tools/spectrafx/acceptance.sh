@@ -51,10 +51,15 @@ skip() {
 
 opts=(
     -S "$ROOT" -B "$BUILD"
-    -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=ON
+    -DAIVERSE_BUILD_TESTS=ON
     -DAIVERSE_BUILD_CLIENT=ON -DAIVERSE_BUILD_HEADLESS=ON
     -DAIVERSE_BUILD_TOOLS=ON
 )
+web="$ROOT/apps/studio-web"
+dist="$BUILD/spectrafx-studio-web"
+stage studio_dependencies npm --prefix "$web" install --no-audit --no-fund --package-lock=false
+stage studio_web npm --prefix "$web" run build -- --outDir "$dist"
+opts+=(-DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON "-DAIVERSE_STUDIO_WEB_DIST=$dist")
 # Preserve an existing Mac build cache and avoid needlessly rebuilding.
 if [[ ! -f "$BUILD/CMakeCache.txt" ]]; then opts+=(-DCMAKE_BUILD_TYPE=Debug); fi
 if [[ "${AIVERSE_ACCEPTANCE_WARNINGS_AS_ERRORS:-0}" == 1 ]]; then
@@ -86,7 +91,7 @@ if stage configure cmake "${opts[@]}"; then
     target_ok=0
     stage spectrafx_core_build cmake --build "$BUILD" --config Debug --parallel "$JOBS" --target "${targets[@]}" && target_ok=1 || true
     stage architecture python3 "$ROOT/tools/spectrafx/check_boundaries.py" || true
-    stage host_integration_build cmake --build "$BUILD" --config Debug --parallel "$JOBS" --target aiverse_editor aiverse_client || true
+    stage host_integration_build cmake --build "$BUILD" --config Debug --parallel "$JOBS" --target aiverse_desktop_editor aiverse_client || true
     full_ok=0
     stage full_build cmake --build "$BUILD" --config Debug --parallel "$JOBS" && full_ok=1 || true
     if (( full_ok )); then
