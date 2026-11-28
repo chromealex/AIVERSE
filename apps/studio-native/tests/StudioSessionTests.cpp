@@ -2723,7 +2723,7 @@ static void localPlayToolContracts(aiverse::editor::Workspace& ws) {
     AIVERSE_TEST_CHECK(call("studio_play_review_apply",apply).has("error"));
 }
 
-int main() {
+static int runStudioSessionTests() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
     actorProjectMapSelection();
@@ -2813,4 +2813,14 @@ int main() {
     regionOverviewContract();mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     caveGraphCaptureWorkflow();
     std::cout << "studio session contract PASS\n";
+    return 0;
+}
+
+// Windows reports an uncaught exception only as 0xc0000409: print it first.
+int main() {
+    try { return runStudioSessionTests(); }
+    catch (const std::exception& e) { std::fprintf(stderr, "studio_session: uncaught exception: %s\n", e.what()); }
+    catch (...) { std::fprintf(stderr, "studio_session: uncaught non-standard exception\n"); }
+    std::fflush(stderr);
+    return 1;
 }
