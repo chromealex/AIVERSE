@@ -67,3 +67,10 @@
 @container (max-width:540px){
   .material-dependency-canvas{height:clamp(240px,72cqw,360px)}
 }
+
+.materials-heading .materials-library-toggle{display:none}
+@container (max-width:540px){
+  .materials-heading .materials-heading-label,.materials-list[data-collapsed]{display:none}
+  .materials-heading .materials-library-toggle{display:inline-flex}
+  .materials-editor>.asset-native-surface{height:clamp(90px,16vh,140px)}
+}

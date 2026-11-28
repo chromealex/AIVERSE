@@ -213,11 +213,14 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   if(pending!==null){selectMaterial(pending);setPending(null);}
   setMessage('Draft discarded.');
  };
+ const [libraryExpanded,setLibraryExpanded]=useState(false);
  const showTarget=!textureOnly||targetExpanded||!name||changes>0;
  return <section className="materials-editor">
   <div className="materials-heading">
    {textureOnly?<StudioButton size="sm" title={name} aria-expanded={showTarget} disabled={!name||changes>0}
-    onClick={()=>setTargetExpanded(v=>!v)}>Target material · {name||'Choose material'} {showTarget?'▴':'▾'}</StudioButton>:<span><Layers size={16}/> Material Library</span>}
+    onClick={()=>setTargetExpanded(v=>!v)}>Target material · {name||'Choose material'} {showTarget?'▴':'▾'}</StudioButton>:<><span className="materials-heading-label"><Layers size={16}/> Material Library</span>
+    <StudioButton className="materials-library-toggle" size="sm" aria-expanded={!name||libraryExpanded}
+      disabled={!name} onClick={()=>setLibraryExpanded(v=>!v)}>Material Library {!name||libraryExpanded?'▴':'▾'}</StudioButton></>}
    <button className="icon-button" aria-label="Reload materials" title="Reload materials"
     disabled={busy||loading||changes>0} onClick={reload}><RefreshCw size={15}/></button>
   </div>
@@ -246,7 +249,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   </details>}
   {!!library.quarantinedPublications?.length&&<details className="materials-warning"><summary>Quarantined material publications ({library.quarantinedPublications.length})</summary>{library.quarantinedPublications.map(p=><div key={p.id}>{p.id}{p.reason&&<small> — {p.reason}</small>}{p.restorable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('restore',p.id)}>Restore to pending</StudioButton>}</div>)}</details>}
   <div className="materials-main">
-   {showTarget&&<aside className="materials-list">
+   {showTarget&&<aside className="materials-list" data-collapsed={!textureOnly && !!name && !libraryExpanded || undefined}>
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}
       onClick={()=>setCreating(value=>!value)}>{creating?'Cancel new material':'+ New material'}</button>
     {creating&&<form className="materials-new-form" onSubmit={event=>{event.preventDefault();void create();}}>
