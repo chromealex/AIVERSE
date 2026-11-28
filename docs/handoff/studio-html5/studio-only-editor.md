@@ -2264,3 +2264,7 @@ ba32c16f4f3363767b03bd787bf0c1800d4bf476 adds Hide preview to LensCameraPanel.ts
 80aede7f4c862127b5b5f3b3fd0bf655a42a84ef updates FogPanel in ProjectToolPanels.tsx. Production build passed. Packaged Mac opened a copied project with fogOfWar:null, displayed defaults, removed the explicit null via reset and disabled reset after cold reopen without a fog block. Verified all remaining parsed rules matched. Evidence ../debug-keys-u83td_ua/{save.png,reopen.png,reopen.log}. Windows GUI pending.
 
 c68ab0df1c40a105be2f10f07367e003651d8772 shows the full selected texture reference in MaterialGraphPanel.tsx and wraps long text in MaterialsPanel.css. Production build passed. Detached Mac Materials selected shader dependencies content/slate.png and content/other/slate.png in turn and displayed both complete paths. Show texture in Assets selected the nested file. Evidence ../lua-input-panel-6g979ra9/{graph.png,assets.png,live.log}. Windows desktop pending.
+
+### Materials dependency navigation
+
+Stage 7c91dae7ca300f6308841bc1d6570e2f843fa02e updated apps/studio-web/src/graphs/MaterialGraphPanel.tsx and apps/studio-web/src/panels/MaterialsPanel.tsx. Web build passed. Packaged Mac Materials window switched from proof_slate to content/materials/anchor_slate.material.json via the selected base node. Capture: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/lua-input-panel-gdz5ksok/materials.png. Next: verify the pending-edit switch flow and remaining parity gates.
