@@ -200,7 +200,16 @@ void AudioEngine::init(const AudioConfig& cfg) {
             dc.playback.format = ma_format_f32;
             dc.playback.channels = 2;
             dc.sampleRate = ma_uint32(std::max(0, cfg.sampleRate));
-            dc.periodSizeInMilliseconds = ma_uint32(std::max(0, cfg.periodMs));
+            int periodMs = std::max(0, cfg.periodMs);
+#if defined(__EMSCRIPTEN__)
+            // Web: miniaudio fills a ScriptProcessorNode on the page's main thread. Its default (~33 ms -> 2048 frames,
+            // 43 ms at 48 kHz) underruns on every frame or load step longer than that, which on phones is most of the
+            // map start and many battle frames: the sound stutters or a buffer repeats. kWebPeriodMs rounds up to
+            // 4096 frames (85 ms at 48 kHz) and tolerates such frames at the cost of that much output latency.
+            constexpr int kWebPeriodMs = 60;
+            if (periodMs == 0) periodMs = kWebPeriodMs;
+#endif
+            dc.periodSizeInMilliseconds = ma_uint32(periodMs);
             dc.dataCallback = deviceCallback;
             dc.pUserData = &m;
             dc.noClip = MA_TRUE;  // the mixer soft-clips
