@@ -1,0 +1,48 @@
+# One-off: Windows engine package for release 3.1.0 (tools/release/package_engine.py), built from the
+# release commit. Triggered by pushes to this branch only; the artifact is attached to the release by the
+# integrator. Remove the branch after the release.
+name: Package engine 3.1.0 (Windows)
+on:
+  push:
+    branches: ['ci/package-3.1.0']
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c65a0b757335ff9316f6d8cc09ebcc4138352958
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Studio web assets
+        working-directory: apps/studio-web
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          exit $LASTEXITCODE
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_CLIENT=ON "-DAIVERSE_STUDIO_WEB_DIST=$PWD/apps/studio-web/dist"
+      - name: Build
+        shell: pwsh
+        run: cmake --build build/windows --config Release --parallel 4
+      - name: Package
+        shell: pwsh
+        run: |
+          python tools/release/package_engine.py --platform windows --bin build/windows --out dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem dist -Filter *.zip | ForEach-Object { "$($_.Name) $($_.Length)" ; (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIVERSE-3.1.0-windows
+          path: dist/*.zip
+          retention-days: 14
+          compression-level: 0
