@@ -6,6 +6,7 @@
 #pragma once
 #include "engine/view/game/MainCameraShake.h"
 #include "engine/view/MapProjection.h"
+#include "engine/view/game/PlanarMinimap.h"
 #include "ProjectCursors.h"
 #include "engine/view/game/GamePortrait.h"
 #include "MatchFiles.h"
@@ -83,7 +84,7 @@ struct Notice { std::string text, style; double until; };
 
 class Minimap {
 public:
-    void build(gfx::Device& dev, const GameState& gs, const std::string& background, const ::aiverse::view::MapProjection& bounds, bool rectangle);
+    void build(gfx::Device& dev, const GameState& gs, const std::string& background, const game::minimap::Layout& layout);
     void update(gfx::Device& dev, const GameState& gs, const Rules& rules, const GameScene& scene, const std::vector<uint8_t>* vision,
                 const float3 (&viewQuad)[4], bool haveQuad, const std::vector<OverlayMinimapMark>* marks = nullptr);
     void release(gfx::Device& dev);
@@ -112,6 +113,7 @@ private:
     ::aiverse::view::MapProjection bounds_;
     bool rectangle_ = false;
     std::vector<uint32_t> base_, pixels_;
+    game::minimap::Raster raster_;   // planar maps: shared with the Studio overlay preview
 };
 
 class GameClient {

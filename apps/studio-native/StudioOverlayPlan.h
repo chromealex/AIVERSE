@@ -189,13 +189,15 @@ inline void registerStudioOverlayPlan(StudioSession& session, StudioPngEncoder e
             if (minimap) {
                 const auto background = map.extra.getStr("minimapBackground", project.manifest.getStr("minimapBackground"));
                 std::string bytes;
-                readStudioOverlayAsset(project.dir, background, bytes);
-                int width, height;
-                float cellsPerPixel;
-                std::vector<uint32_t> base, pixels;
-                game::minimap::build(grid, bytes, width, height, cellsPerPixel, base);
-                game::minimap::rasterize(grid, rules, scene, nullptr, &overlays.minimapMarks(),
-                                        width, height, cellsPerPixel, base, pixels);
+                std::vector<uint8_t> image;
+                int iw = 0, ih = 0;
+                if (!readStudioOverlayAsset(project.dir, background, bytes) || !render::decodeImage(bytes, iw, ih, image)) iw = ih = 0;
+                // Same bounds, frame and raster as the game HUD (apps/client/Minimap.cpp).
+                const auto layout = game::minimap::resolveLayout(map.extra, project.manifest, map.w, map.h);
+                const auto raster = game::minimap::build(grid, layout, image, iw, ih);
+                std::vector<uint32_t> pixels;
+                game::minimap::rasterize(raster, grid, rules, scene, nullptr, &overlays.minimapMarks(), nullptr, pixels);
+                const int width = raster.width, height = raster.height;
                 std::vector<uint8_t> rgba;
                 rgba.reserve(pixels.size()*4);
                 for (auto pixel : pixels)

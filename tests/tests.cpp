@@ -19104,6 +19104,41 @@ TEST(map_projection_crop_roundtrip_and_frame) {
     CHECK(rectangle[0].x==8&&rectangle[1].x==24&&rectangle[2].z==40);
 }
 
+#include "engine/view/game/PlanarMinimap.h"
+// The game HUD and the Studio overlay preview share one minimap raster: authored
+// bounds crop it, invalid scene types are skipped and view.minimap=false hides a type.
+TEST(planar_minimap_shared_bounds_and_scene_guards) {
+    using namespace aiverse;
+    game::MapGrid grid; grid.init(40,20);
+    for (auto& f : grid.flags) f = game::kCellGround;
+    auto layout=game::minimap::resolveLayout(Json::parse(R"({"minimap":{"bounds":[10,0,30,20],"cameraFrame":"rectangle"}})"),Json::object(),40,20);
+    CHECK(layout.bounds.left==10&&layout.bounds.right==30&&layout.rectangle);
+    // The map value wins over game.json; bounds outside the grid are clipped.
+    layout=game::minimap::resolveLayout(Json::object(),Json::parse(R"({"minimap":{"bounds":[-5,0,20,50]}})"),40,20);
+    CHECK(layout.bounds.left==0&&layout.bounds.right==20&&layout.bounds.bottom==20&&!layout.rectangle);
+    bool rejected=false;
+    try { (void)game::minimap::resolveLayout(Json::parse(R"({"minimap":{"bounds":[50,0,60,10]}})"),Json::object(),40,20); }
+    catch (const std::runtime_error&) { rejected=true; }
+    CHECK(rejected);
+    rejected=false;
+    try { (void)game::minimap::resolveLayout(Json::object(),Json::object(),0,0); } catch (const std::runtime_error&) { rejected=true; }
+    CHECK(rejected);
+    const auto raster=game::minimap::build(grid,layout,{},0,0);
+    CHECK(raster.width==raster.height&&raster.width>0&&raster.base.size()==size_t(raster.width)*size_t(raster.height));
+    game::Rules rules=game::loadRules(Json::parse(R"({"types":{"hidden":{"view":{"minimap":false}},"shown":{}}})"));
+    game::GameScene scene;
+    game::SceneObject bad; bad.type=uint16_t(rules.types.size()+5); bad.pos={5,0,5}; bad.visible=true;
+    game::SceneObject hidden; hidden.type=uint16_t(rules.findType("hidden")); hidden.owner=1; hidden.pos={5,0,5}; hidden.visible=true;
+    scene.objects={bad,hidden};
+    std::vector<uint32_t> pixels;
+    game::minimap::rasterize(raster,grid,rules,scene,nullptr,nullptr,nullptr,pixels);
+    CHECK(pixels==raster.base);
+    game::SceneObject shown=hidden; shown.type=uint16_t(rules.findType("shown")); shown.pos={5,0,5};
+    scene.objects={shown};
+    game::minimap::rasterize(raster,grid,rules,scene,nullptr,nullptr,nullptr,pixels);
+    CHECK(pixels!=raster.base);
+}
+
 #include "engine/view/PortraitOptions.h"
 TEST(portrait_options_inheritance_and_background) {
     using namespace aiverse;
