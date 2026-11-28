@@ -6,10 +6,93 @@
     "branch": "https://github.com/chromealex/AIVERSE/tree/builds"
   },
   "next": {
-    "version": "3.1.0",
+    "version": "3.2.0",
     "note": "Planned number of the next tag: system cards say a feature in main 'will appear' in it. The integrator updates this when the release is tagged (then the entry moves into releases)."
   },
   "releases": [
+    {
+      "version": "3.1.0",
+      "tag": "v3.1.0",
+      "date": "2026-11-28",
+      "commit": "c65a0b757",
+      "title": "Studio — главный редактор, миры с зданиями и пещерами, точные снаряды",
+      "titleEn": "Studio becomes the editor, worlds gain buildings and caves, projectiles land where they should",
+      "summary": "HTML5 Studio стала редактором на macOS, Windows и Linux, старый ImGui-редактор по умолчанию не собирается. В мир пришли граф зданий, пещеры, процессы планет и региональное сохранение; в Studio — отладчики, профилировщик, история документов и общий редактор графов. Ломающие изменения: AIVERSE_BUILD_EDITOR по умолчанию OFF; GLES/WebGL собирает шейдеры при первом использовании (AIVERSE_EAGER_SHADERS=1 — по-старому); сохранения v13, v4–v12 читаются.",
+      "summaryEn": "HTML5 Studio is the editor on macOS, Windows and Linux; the legacy ImGui editor is no longer built by default. Worlds gain the building graph, caves, planetary processes and regional persistence; Studio gains debuggers, a profiler, document history and a shared graph editor. Breaking: AIVERSE_BUILD_EDITOR defaults to OFF; GLES/WebGL builds shader programs on first use (AIVERSE_EAGER_SHADERS=1 for eager); match saves v13, v4–v12 still load.",
+      "highlights": [
+        {
+          "title": "Studio на трёх платформах",
+          "titleEn": "Studio on three platforms",
+          "text": "HTML5 Studio — редактор на macOS, Windows и Linux (WebKitGTK); Entity и Runtime Debugger, профилировщик симуляции, обзор мира, история документов, сетевая игра из Studio.",
+          "textEn": "HTML5 Studio is the editor on macOS, Windows and Linux (WebKitGTK); Entity and Runtime Debuggers, a simulation profiler, a world explorer, document history and network play from Studio.",
+          "media": [
+            {
+              "src": "docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-panel.png",
+              "caption": "Сетевая игра из HTML5 Studio",
+              "captionEn": "Network play from HTML5 Studio"
+            }
+          ]
+        },
+        {
+          "title": "Здания и пещеры",
+          "titleEn": "Buildings and caves",
+          "text": "Граф зданий со стилями, проходами и лифтами, пещеры TerraWeave с Carve/Fill — и в браузере.",
+          "textEn": "A building graph with styles, circulation and lifts, and TerraWeave caves with Carve/Fill — also in the browser.",
+          "media": [
+            {
+              "src": "docs/devlog/media/2026-11-25-world-building-caverns-web/cave.png",
+              "caption": "Правка пещеры в браузере",
+              "captionEn": "Editing a cave in the browser"
+            }
+          ]
+        },
+        {
+          "title": "Луга, импостеры и дым",
+          "titleEn": "Meadows, impostors and smoke",
+          "text": "Густая луговая трава с ветром и солнцем, импостеры по альфа-маске, объёмный дым и шлейфы от движущихся источников.",
+          "textEn": "Dense meadow grass with wind and sunlight, alpha-mask impostors, volumetric smoke and trails from moving sources.",
+          "media": [
+            {
+              "src": "docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-low-sun.jpg",
+              "caption": "Луг при низком солнце",
+              "captionEn": "A meadow in low sun"
+            }
+          ]
+        },
+        {
+          "title": "Рендер для всех",
+          "titleEn": "Rendering everywhere",
+          "text": "Миниатюры моделей на CPU и Direct3D, графы постобработки для камер, уровни Quake III, рендер модели из Python, C# и Java, физическое небо PRISMA для карт.",
+          "textEn": "Model thumbnails on CPU and Direct3D, post-processing graphs per camera, Quake III levels, rendering a model from Python, C# and Java, and the PRISMA physical sky for maps.",
+          "media": [
+            {
+              "src": "docs/devlog/media/2026-11-25-render-quake3-bsp/egyptian-trouble.jpg",
+              "caption": "Уровень Quake III с запечённым светом",
+              "captionEn": "A Quake III level with baked lighting"
+            }
+          ]
+        },
+        {
+          "title": "Игровой клиент",
+          "titleEn": "Game client",
+          "text": "Снаряды и шлейфы на одной траектории, высота попадания, командная карта, миникарта по границам камеры, портреты, голоса выбора, точный замах оружия.",
+          "textEn": "Projectiles and trails on one path, impact height, a command card, a minimap bounded by the camera, portraits, selection voices and sub-tick weapon windup."
+        },
+        {
+          "title": "Импорт Warcraft III и ходьба",
+          "titleEn": "Warcraft III import and walking",
+          "text": "Импорт сцены Warcraft III одной командой; цикл ходьбы из скелета и перенос BVH-походки на VIVID-персонажа.",
+          "textEn": "One-command Warcraft III scene import; a walk cycle from a skeleton and BVH gait retargeting onto a VIVID character.",
+          "media": [
+            {
+              "src": "docs/devlog/media/2026-11-23-motionweave-ada-cmu-walk/01.png",
+              "caption": "Ходьба по захвату движения на Ada",
+              "captionEn": "A motion-capture walk on Ada"
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "3.0.0",
       "tag": "v3.0.0",

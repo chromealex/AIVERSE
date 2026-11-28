@@ -2,16 +2,16 @@
 
 Extracted verbatim from the previous root AGENTS.md; original section numbering and repository-root-relative paths remain intentional. Follow cross-references via the root routing table. These rules are binding, not optional guidance.
 
-## Current release: 3.0.0 released, 3.1.0 in preparation (2026-11-22)
+## Current release: 3.1.0 released, 3.2.0 in preparation (2026-11-28)
 
-- **3.0.0** is out (tag `v3.0.0`, GitHub release, site `releases.html`). Do not change its
-  entry in `docs/devlog/releases.json` and do not move the tag.
-- **The next release is 3.1.0.** Everything merged into `main` from now on goes into 3.1.0:
-  `next.version` in `docs/devlog/releases.json` is `3.1.0`. A flagship system that reaches
-  `main` gets `"release": "3.1.0"` in `docs/devlog/systems.json` (site: «появится в 3.1.0»).
+- **3.1.0** is out (tag `v3.1.0`, GitHub release, site `releases.html`); **3.0.0** before it. Do not
+  change their entries in `docs/devlog/releases.json` and do not move the tags.
+- **The next release is 3.2.0.** Everything merged into `main` from now on goes into 3.2.0:
+  `next.version` in `docs/devlog/releases.json` is `3.2.0`. A flagship system that reaches
+  `main` gets `"release": "3.2.0"` in `docs/devlog/systems.json` (site: «появится в 3.2.0»).
 - Do not bump `project(AIVERSE VERSION ...)` in `CMakeLists.txt` and do not tag or publish
   builds yourself: the integrator (MAIN agent) does it at release time (§8). Write in your
-  handoff what of your work should be mentioned in the 3.1.0 notes, including breaking changes
+  handoff what of your work should be mentioned in the 3.2.0 notes, including breaking changes
   (save/format changes, renamed paths or APIs).
 
 ## Ход разработки на сайте — обязательная запись (2026-11-21, указание пользователя)
