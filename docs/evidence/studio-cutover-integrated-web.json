@@ -1,0 +1,13 @@
+{
+  "sha": "f97210d0b4d55536e358cc901c508b8ba33bd244",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-cutover-integrated-web.log.txt",
+  "sha256": "d01160557dce65dbd960c942779317c6164deddeddfea70a326ec92a36632372"
+}
