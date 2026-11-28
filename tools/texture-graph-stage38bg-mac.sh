@@ -40,7 +40,7 @@ run web-build npm --prefix "$web" run build
 build="$root/native"
 run configure cmake -S "$source_dir" -B "$build" \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="$(uname -m)" \
-    -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_CLIENT=ON \
+    -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_CLIENT=ON \
     -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON \
     -DAIVERSE_TEXTURE_GRAPH_GPU_TESTS=ON -DAIVERSE_STUDIO_WEB_DIST="$web/dist"
 run studio-mcp-build cmake --build "$build" --config Release --parallel "$jobs" --target aiverse_studio aiversemcp
