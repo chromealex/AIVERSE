@@ -23,6 +23,7 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <cstdio>
 #include <set>
 #include <filesystem>
 #include <fstream>
@@ -2635,7 +2636,12 @@ static void worldSceneInspectorProperties() {
         const auto depth=session.workspace().map.undoDepth();
         AIVERSE_TEST_CHECK(!call("studio.mapPropertiesSet",params).has("error")&&session.workspace().map.undoDepth()==depth);
         AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==original);
-        AIVERSE_TEST_CHECK(!call("studio.redo").has("error")&&!call("studio.save").has("error"));
+        for(const char* method:{"studio.redo","studio.save"}){
+            const auto reply=call(method);
+            // Print the owner's message: the Windows runner exposes only stdout.
+            if(reply.has("error"))std::printf("%s failed: %s\n",method,reply["error"].dump().c_str());
+            AIVERSE_TEST_CHECK(!reply.has("error"));
+        }
         editor::MapDoc disk;std::string error;Json expected=original;expected.set("name",Json::string("Harbor terminal"));
         AIVERSE_TEST_CHECK(disk.load((project/"map.json").string(),&error)&&disk.toJson()==expected);
         disk.undo();AIVERSE_TEST_CHECK(disk.toJson()==original);
