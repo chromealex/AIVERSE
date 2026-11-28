@@ -1,5 +1,63 @@
 # AIVERSE MotionWeave
 
+## BVH walk capture import
+
+`render::parseBvhMotion(text)` reads a BVH hierarchy and sampled motion;
+`render::retargetBvhMotion(motion, model, rootNode, jointMap)` transfers named
+joint rotations and root travel to another skeleton. The target leg length
+sets the translation scale. The lower foot determines a flat-ground pelvis
+height per frame, and its ankle orientation is aligned to the target bind
+pose. A caller supplies the source BVH text; no recording is embedded in the
+engine. The VIVID Creator diagnostic accepts `--preview-bvh <path>` alongside
+`--asset <manifest>` and `--preview-sequence <frames>`.
+
+The Ada demonstration uses CMU Graphics Lab motion `02_01` (344 frames at
+120 fps), mirrored at
+`https://github.com/una-dinosauria/cmu-mocap/blob/master/data/002/02_01.bvh`.
+The CMU terms at `https://mocap.cs.cmu.edu/` allow product use while
+disallowing direct resale of the motion data, including converted forms.
+The raw BVH stays outside this repository. Ada's legs and torso follow the
+capture; arms use the existing A-pose-aware procedural tracks to avoid
+incompatible shoulder/wrist orientations. This preview is not yet a polished
+loop or a terrain-aware foot-contact solution.
+
+## Generated walk cycle (prototype)
+
+`render::generateWalkCycle(model, rig, settings)` in
+`engine/render/WalkCycleGenerator.h` produces a looping `AnimClip`
+without modifying the input model. `WalkRig` contains explicit node indices for
+the root, both hip-knee-ankle chains and both shoulders. The caller validates
+semantic joint mapping when importing a skeleton and then adds the returned
+clip to a model or asset publication transaction. The rig must use local +Z
+forward; joint pitch axes are derived from the bind pose. Duration, swing angles, pelvis bob and
+sample count and optional forward `rootSpeed` are bounded and validated.
+`rootBob` is a fraction of measured leg length, so pelvis motion scales with
+the skeleton rather than the source file's units. The walk also uses a small
+side-to-side weight shift, delayed arm swing and elbow bend, torso roll and a
+lower swing-foot arc.
+`rootSpeed=0` produces an in-place clip; a positive value writes local +Z
+translation into the root channel, with exactly `rootSpeed * duration` travel
+per cycle. Stance targets hold ankle positions against root travel, and the
+shared two-bone IK solver bakes leg rotations into the clip. Pelvis translation
+and rotation carry the weight shift. This uses the bind-pose floor on a flat
+surface; terrain sampling, shoe-sole contact, automatic rig mapping and a
+catalog asset writer remain to be added.
+
+If elbow nodes are supplied, `classifyWalkArmRestPose` measures each bind
+shoulder-to-elbow direction and identifies relaxed, A or T rest poses. For A/T
+rigs, the generated shoulder track first lowers the arms toward a relaxed
+downward direction, then applies the walk swing. Optional neck and head nodes
+receive small delayed yaw and pitch tracks after torso motion. Missing
+optional joints leave those channels absent.
+
+The diagnostic Creator command `--smoke --preview-walk --preview-sequence 48
+--asset <human-manifest>` maps complete modular human rigs by semantic joint
+names, samples this clip at 24 fps, and captures real native 3D frames.
+`HumanWalkPreview.h` mirrors the walk onto each complete body/clothing skin and
+copies matching pelvis, torso, neck and head tracks to partial head/groom
+roots, keeping the modular character together. This is a preview adapter;
+the generic generator itself has no dependency on VIVID or character assets.
+
 **MotionWeave** is the canonical name for AIVERSE's modular, genre-independent
 animation subsystem: AnimationGraph, clips, blend trees, IK, Motion Matching,
 Montages, root motion, ragdoll poses, inertialization and animation LOD/GPU crowds.

@@ -1,0 +1,38 @@
+{
+  "id": "2026-11-23-motionweave-ada-natural-walk",
+  "date": "2026-11-23",
+  "system": "motionweave",
+  "title": "Походка Ada: перенос веса и мягкий шаг",
+  "summary": "Шаг Ada получил перенос веса в стороны, более плавный вынос ноги и движение рук с небольшим сгибом в локтях.",
+  "body": [
+    "Движение таза рассчитывается по длине ноги, поэтому его амплитуда сохраняется после импорта модели с другим масштабом. Во время шага таз слегка смещается к опорной ноге; плечи и руки следуют с задержкой, корпус немного поворачивается и наклоняется.",
+    "Поднятие свободной ноги стало ниже и мягче. Опорная стопа продолжает удерживаться двухзвенной кинематикой, а отдельные части модели Ada повторяют движение основного скелета."
+  ],
+  "status": "in-progress",
+  "verified": "Проверено на Ada в нативном просмотре macOS с Metal: записаны 48 кадров ходьбы с перемещением персонажа.",
+  "limits": "Движение остаётся процедурным: точный перекат подошвы, неровный рельеф и автоматическая настройка под разную обувь пока не реализованы.",
+  "branch": "feature/motionweave-walk-generator-current",
+  "commit": "d852d1c9a",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-23-motionweave-ada-natural-walk/01.png",
+      "caption": "Ada в опорной фазе: таз смещается к опорной ноге, руки сопровождают шаг.",
+      "captionEn": "Ada in stance: the pelvis shifts toward the supporting leg while the arms follow the step."
+    }
+  ],
+  "links": [
+    {
+      "title": "MotionWeave handoff",
+      "href": "docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+  ],
+  "author": "motionweave",
+  "titleEn": "Ada walk: weight shift and softer step",
+  "summaryEn": "Ada’s walk now shifts weight sideways, moves the swing foot in a softer arc, and adds delayed arm swing with slight elbow bend.",
+  "bodyEn": [
+    "Pelvis movement is measured against leg length, so its amplitude survives changes in imported model scale. During a step the pelvis shifts toward the supporting leg; shoulders and arms follow with a slight delay, while the torso turns and tilts subtly.",
+    "The swing foot follows a lower, softer arc. Two-bone IK continues to hold the stance ankle, and Ada’s separate model parts follow the main skeleton."
+  ],
+  "verifiedEn": "Verified on Ada in the native macOS Metal preview: 48 root-motion walking frames were captured.",
+  "limitsEn": "The motion remains procedural; precise shoe-sole roll, uneven terrain and automatic tuning for different footwear are not yet implemented."
+}

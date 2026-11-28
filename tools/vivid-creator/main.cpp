@@ -1,5 +1,6 @@
 #include "engine/render/PostFx.h"
 #include "engine/character/vivid/HumanPreviewAnimation.h"
+#include "engine/character/vivid/HumanWalkPreview.h"
 #include "engine/character/vivid/HumanStudioLighting.h"
 // VIVID Creator: standalone non-destructive digital-human authoring and
 // actual Renderer3D preview. Uses AIVERSE's existing ImGui/RHI/Model and
@@ -96,9 +97,10 @@ struct CreatorApp {
     bool animate=true, inspectGroom=false, wetPreview=false;
     bool smoke=false, smokeCaptureRequested=false, smokeCompleted=false;
     bool portraitCapture=false,closeupCapture=false,eyeDetailCapture=false;
-    bool previewMotion=false;int previewPose=0;float previewTime=-1;
+    bool previewMotion=false,previewWalk=false;int previewPose=0;float previewTime=-1;
+    std::string previewBvhPath;
     motionweave::AnimationPoseComponent previewCapturePose;
-    int sequenceFrames=0,sequenceFrame=0,sequenceSampled=-1,sequenceBase=-1;
+    int sequenceFrames=0,sequenceFrame=0,sequenceSampled=-1,sequenceBase=-1,walkClip=-1;
     bool automaticLod=true;
     render::PostFx antialiasing;bool antialiasingReady=false,aaEnabled=true;
     bool previewHeadSweep=false,previewFixedPose=false,previewBindPose=false,previewLightSweep=false;
@@ -223,6 +225,7 @@ struct CreatorApp {
         camera.minDistance=eyeDetailCapture?.2f:closeupCapture?.5f:2.0f;
         camera.pitch=0.08f;
         camera.yaw=0.08f;
+        if(previewWalk){camera.target.z=1.2f;camera.distance=captureCameraDistance>0?captureCameraDistance:10.5f;camera.yaw=0.65f;}
         cache=std::make_unique<GpuMorphAssetCache>(dev);
         retiredHumans=std::make_unique<HumanRetirementQueue>(dev);
         if(commandLineAsset)loadExternal(manifestFile);
@@ -638,6 +641,27 @@ struct CreatorApp {
             idle.name="vivid_idle";
             proposed.head->clips.push_back(std::move(idle));
             if(sequenceFrames)sequenceBase=appendHumanPreviewClips(*proposed.head);
+            int proposedWalkClip=-1;
+            if(previewWalk){
+                WalkCycleSettings walk;
+                walk.duration=1.0f;
+                walk.rootSpeed=120.0f; // source MetaHuman joints are centimetres under a 0.01 scene scale
+                walk.rootBob=0.018f; // fraction of leg length, independent of source scale
+                proposedWalkClip=int(proposed.head->clips.size());
+                HumanWalkPreviewStats walkStats;
+                BvhMotion sourceMotion;
+                const BvhMotion* motion=nullptr;
+                if(!previewBvhPath.empty()) {
+                    std::ifstream source(previewBvhPath);
+                    if(!source)throw std::runtime_error("Could not open BVH walk source");
+                    sourceMotion=parseBvhMotion(std::string(std::istreambuf_iterator<char>(source),{}));
+                    motion=&sourceMotion;
+                }
+                proposed.head->clips.push_back(humanWalkPreviewClip(*proposed.head,walk,&walkStats,motion));
+                std::printf("VIVID walk rigs=%d arms relaxed=%d A=%d T=%d unknown=%d headChannels=%d\n",
+                    walkStats.completeRigs,walkStats.relaxedArms,walkStats.aPoseArms,
+                    walkStats.tPoseArms,walkStats.unknownArms,walkStats.headChannels);
+            }
             proposed.head->uploadPrepared=true;
             auto newGraph=AnimationGraph::compile(*proposed.head,Json::parse(
                 R"({"nodes":[{"id":"idle","kind":"clip","clip":"vivid_idle"}],"output":"idle"})"));
@@ -763,6 +787,7 @@ struct CreatorApp {
                 retired->human=std::move(human);
             }
             human=std::move(proposed);
+            walkClip=proposedWalkClip;
             sequenceAnimator.setModel(human.head.get());sequenceSampled=-1;
             sculptSourceIds=std::move(proposedSculptSourceIds);
             gpuSculptToken.cancel();
@@ -1806,16 +1831,34 @@ struct CreatorApp {
         if(previewMotion&&previewTime>=0&&!sequenceFrames){previewCapturePose=sourcePose;bindPose(*human.head,previewCapturePose.local);sampleClip(human.head->clips.back(),previewTime,previewCapturePose.local);worldMatrices(*human.head,previewCapturePose.local,previewCapturePose.matrices);poseSource=&previewCapturePose;}
         if(sequenceFrames){
             if(sequenceSampled!=sequenceFrame){
-                if(sequenceSampled<0)sequenceAnimator.setModel(human.head.get());
+                if(sequenceSampled<0&&!previewWalk)sequenceAnimator.setModel(human.head.get());
                 // 3s relaxed, A, T, portrait, then relaxed. Face close-up stays
                 // portrait to show uninterrupted blink/gaze and loop continuity.
-                const int poses[]={0,1,2,3,0};
-                const int index=previewFixedPose?previewPose:(portraitCapture?3:poses[std::min(sequenceFrame/72,4)]);
-                const int clip=sequenceBase+index*2+1;
-                if(sequenceAnimator.clip(0)!=clip)playHumanPreview(sequenceAnimator,clip,true);
-                if(sequenceSampled>=0)sequenceAnimator.update(1.f/24);
                 previewCapturePose=sourcePose;
-                sequenceAnimator.evaluate(previewCapturePose.local);
+                if(previewWalk){
+                    const float time=float(sequenceFrame)/24.f;
+                    const auto& clip=human.head->clips[size_t(walkClip)];
+                    const float cycle=std::floor(time/clip.duration);
+                    bindPose(*human.head,previewCapturePose.local);
+                    sampleClip(clip,time-cycle*clip.duration,previewCapturePose.local);
+                    for(const auto& channel:clip.channels){
+                        if(channel.path!=AnimChannel::Translation||channel.times.size()<2)continue;
+                        const auto name=humanBoneSemantic(human.head->nodes[size_t(channel.node)].name);
+                        if(name!="root"&&name.rfind("root.",0)!=0)continue;
+                        const size_t end=channel.values.size()-3;
+                        previewCapturePose.local[size_t(channel.node)].t.x+=
+                            (channel.values[end]-channel.values[0])*cycle;
+                        previewCapturePose.local[size_t(channel.node)].t.z+=
+                            (channel.values[end+2]-channel.values[2])*cycle;
+                    }
+                }else{
+                    const int poses[]={0,1,2,3,0};
+                    const int index=previewFixedPose?previewPose:(portraitCapture?3:poses[std::min(sequenceFrame/72,4)]);
+                    const int clip=sequenceBase+index*2+1;
+                    if(sequenceAnimator.clip(0)!=clip)playHumanPreview(sequenceAnimator,clip,true);
+                    if(sequenceSampled>=0)sequenceAnimator.update(1.f/24);
+                    sequenceAnimator.evaluate(previewCapturePose.local);
+                }
                 if(previewBindPose)bindPose(*human.head,previewCapturePose.local);
                 worldMatrices(*human.head,previewCapturePose.local,previewCapturePose.matrices);
                 if(previewHeadSweep){
@@ -2378,6 +2421,11 @@ int aiverseMain(int argc,char** argv) {
             HumanPreviewAnimation settings;settings.pose=argv[++i];try{application->previewPose=settings.poseIndex();application->previewMotion=true;}catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 2;}
         }else if(std::strcmp(argv[i],"--preview-head-sweep")==0) {
             application->previewHeadSweep=true;
+        }else if(std::strcmp(argv[i],"--preview-walk")==0) {
+            application->previewWalk=true;application->previewMotion=true;
+        }else if(std::strcmp(argv[i],"--preview-bvh")==0 && i+1<argc) {
+            application->previewBvhPath=argv[++i];
+            application->previewWalk=true;application->previewMotion=true;
         }else if(std::strcmp(argv[i],"--preview-sequence")==0 && i+1<argc) {
             try{application->sequenceFrames=std::stoi(argv[++i]);if(application->sequenceFrames<1||application->sequenceFrames>720)return 2;}catch(...){return 2;}
         }else if(std::strcmp(argv[i],"--preview-time")==0 && i+1<argc) {

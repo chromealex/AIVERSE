@@ -1,0 +1,46 @@
+{
+  "id": "2026-11-23-motionweave-ada-cmu-walk",
+  "date": "2026-11-23",
+  "system": "motionweave",
+  "title": "Ходьба из записи движений на Ada",
+  "summary": "В предпросмотр Ada загружена запись ходьбы CMU: движение ног, таза и корпуса перенесено на её скелет вместе с перемещением персонажа.",
+  "body": [
+    "MotionWeave читает запись BVH и сопоставляет суставы с ригом персонажа. Масштаб движения вычисляется по длине ноги; положение таза и опорной стопы корректируется для ровной плоскости. Отдельные части модели Ada повторяют позу основного тела.",
+    "В показанном проходе использована запись 02_01 из базы CMU Graphics Lab. Плечи и локти адаптированы к исходной А-позе Ada, чтобы избежать неестественного поворота рук при переносе движения между разными ригами."
+  ],
+  "status": "in-progress",
+  "verified": "Показано на Ada в нативном просмотре macOS с Metal: записаны 48 кадров движения персонажа с перемещением по сцене.",
+  "limits": "Перенос рук пока использует адаптированные процедурные каналы. Контакт подошвы приближённый; запись ещё не превращена в бесшовный цикл для каталога.",
+  "branch": "feature/motionweave-walk-generator-current",
+  "commit": "6956a70ad",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-23-motionweave-ada-cmu-walk/01.png",
+      "caption": "Ada в шаге с движением ног и корпуса из записи CMU 02_01.",
+      "captionEn": "Ada walking with leg and torso motion from CMU recording 02_01."
+    }
+  ],
+  "links": [
+    {
+      "title": "CMU Graphics Lab source and terms",
+      "href": "https://mocap.cs.cmu.edu/"
+    },
+    {
+      "title": "CMU 02_01 BVH",
+      "href": "https://github.com/una-dinosauria/cmu-mocap/blob/master/data/002/02_01.bvh"
+    },
+    {
+      "title": "MotionWeave handoff",
+      "href": "docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+  ],
+  "author": "motionweave",
+  "titleEn": "Motion capture walk on Ada",
+  "summaryEn": "Ada’s preview now uses a CMU walking recording: leg, pelvis and torso motion is retargeted to her skeleton with root travel.",
+  "bodyEn": [
+    "MotionWeave reads BVH motion and maps its joints onto a character rig. Travel is scaled by leg length; pelvis height and the supporting shoe are adjusted for a flat floor. Ada’s separate model parts follow the main body pose.",
+    "The preview uses motion 02_01 from the CMU Graphics Lab database. Shoulder and elbow tracks are adapted to Ada’s A-pose to avoid awkward arm rotations between the different rigs."
+  ],
+  "verifiedEn": "Shown on Ada in the native macOS Metal preview: 48 frames of character motion and scene travel were captured.",
+  "limitsEn": "The arms currently use adapted procedural tracks. Shoe contact is approximate, and the recording has not yet been turned into a seamless catalog loop."
+}

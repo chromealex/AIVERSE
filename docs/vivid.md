@@ -3,6 +3,32 @@
 Status: DESIGN / staged implementation; created 2026-11-19.
 Owner / branch: VIVID agent, `feature/vivid-digital-humans`.
 Handoff log: [docs/agent-handoffs/vivid.md](agent-handoffs/vivid.md).
+
+## Generated walk preview on modular humans — 2026-11-23
+
+Creator can preview an external BVH walk with `--preview-bvh <path>`.
+The Ada capture uses CMU `02_01`: the legs and torso come from the recording,
+while the shoulder/elbow tracks are adapted from the existing A-pose-aware
+generator. The lower foot sets pelvis height on a flat surface and its shoe
+is aligned to Ada's bind orientation during stance. The source recording is
+stored outside the repository; see `docs/motionweave.md` for provenance and
+usage terms. This is a native preview, not a published catalog animation.
+
+`HumanWalkPreview.h` maps semantic leg and shoulder joints in each complete
+skin rig to MotionWeave's shared walk generator. Partial head/groom roots copy
+the matching pelvis, torso and head tracks as well as forward travel. Creator's diagnostic `--preview-walk` sequence can
+capture the resulting full character on Metal. Ada's corrected Groom-Bound
+package was captured at 24 fps for two seconds with root motion; this is a
+prototype with flat-ground ankle stance targets and baked two-bone IK.
+The external Ada asset is not included in the repository.
+The walk adapter now passes the lower arms and neck/head joints to the shared
+generator. It detects Ada's A-pose and lowers her arms before swinging them;
+the neck and head receive smaller delayed motion during walking. Pelvis and
+upper torso move with the step. Terrain contact and shoe-sole calibration are
+not yet implemented.
+The current Ada preview derives pelvis motion from leg length, adds a small
+lateral weight shift, delayed arm swing and elbow bend, and lowers the swing
+foot arc. The Creator diagnostic sets `rootBob` as a proportion of leg length.
 Code ownership: `engine/character/vivid/`, `tests/vivid/`, `docs/vivid.md`, `skills/visuals/aiverse-vivid/`.
 Cross-cutting render, animation and build changes must be small and coordinated with their owners; avoid editing their in-progress features.
 

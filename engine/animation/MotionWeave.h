@@ -6,6 +6,7 @@
 #pragma once
 #include "EcsAnimationSystems.h"
 #include "MotionWeaveScheduler.h"
+#include "engine/render/WalkCycleGenerator.h"
 
 namespace aiverse::lib::animation {
 

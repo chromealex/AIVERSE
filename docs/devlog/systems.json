@@ -59,7 +59,12 @@
         "Запрашивать деревья рядом из геймплея и запекать рельеф в карту редактора через MCP."
       ],
       "roadmap": [
-        {"id": "terraweave-impostor-contour", "status": "in-progress", "title": "Контуры дальних деревьев: полосы и границы слоёв", "titleEn": "Far tree silhouette geometry: bands and layer bounds"},
+        {
+          "id": "terraweave-impostor-contour",
+          "status": "in-progress",
+          "title": "Контуры дальних деревьев: полосы и границы слоёв",
+          "titleEn": "Far tree silhouette geometry: bands and layer bounds"
+        },
         {
           "id": "terraweave-meadow-grass",
           "status": "done",
@@ -734,7 +739,12 @@
         "Проверить, подойдёт ли ассет, ещё до импорта — через MCP."
       ],
       "roadmap": [
-        {"id":"impostor-mask-authoring","status":"in-progress","title":"Выбор геометрии импостера по маске","titleEn":"Alpha-mask impostor authoring"},
+        {
+          "id": "impostor-mask-authoring",
+          "status": "in-progress",
+          "title": "Выбор геометрии импостера по маске",
+          "titleEn": "Alpha-mask impostor authoring"
+        },
         {
           "status": "done",
           "date": "2026-11-19",
@@ -1706,6 +1716,13 @@
           "target": null,
           "title": "Тесты и визуальная проверка",
           "titleEn": "Tests and visual verification"
+        },
+        {
+          "status": "in-progress",
+          "title": "Генерация цикла ходьбы по скелету",
+          "titleEn": "Generate a walk cycle from a skeleton",
+          "text": "Зацикленный клип ходьбы из размеченного скелета и перенос BVH-походки на VIVID-персонажа.",
+          "textEn": "A looping walk clip from a mapped rig and BVH gait retargeting onto a VIVID character."
         },
         {
           "status": "done",
