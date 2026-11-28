@@ -52,7 +52,7 @@ echo "[terra70] report=$reports"
 cmake -S "$root" -B "$build" \
     -DCMAKE_BUILD_TYPE=Debug \
     -DAIVERSE_BUILD_TESTS=ON \
-    -DAIVERSE_BUILD_EDITOR=ON \
+    -DAIVERSE_BUILD_EDITOR=OFF \
     -DAIVERSE_BUILD_CLIENT=OFF \
     -DAIVERSE_BUILD_HEADLESS=ON \
     -DAIVERSE_BUILD_TOOLS=ON \
