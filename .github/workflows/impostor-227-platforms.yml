@@ -60,6 +60,8 @@ jobs:
           $result = $LASTEXITCODE
           $result | Out-File evidence/ctest-exit.txt
           Get-Content evidence/ctest.log
+          # ctest.log omits the test's own output on a crash; the JUnit file keeps it.
+          if (Test-Path evidence/ctest.xml) { Get-Content evidence/ctest.xml }
           exit $result
       - uses: actions/upload-artifact@v4
         if: always()
