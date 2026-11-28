@@ -3,12 +3,10 @@
 copied, heavy assets symlinked; nothing is saved). Opens maps/valley.json,
 turns on the PHYSIS nature preview (grass, wind, fire), reads NEREID water
 state, and captures river / forest / fire / overview shots with
-geometry_stats per shot (alpine.json).
+geometry_stats per Scene shot (alpine.json).
 
-Drive a running aiverse_editor over its agent link (--listen PORT) and
-capture beauty + debug screenshots of hierarchical wind masks on a
-TerraWeave landscape: generated relief, procedural Arbor forest, PHYSIS
-nature-preview grass and wind. Editor-only; the map is never saved.
+Run against HTML5 Studio with --listen PORT. Nature shots use the private
+PHYSIS viewport. Scene shots include terrain, water and diagnostic gizmos.
 
 usage: alpine_check.py PORT OUT_DIR
 """
@@ -62,14 +60,16 @@ def call(_tool, **args):
             print(f"{_tool}: {json.dumps(short, ensure_ascii=False)[:300]}", flush=True)
             return r
 
-def shot(name, **cam):
+def shot(name, window="scene", **cam):
+    options = dict(clean=True, width=1920, height=1080) if window == "scene" else {}
     for attempt in range(5):
-        r = call("view_screenshot", window="scene", clean=True, width=1920, height=1080, **cam)
+        r = call("view_screenshot", window=window, **options, **cam)
         if "png_base64" in r:
             with open(os.path.join(out, name + ".png"), "wb") as f:
                 f.write(base64.b64decode(r["png_base64"]))
             return
         time.sleep(1)
+    raise RuntimeError(f"{window} capture failed for {name}: {r}")
 
 def height(x, z):
     r = call("terrain_heights", points=[[x, z]])
@@ -99,15 +99,19 @@ def ui_shot(tag, **cam):
             open(os.path.join(out, tag + ".png"), "wb").write(base64.b64decode(r["png_base64"]))
             return
         time.sleep(1)
+    raise RuntimeError(f"Scene gizmo capture failed for {tag}: {r}")
 info = call("map_info")
 call("view_focus", x=256, z=256, distance=90)
 time.sleep(15)   # 1391 entities, 48 terrain tiles, NEREID river upload
 results = []
-def measure(tag, **cam):
-    shot(tag, **cam)
+def measure(tag, window="scene", **cam):
+    shot(tag, window=window, **cam)
     time.sleep(2.5)
-    shot(tag, **cam)
+    shot(tag, window=window, **cam)
     time.sleep(1.0)
+    if window == "physis":
+        results.append({"view": tag, "window": window})
+        return
     st = min((call("geometry_stats") for _ in range(3)), key=lambda r: r.get("drawCalls", 1 << 30))
     row = {"view": tag}
     for k in ("drawCalls", "cameraModelTriangles", "sunShadowModelTriangles", "completedGpuFrameMs",
@@ -126,15 +130,15 @@ measure("forest-edge", x=300, y=14, z=250, distance=90, pitch=40, yaw=250)
 call("physis_nature_preview", enabled=True, playing=True, grass=True, flames=True, sound=False,
      windSpeed=9, windDirection=20, humidity=0.1, cellMeters=4)
 time.sleep(6)
-measure("physis-wind", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
+measure("physis-wind", window="physis", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
 fire = call("physis_nature_preview", ignite={"x": 271, "z": 207}, advanceTicks=8)
 time.sleep(3)
-measure("physis-fire", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
+measure("physis-fire", window="physis", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
 fire2 = call("physis_nature_preview", advanceTicks=40)
 time.sleep(3)
-measure("physis-fire-later", x=262, y=1.2, z=205, distance=55, pitch=40, yaw=0)
+measure("physis-fire-later", window="physis", x=262, y=1.2, z=205, distance=55, pitch=40, yaw=0)
 fire = {"first": fire, "later": fire2}
-measure("physis-overview", x=256, y=8, z=256, distance=120, pitch=24, yaw=110)
+measure("physis-overview", window="physis", x=256, y=8, z=256, distance=120, pitch=24, yaw=110)
 # Direction gizmos (viewport UI, so clean:false captures).
 call("view_gizmos", physisWind=True, physisFire=True, nereidFlow=True, terraSlope=True,
      terraTreeWind=True, radius=60, spacing=6, select=river[1])
