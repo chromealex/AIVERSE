@@ -103,16 +103,16 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
   <StudioButton size="sm" aria-label="Zoom out" title="Zoom out" disabled={zoom<=(enhancedNavigation ? .25 : .5)} onClick={()=>setZoom(z=>Math.max(enhancedNavigation ? .25 : .5,z-.25))}>−</StudioButton>
   <StudioButton size="sm" aria-label={Math.round(zoom*100)+'% · Reset zoom to 100%'} title="Reset zoom to 100%" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
   <StudioButton size="sm" aria-label="Zoom in" title="Zoom in" disabled={zoom>=2} onClick={()=>setZoom(z=>Math.min(2,z+.25))}>+</StudioButton>
-  {enhancedNavigation&&<StudioButton size="sm" aria-label="Fit graph to window" title="Fit graph to window (Home on canvas)" onClick={fit}>Fit</StudioButton>}
+  <StudioButton size="sm" aria-label="Fit graph to window" title="Fit graph to window (Home on canvas)" onClick={fit}>Fit</StudioButton>
   {onAddMenu&&<StudioButton size="sm" disabled={disabled} onClick={onAddMenu}>Search nodes</StudioButton>}
   {commands?.length&&<StudioButton size="sm" aria-expanded={menu} disabled={disabled} onClick={()=>setMenu(v=>!v)}>Actions</StudioButton>}
  </div>
  {menu&&<div className="au-row au-graph-actions" aria-label="Graph actions">{commands?.map(c=><StudioButton key={c.id} size="sm" disabled={disabled||c.disabled} onClick={()=>{setMenu(false);c.run()}}>{c.label}</StudioButton>)}</div>}
  <div className={"au-graph-canvas graph-surface"+(enhancedNavigation?" au-graph-canvas--grid":"")} ref={scroll}>
   <svg ref={svg} width={maxWidth*zoom} height={maxHeight*zoom} viewBox={`0 0 ${maxWidth} ${maxHeight}`}
-   role="group" tabIndex={0} aria-label={label} aria-keyshortcuts={enhancedNavigation?'Home':undefined}
+   role="group" tabIndex={0} aria-label={label} aria-keyshortcuts="Home"
    onKeyDown={event=>{
-    if(!enhancedNavigation||event.target!==event.currentTarget||event.key!=='Home'||
+    if(event.target!==event.currentTarget||event.key!=='Home'||
        event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
     event.preventDefault();event.stopPropagation();fit();
    }}
