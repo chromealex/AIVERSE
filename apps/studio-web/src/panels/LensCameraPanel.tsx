@@ -35,7 +35,7 @@ interface CameraRecord {
   update?: {mode?:number;everyNFrames?:number;rateHz?:number};
   stack?: {overlay?:boolean;order?:number;opacity?:number};
   viewport?: {enabled?:boolean;x?:number;y?:number;width?:number;height?:number};
-  camera?: { projection?: string; fov?: number; orthographicHalfHeight?: number; near?: number; far?: number; enabled?: boolean };
+  camera?: { priority?: number; projection?: string; fov?: number; orthographicHalfHeight?: number; near?: number; far?: number; enabled?: boolean };
   output?: { kind?: string; key?: number; width?: number; height?: number; hdr?: boolean; depth?: boolean };
 }
 interface CameraScene { cameras: CameraRecord[] }
@@ -145,7 +145,7 @@ export default function LensCameraPanel({project, operations,openScene,actorSess
             <h4>View</h4>
             <div className="lens-fields"><label>Projection<select className="au-input" value={view.projection??'perspective'} onChange={e=>viewField({projection:e.target.value})}><option value="perspective">Perspective</option><option value="ortho">Orthographic</option></select></label>
             {view.projection==='ortho'?<NumberField label="Orthographic half-height" value={view.orthographicHalfHeight??10} onValue={v=>viewField({orthographicHalfHeight:v})}/>:<NumberField label="Vertical FOV (degrees)" value={+(180*(view.fov??.75)/Math.PI).toFixed(4)} onValue={v=>viewField({fov:v*Math.PI/180})}/>}
-            <NumberField label="Near clip" value={view.near??.1} onValue={v=>viewField({near:v})}/><NumberField label="Far clip" value={view.far??1000} onValue={v=>viewField({far:v})}/></div>
+            <NumberField label="Camera priority" value={view.priority??0} min={-10000} max={10000} step={1} onValue={priority=>viewField({priority})}/><NumberField label="Near clip" value={view.near??.1} onValue={v=>viewField({near:v})}/><NumberField label="Far clip" value={view.far??1000} onValue={v=>viewField({far:v})}/></div>
             <label className="lens-toggle"><input type="checkbox" checked={view.enabled??true} onChange={e=>viewField({enabled:e.target.checked})}/>Camera enabled</label>
             <details className="lens-optics" onToggle={e=>setShowOptics(e.currentTarget.open)}><summary>Physical lens</summary>
               {lensSwitches.map(([key,label])=><label key={key} className="lens-toggle"><input type="checkbox" checked={lens[key]??false} onChange={e=>update({lens:{...camera.lens,[key]:e.target.checked}})}/>{label}</label>)}
@@ -164,11 +164,11 @@ export default function LensCameraPanel({project, operations,openScene,actorSess
   </div>;
 }
 
-function NumberField({label,value,onValue}:{label:string;value:number;onValue:(value:number)=>void}) {
+function NumberField({label,value,onValue,min,max,step='any'}:{label:string;value:number;min?:number;max?:number;step?:number|'any';onValue:(value:number)=>void}) {
   const [text,setText]=useState(String(value));
   const [focused,setFocused]=useState(false);
   useEffect(()=>{if(!focused)setText(String(value));},[value,focused]);
-  return <label>{label}<input className="au-input" type="number" step="any" required value={text} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setText(e.target.value);if(Number.isFinite(e.target.valueAsNumber))onValue(e.target.valueAsNumber);}}/></label>;
+  return <label>{label}<input className="au-input" type="number" min={min} max={max} step={step} required value={text} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setText(e.target.value);if(Number.isFinite(e.target.valueAsNumber))onValue(e.target.valueAsNumber);}}/></label>;
 }
 
 function CameraOptions({camera,normalized,onChange,presets,presetError}:{presets:FollowPreset[];presetError:string;camera:CameraRecord;normalized?:CameraRecord;onChange:(patch:Partial<CameraRecord>)=>void}) {
