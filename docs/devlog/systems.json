@@ -3507,6 +3507,14 @@
           "titleEn": "Restore tools and Studio builds with Windows MSVC",
           "text": "Исправлены несовместимые с MSVC литералы шейдеров и макросы Windows без изменения поведения; исходная ветка собрала инструменты и Studio на Windows, интеграционное дерево прошло Mac quick gate (551/551).",
           "textEn": "Fixed MSVC shader literal limits and Windows macro collisions without behavior changes; the source branch built tools and Studio on Windows, and the integration tree passed the Mac quick gate (551/551)."
+        },
+        {
+          "id": "studio-session-windows-fixtures",
+          "title": "Проверка документов Studio на Windows",
+          "titleEn": "Studio document verification on Windows",
+          "text": "Исправить переносы строк в тестовых файлах и проверить сохранность внешних правок и истории документов на Windows.",
+          "textEn": "Correct line endings in test files and verify preservation of external edits and document history on Windows.",
+          "status": "in-progress"
         }
       ]
     },

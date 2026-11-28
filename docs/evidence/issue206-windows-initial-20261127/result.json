@@ -1,0 +1,14 @@
+{
+  "run_url": "https://github.com/chromealex/AIVERSE/actions/runs/46018209732",
+  "source_sha": "ed1e451f25812214051f6d8df98a231b5eef9dfb",
+  "configure": "pass",
+  "build": "pass",
+  "studio_session": "fail",
+  "error": "0xc0000409: always-on byte equality assertion at StudioSessionTests.cpp:1355",
+  "runner": "windows-2022",
+  "generator": "Visual Studio 17 2022",
+  "architecture": "x64",
+  "configuration": "Release",
+  "build_log_sha256": "e727b5527314c5bce64654004fc685a91ab47318167513c0cc1e432427c71eb0",
+  "build_log_retained": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/issue206-windows-46018209732/evidence/build.log"
+}

@@ -152,11 +152,11 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "note": "Full combined-tree Mac quick gate on clean ac687b5f2026e5a14cb770c2a98a087224bf8f5b (main3354ced78 plus general binary fixture correction): configure/build PASS;592 CTests,587passed,5explicit GPU skips,0failures,1144.61s. studio_session PASS15.39s. Existing main renderer warnings retained in build log (overlength shader string and unused completedSubmission); no claim of warning-free build. Two earlier Windows runs exposed text-mode fixture errors; latest all-fixture correction has NOT RUN on Windows pending a third manual-run authorization.",
       "evidence": [
-        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
-        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
-        "docs/agent-handoffs/issues-20261127-verification.md"
+        "docs/evidence/issue206-integrated-mac-quick-20261127.json",
+        "docs/evidence/issue206-integrated-mac-quick-20261127.log.txt",
+        "docs/agent-handoffs/issue206-windows-session.md"
       ]
     },
     "handoff": {
@@ -202,6 +202,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+    "docs/evidence/issue206-integrated-mac-quick-20261127.json"
   ]
 }

@@ -1,0 +1,19 @@
+Internal ctest changing into directory: D:/a/AIVERSE/AIVERSE/build/issue206
+Test project D:/a/AIVERSE/AIVERSE/build/issue206
+    Start 539: studio_session
+1/1 Test #539: studio_session ...................Exit code 0xc0000409
+***Exception:   2.03 sec
+AIVERSE test check failed: editor::readProjectFileBytes(project/"game.json")==bytes+"\n" (D:\a\AIVERSE\AIVERSE\apps\studio-native\tests\StudioSessionTests.cpp:1355)
+
+
+0% tests passed, 1 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   2.03 sec*proc (1 test)
+
+Total Test time (real) =   2.13 sec
+
+The following tests FAILED:
+	539 - studio_session (Exit code 0xc0000409
+)            EDITOR
+Errors while running CTest

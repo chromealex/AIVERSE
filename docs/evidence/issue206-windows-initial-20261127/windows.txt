@@ -1,0 +1,5 @@
+
+Caption                                  Version    OSArchitecture
+-------                                  -------    --------------
+Microsoft Windows Server 2022 Datacenter 10.0.20348 64-bit
+

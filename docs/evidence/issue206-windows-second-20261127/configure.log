@@ -1,0 +1,99 @@
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.20348.
+-- The C compiler identification is MSVC 19.44.35230.0
+-- The CXX compiler identification is MSVC 19.44.35230.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- AIVERSE platform: windows
+-- Installing the template packages into C:/Users/runneradmin/.aiverse/packages/templates
+downloading ambersands@1.0.0 (0 MB)
+ambersands: ambersands@1.0.0
+downloading borderrush@1.0.0 (0 MB)
+borderrush: borderrush@1.0.0
+downloading boss-arena@1.0.0 (0 MB)
+boss_arena: boss-arena@1.0.0
+downloading clanlands@1.0.0 (0 MB)
+clanlands: clanlands@1.0.0
+downloading extraction@1.0.0 (0 MB)
+extraction: extraction@1.0.0
+downloading flagsectors@1.0.0 (0 MB)
+flagsectors: flagsectors@1.0.0
+downloading fourages@1.0.0 (0 MB)
+fourages: fourages@1.0.0
+downloading fps-arena@1.0.0 (0 MB)
+fps_arena: fps-arena@1.0.0
+downloading fps-survival@1.0.0 (0 MB)
+fps_survival: fps-survival@1.0.0
+downloading fps-tactical@1.0.0 (0 MB)
+fps_tactical: fps-tactical@1.0.0
+downloading fps-training@1.0.0 (0 MB)
+fps_training: fps-training@1.0.0
+downloading frostcrown@1.0.0 (0 MB)
+frostcrown: frostcrown@1.0.0
+downloading hearthhaul@1.0.0 (0 MB)
+hearthhaul: hearthhaul@1.0.0
+downloading holdtheline@1.0.0 (0 MB)
+holdtheline: holdtheline@1.0.0
+downloading ironfront@1.0.0 (0 MB)
+ironfront: ironfront@1.0.0
+downloading km2d@1.0.0 (0 MB)
+km2d: km2d@1.0.0
+downloading laneclash@1.0.0 (0 MB)
+laneclash: laneclash@1.0.0
+downloading lastcolony@1.0.0 (0 MB)
+lastcolony: lastcolony@1.0.0
+downloading metaltide@1.0.0 (0 MB)
+metaltide: metaltide@1.0.0
+downloading mushrooms@1.0.0 (0 MB)
+mushrooms: mushrooms@1.0.0
+downloading perk-arena@1.0.0 (0 MB)
+perk_arena: perk-arena@1.0.0
+downloading planets@1.0.0 (0 MB)
+planets: planets@1.0.0
+downloading racing@1.0.0 (0 MB)
+racing: racing@1.0.0
+downloading road-race@1.0.0 (0 MB)
+road_race: road-race@1.0.0
+downloading scripted@1.0.0 (0 MB)
+scripted: scripted@1.0.0
+downloading showcase@1.0.0 (0 MB)
+showcase: showcase@1.0.0
+downloading shroomwars@1.0.0 (0 MB)
+shroomwars: shroomwars@1.0.0
+downloading skirmish@1.0.0 (1 MB)
+skirmish: skirmish@1.0.0
+downloading spellbunkers@1.0.0 (0 MB)
+spellbunkers: spellbunkers@1.0.0
+downloading sporelanes@1.0.0 (0 MB)
+sporelanes: sporelanes@1.0.0
+downloading starfall@1.0.0 (0 MB)
+starfall: starfall@1.0.0
+downloading tiles2d@1.0.0 (0 MB)
+tiles2d: tiles2d@1.0.0
+downloading topdown-arena@1.0.0 (0 MB)
+topdown_arena: topdown-arena@1.0.0
+downloading underlord@1.0.0 (0 MB)
+underlord: underlord@1.0.0
+downloading voxel-sandbox@1.0.0 (0 MB)
+voxel_sandbox: voxel-sandbox@1.0.0
+downloading wildfire@1.0.0 (0 MB)
+wildfire: wildfire@1.0.0
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Failed
+-- Looking for pthread_create in pthreads
+-- Looking for pthread_create in pthreads - not found
+-- Looking for pthread_create in pthread
+-- Looking for pthread_create in pthread - not found
+-- Found Threads: TRUE
+-- No build type selected, default to Debug
+-- Found Python3: C:/hostedtoolcache/windows/Python/3.14.10/x64/python3.exe (found version "3.14.10") found components: Interpreter
+-- Configuring done (59.2s)
+-- Generating done (4.6s)
+-- Build files have been written to: D:/a/AIVERSE/AIVERSE/build/issue206

@@ -1,0 +1,13 @@
+{
+  "sha": "ac687b5f2026e5a14cb770c2a98a087224bf8f5b",
+  "argv": [
+    "bash",
+    "./run-tests.sh",
+    "--quick",
+    "--build-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issue206-integrated-mac-quick-20261127.log.txt",
+  "sha256": "1ffea9c0dc8a605dab5f7deb29ee071510f5c7f54c388a381181c3a0981849cb"
+}
