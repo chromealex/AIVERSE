@@ -61,9 +61,12 @@
       "roadmap": [
         {
           "id": "terraweave-impostor-contour",
-          "status": "in-progress",
+          "status": "done",
           "title": "Контуры дальних деревьев: полосы и границы слоёв",
-          "titleEn": "Far tree silhouette geometry: bands and layer bounds"
+          "titleEn": "Far tree silhouette geometry: bands and layer bounds",
+          "date": "2026-11-27",
+          "text": "Контуры по альфа-маске для карточек Arbor: узкие стволы и высокие кроны; полные карточки остаются по умолчанию, проверено на Metal, Windows и Linux.",
+          "textEn": "Alpha-mask contours for Arbor cards: narrow trunks and high crowns; full cards stay the default, verified on Metal, Windows and Linux."
         },
         {
           "id": "terraweave-meadow-grass",
@@ -741,9 +744,12 @@
       "roadmap": [
         {
           "id": "impostor-mask-authoring",
-          "status": "in-progress",
+          "status": "done",
           "title": "Выбор геометрии импостера по маске",
-          "titleEn": "Alpha-mask impostor authoring"
+          "titleEn": "Alpha-mask impostor authoring",
+          "date": "2026-11-27",
+          "text": "Studio подгоняет карточки импостера к альфа-маске, показывает атлас и площадь до сохранения GLB.",
+          "textEn": "Studio fits impostor cards to the alpha mask and previews the atlas and area before saving the GLB."
         },
         {
           "status": "done",
@@ -3132,7 +3138,8 @@
           "titleEn": "Simulation Profiler",
           "text": "Ограниченный замер реального времени тиков и систем ECS в локальной игре.",
           "textEn": "Bounded measurement of actual tick and ECS system wall time in a local match.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "studio-world-explorer-live",
