@@ -103,6 +103,15 @@ def main():
                 for binary in binaries:
                     if binary not in studio_files and os.path.isfile(os.path.join(a.bin, "Release", binary)):
                         studio_files[binary] = os.path.join(a.bin, "Release")
+            player = "AiverseGame.exe"
+            player_dirs = (directory, studio_files.get(player, a.bin))
+            for player_dir in player_dirs:
+                if os.path.isfile(os.path.join(player_dir, player)):
+                    require_files(player_dir, ("content/engine/ui/theme.rcss",))
+                    studio_files[player] = player_dir
+                    studio_files["content/engine"] = player_dir
+                    binaries.append("content/engine")
+                    break
             break
         else:
             sys.exit(f"missing AiverseStudio.exe in {a.bin}")
