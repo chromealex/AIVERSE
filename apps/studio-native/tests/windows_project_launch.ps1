@@ -43,6 +43,39 @@ function Test-SceneDock($Root) {
     }
     Write-Output "Scene dock expanded and returned to its original width."
 }
+function Test-StandalonePlayer($Root, $Studio, [string]$ExpectedExe, [string]$ExpectedProject) {
+    $dock = Wait-NamedControl $Root 'Dock dock-center'
+    $tab = Wait-NamedControl $dock 'Game'
+    $selection = $null
+    if ($tab.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$selection)) {
+        $selection.Select()
+    } else {
+        Invoke-Control $tab
+    }
+    $player = $null
+    try {
+        Invoke-Control (Wait-NamedControl $Root 'Standalone player')
+        $until = [DateTime]::UtcNow.AddSeconds(20)
+        do {
+            $child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($Studio.Id) AND Name = 'AiverseGame.exe'" | Select-Object -First 1
+            if ($child) {
+                $player = Get-Process -Id $child.ProcessId -ErrorAction Stop
+                if ($child.ExecutablePath -ne $ExpectedExe) { throw "Studio launched the wrong executable: $($child.ExecutablePath)" }
+                if ($child.CommandLine -notmatch '(?:^|\s)"?--project"?\s+"([^"]+)"' -or
+                    [IO.Path]::GetFullPath($Matches[1]) -ne $ExpectedProject) { throw "Unexpected player arguments: $($child.CommandLine)" }
+                $player.Refresh()
+                if ($player.MainWindowHandle -ne [IntPtr]::Zero) {
+                    Write-Output "Standalone player opened its own window from the staged package."
+                    return
+                }
+            }
+            Start-Sleep -Milliseconds 200
+        } while ([DateTime]::UtcNow -lt $until)
+        throw "The packaged standalone player did not open a window."
+    } finally {
+        if ($player -and !$player.HasExited) { $player.Kill(); $player.WaitForExit() }
+    }
+}
 $exe = Join-Path (Resolve-Path $Package).Path 'AiverseStudio.exe'
 $process = Start-Process -FilePath $exe -ArgumentList "--project `"$projectDir`"" -PassThru
 try {
@@ -56,6 +89,7 @@ try {
             if ($projectLabel) {
                 Write-Output "Packaged Studio displayed project '$name'."
                 Test-SceneDock $root
+                Test-StandalonePlayer $root $process (Join-Path (Split-Path $exe) 'AiverseGame.exe') $projectDir
                 return
             }
         }
