@@ -111,7 +111,7 @@ def showcase_html(frame, systems, ctx):
         '<figcaption><div class="wrap"><div>'
         f'<p class="eyebrow">{ctx.T["showcaseEyebrow"]}</p>'
         f'<h2 id="showcase-title">{esc(title)}</h2><p>{esc(ctx.loc(frame, "caption"))}</p></div>'
-        f'<div class="meta"><span>{esc(ctx.loc(systems[frame["system"]], "name"))} · {ctx.fmt_date(frame["date"])}</span>{more}</div>'
+        f'<div class="meta"><span class="meta-pair"><span>{esc(ctx.loc(systems[frame["system"]], "name"))}</span><span>{ctx.fmt_date(frame["date"])}</span></span>{more}</div>'
         '</div></figcaption></figure>\n</section>'
     )
 
@@ -240,13 +240,13 @@ def blog_posts(entries, ctx):
         facts = f'<div><dt>{ctx.T["blogVerified"]}</dt><dd>{esc(e["verified"])}</dd></div>'
         if e.get('limits'):
             facts += f'<div><dt>{ctx.T["blogLimits"]}</dt><dd>{esc(e["limits"])}</dd></div>'
-        src = esc(e['branch'] or '') + (f' · {esc(e["commit"])}' if e.get('commit') else '')
+        src = ''.join(f'<span>{esc(v)}</span>' for v in (e.get('branch'), e.get('commit')) if v)
         links = ''.join(f'<a href="{esc(l["href"])}">{esc(l["title"])}</a>' for l in e.get('links') or [])
         posts.append(f'<li class="blog-post" id="{esc(e["id"])}" data-sys="{esc(e["system"])}">'
                      f'<time class="blog-date mono" datetime="{esc(e["date"])}">{ctx.fmt_date(e["date"])}</time>'
                      f'<span class="blog-dot" aria-hidden="true"></span><article class="blog-card">'
                      f'<div class="entry-meta"><span class="st st-{esc(e["status"])}">{esc(status.get(e["status"], e["status"]))}</span>'
-                     f'{f"<span>{src}</span>" if src else ""}</div>'
+                     f'{src}</div>'
                      f'<h2>{esc(e["title"])}</h2><p class="summary">{esc(e["summary"])}</p>'
                      f'{gal}{body}'
                      f'<dl class="facts-list">{facts}</dl>{f"<div class=entry-links>{links}</div>" if links else ""}</article></li>')
@@ -319,7 +319,7 @@ def system_page(s, flagships, entries, ctx, repo_blob, doc_pages):
         buttons.append(f'<a class="btn btn-ink" href="{esc(href)}">{ctx.T["article"]}</a>')
     core = bool(s.get('core'))
     if mine or not core:
-        buttons.append(f'<a class="btn btn-line" href="{f"devblog-{sid}.html" if mine else f"devlog.html#system={sid}"}">{ctx.T["blogTitle"]} · {len(mine)}</a>')
+        buttons.append(f'<a class="btn btn-line" href="{f"devblog-{sid}.html" if mine else f"devlog.html#system={sid}"}">{ctx.T["blogTitle"]} ({len(mine)})</a>')
     badge = '' if core else version_badge(s, ctx)
     since = f'<p class="sp-since mono">{ctx.T["since"]} {ctx.fmt_date(s["started"])}</p>' if s.get('started') else ''
     hero = (f'<section class="sp-hero"><p class="crumbs"><a href="./#{"core" if core else "systems"}">{ctx.T["crumbSystems"]}</a> / {esc(ctx.loc(s, "name"))}</p>'
@@ -719,7 +719,7 @@ def gallery_page(entries, systems, ctx):
                      f'<a class="gal-img" href="{src}" data-cap="{cap}"><img src="{src}" alt="{cap}" loading="lazy"></a>'
                      f'<figcaption><span class="gal-cap">{cap}</span>'
                      f'<a class="gal-meta mono" href="devblog-{esc(e["system"])}.html#{esc(e["id"])}">'
-                     f'{esc(names.get(e["system"], e["system"]))} · {ctx.fmt_date(e["date"])}</a></figcaption></figure>')
+                     f'<span>{esc(names.get(e["system"], e["system"]))}</span><span>{ctx.fmt_date(e["date"])}</span></a></figcaption></figure>')
     return (f'<section class="dl-hero"><div><p class="eyebrow">{ctx.T["navGallery"]}</p><h1>{ctx.T["galTitle"]}</h1>'
             f'<p>{ctx.T["galLead"]}</p></div>'
             f'<div class="dl-stats"><div><strong>{len(shots)}</strong><span>{ctx.T["galShots"]}</span></div>'
@@ -740,7 +740,7 @@ RELEASES_JS = """<script>
 (function(){var cfg=window.REL_CFG;if(!cfg)return;
 function mb(n){return (n/1048576).toFixed(0)+' MB';}
 function btn(p){var a=document.createElement('a');a.className='btn btn-ink btn-sm rel-pkg';a.href=p.url;
-a.textContent=(cfg.os[p.platform]||p.platform)+' · '+mb(p.size);a.title='sha256 '+p.sha256+' · '+p.commit;return a;}
+a.textContent=(cfg.os[p.platform]||p.platform)+', '+mb(p.size);a.title='sha256 '+p.sha256+', '+p.commit;return a;}
 fetch(cfg.index,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(d){
 var pk=d.packages||[],known={},other=[];
 document.querySelectorAll('.rel-dl').forEach(function(el){known[el.dataset.version]=el;});
@@ -750,7 +750,7 @@ if(!el.dataset.filled){l.textContent='';el.dataset.filled='1';}l.appendChild(btn
 document.querySelectorAll('.rel-dl:not([data-filled])').forEach(function(el){var s=document.createElement('span');
 s.className='rel-dl-none';s.textContent=cfg.none;el.querySelector('.rel-dl-list').prepend(s);});
 if(other.length){var box=document.querySelector('.rel-other'),list=box.querySelector('.rel-other-list'),g={};
-other.forEach(function(p){var k=p.version+' · '+p.commit;(g[k]=g[k]||[]).push(p);});
+other.forEach(function(p){var k=p.version+' ('+p.commit+')';(g[k]=g[k]||[]).push(p);});
 Object.keys(g).forEach(function(k){var row=document.createElement('div');row.className='rel-other-row';
 var c=document.createElement('code');c.textContent=k;row.appendChild(c);g[k].forEach(function(p){row.appendChild(btn(p));});list.appendChild(row);});
 box.hidden=false;}}).catch(function(){}).then(function(){document.querySelectorAll('.rel-dl .aiv-loader').forEach(function(e){e.remove();});});})();
@@ -804,7 +804,7 @@ var cmd=(p.kind==='content'?'add '+p.id+' --project <project>':p.kind==='templat
 var pre=el('div','cat-cmd'),code=el('code',null,'python3 tools/pkg/aiverse_pkg.py '+cmd),cp=el('button','cat-copy',T.copy);cp.type='button';
 cp.onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(code.textContent).then(function(){cp.textContent=T.copied;setTimeout(function(){cp.textContent=T.copy;},1500);});};
 pre.appendChild(code);pre.appendChild(cp);body.appendChild(pre);
-var act=el('div','cat-actions'),dl=el('a','btn btn-ink btn-sm',T.download+' · '+mb(v.size));dl.href=v.url;dl.title='sha256 '+v.sha256;act.appendChild(dl);
+var act=el('div','cat-actions'),dl=el('a','btn btn-ink btn-sm',T.download+' '+mb(v.size));dl.href=v.url;dl.title='sha256 '+v.sha256;act.appendChild(dl);
 if(p.readme){var r=el('a','btn btn-line btn-sm',T.readme);r.href=p.readme;act.appendChild(r);}
 a.item=0;a.link=function(){return location.origin+location.pathname+'#pkg-'+p.id+(a.classList.contains('is-open')&&a.item?'/'+a.item:'');};
 if(p.viewer){var v3=el('button','btn btn-accent btn-sm cat-3d',T.view3d);v3.type='button';

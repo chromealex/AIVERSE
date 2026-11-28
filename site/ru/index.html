@@ -39,7 +39,7 @@
 <main>
 <section class="hero wrap">
 <div class="chips">
-<span class="chip">C++20</span><span class="chip">MIT</span><span class="chip">детерминированная симуляция</span><span class="chip chip-ink">MCP · агенты</span><!--RELEASE_CHIP-->
+<span class="chip">C++20</span><span class="chip">MIT</span><span class="chip">детерминированная симуляция</span><span class="chip chip-ink">MCP, агенты</span><!--RELEASE_CHIP-->
 </div>
 <h1>Игру любого жанра <span class="mark">описывают</span>, а&nbsp;не&nbsp;пишут с&nbsp;нуля</h1>
 <div class="hero-row">
@@ -52,14 +52,14 @@
 <div class="hero-visual">
 <figure><img src="../media/docs/images/readme/city-roads.jpg" alt="Город со сплайновыми дорогами и кварталами, собранный агентом в AIVERSE" width="1280" height="800"></figure>
 <div class="console" aria-label="Пример сессии агента">
-<div class="console-head"><span class="dot"></span>агент · aiversemcp · пример сессии</div>
+<div class="console-head"><span class="dot"></span>агент, aiversemcp, пример сессии</div>
 <div class="console-body">
 <div><b>›</b> rules_set <i>peasant.cost.gold = 75</i></div>
-<div><b>›</b> map_generate <i>2 игрока · 128×128</i></div>
-<div><b>›</b> rules_lint <em>ok · 0 ошибок</em></div>
+<div><b>›</b> map_generate <i>2 игрока, 128×128</i></div>
+<div><b>›</b> rules_lint <em>ok, 0 ошибок</em></div>
 <div><b>›</b> scenario_run <i>tutorial</i> <em>все проверки пройдены</em></div>
 <div><b>›</b> balance_matrix <i>матчи ботов</i></div>
-<div><b>›</b> build_start <i>ios · android · web</i></div>
+<div><b>›</b> build_start <i>ios, android, web</i></div>
 </div>
 </div>
 <p class="shot-caption">Город собрал агент навыками aiverse-roads и aiverse-city-blocks</p>
@@ -114,9 +114,9 @@
 <img src="../favicon.svg" width="300" height="284" alt="Знак AIVERSE: три луча вокруг ромба">
 </div>
 <div class="grid">
-<article class="card"><span class="tag">01 · данные</span><h3 class="h3">Проект — это текст</h3><p>game.json, rules.json, уровни, UI, звук и эффекты — читаемые файлы. Никаких бинарных сцен: человек и агент правят одно и то же.</p></article>
-<article class="card"><span class="tag">02 · механики</span><h3 class="h3">Геймплей уже внутри</h3><p>Армии, персонажи, транспорт и гонки, бой, движение, стелс, диалоги, карты, головоломки, экономика — 88 детерминированных библиотек, которые работают в любом проекте.</p></article>
-<article class="card card-ink"><span class="tag">03 · агент</span><h3 class="h3">ИИ проверяет сам себя</h3><p>Матчи ботов, сценарии с проверками, матрицы баланса, линтер правил и скриншоты — агент видит результат, а не работает вслепую.</p></article>
+<article class="card"><span class="tag">01 данные</span><h3 class="h3">Проект — это текст</h3><p>game.json, rules.json, уровни, UI, звук и эффекты — читаемые файлы. Никаких бинарных сцен: человек и агент правят одно и то же.</p></article>
+<article class="card"><span class="tag">02 механики</span><h3 class="h3">Геймплей уже внутри</h3><p>Армии, персонажи, транспорт и гонки, бой, движение, стелс, диалоги, карты, головоломки, экономика — 88 детерминированных библиотек, которые работают в любом проекте.</p></article>
+<article class="card card-ink"><span class="tag">03 агент</span><h3 class="h3">ИИ проверяет сам себя</h3><p>Матчи ботов, сценарии с проверками, матрицы баланса, линтер правил и скриншоты — агент видит результат, а не работает вслепую.</p></article>
 </div>
 </div>
 </section>
@@ -128,7 +128,7 @@
 <ol class="steps">
 <li><span class="n">1</span><strong>Идея, арт, музыка</strong><span>Текстовое описание и ассеты — всё, что нужно на входе.</span></li>
 <li><span class="n">2</span><strong>Мастер «Сделать игру»</strong><span>Или агент через MCP: уровни, туториал, мета, магазин, иконка, сплэш.</span></li>
-<li><span class="n">3</span><strong>Проект = данные</strong><span>game.json · rules.json · levels · ui · fx · audio.</span></li>
+<li><span class="n">3</span><strong>Проект = данные</strong><span>game.json, rules.json, levels, ui, fx, audio.</span></li>
 <li><span class="n">4</span><strong>Проверка ↺</strong><span>Боты проходят туториал и каждый уровень; найденное уходит в правки.</span></li>
 <li class="ink"><span class="n">5</span><strong>aiversebuild</strong><span>.app, Xcode, Gradle/APK, web и .exe — одной командой.</span></li>
 </ol>
@@ -169,18 +169,18 @@
 <p style="margin:0;color:var(--muted);max-width:420px">Механики подключаются данными и сочетаются как угодно. Каждая библиотека детерминирована, протестирована, умеет сохраняться и валидирует свой конфиг.</p>
 </div>
 <div class="grid genres">
-<article class="card genre"><div class="genre-top"><h3>Армии, здания, экономика</h3></div><p>Юниты и здания из данных, A*/HPA*/flow fields для тысяч юнитов на картах до 2048², ресурсы, туман войны, ИИ-командир стороны.</p><code>26 шаблонов · aiverse-bots-commander</code></article>
-<article class="card genre"><div class="genre-top"><h3>Персонаж и сетевой бой</h3></div><p>Авторитетный сервер с откатом попаданий, большие стримящиеся миры до 100 игроков, отдача и баллистика, боты.</p><code>weapon-policies · match-rules</code></article>
-<article class="card genre"><div class="genre-top"><h3>Транспорт и гонки</h3></div><p>Колёсные, гусеничные, ховер и летающие машины с местами; трассы на сплайновых дорогах, старт, чекпоинты, круги, гоночные боты.</p><code>vehicle-controllers · aiverse-races</code></article>
-<article class="card genre"><div class="genre-top"><h3>Ближний бой</h3></div><p>Хитбоксы, комбо и окна отмены, i-frames уклонения, парирование, захват цели.</p><code>combat-actions · melee-combat</code></article>
-<article class="card genre"><div class="genre-top"><h3>Движение и мир</h3></div><p>Coyote time, буфер прыжка, уступы, лестницы, плавание; гейты способностей и проверка на софтлоки.</p><code>character-locomotion · zone-graph</code></article>
-<article class="card genre"><div class="genre-top"><h3>Восприятие и взаимодействие</h3></div><p>Конусы зрения, слух, подозрение и тревога, маскировка; перенос, броски, верёвки, двери.</p><code>stealth-senses · physical-interactions</code></article>
-<article class="card genre"><div class="genre-top"><h3>Сюжет и постановка</h3></div><p>Диалоги с условиями, отношения и последствия, бэклог; таймлайны, QTE, замедление.</p><code>narrative-graphs · cinematic-gameplay</code></article>
-<article class="card genre"><div class="genre-top"><h3>Ходы, карты, скрытая информация</h3></div><p>Инициатива, очки действий, реакции; зоны, стек приоритета, тактическая сетка.</p><code>turn-scheduler · card-runtime</code></article>
-<article class="card genre"><div class="genre-top"><h3>Головоломки, ритм, спорт</h3></div><p>Правила сокобана, undo/redo и решатель, VM для задач; темповые карты; владение мячом, пасы, удары, периоды.</p><code>grid-puzzles · rhythm-timing · sports-rules</code></article>
-<article class="card genre"><div class="genre-top"><h3>Забеги и лут</h3></div><p>Сидированные забеги, бюджеты встреч, таблицы лута с гарантированной редкостью.</p><code>run-graph · loot-tables</code></article>
-<article class="card genre"><div class="genre-top"><h3>Большие числа и производство</h3></div><p>Точный офлайн-прогресс, многослойный престиж, производственные сети и логистика.</p><code>big-numbers · offline-production</code></article>
-<article class="card genre"><div class="genre-top"><h3>Мета мобильной игры</h3></div><p>Магазин, валюты, квесты, пассы, энергия, кланы, турниры, сундуки — в JSON.</p><code>aiverse::meta · LiveOps</code></article>
+<article class="card genre"><div class="genre-top"><h3>Армии, здания, экономика</h3></div><p>Юниты и здания из данных, A*/HPA*/flow fields для тысяч юнитов на картах до 2048², ресурсы, туман войны, ИИ-командир стороны.</p><code>26 шаблонов, aiverse-bots-commander</code></article>
+<article class="card genre"><div class="genre-top"><h3>Персонаж и сетевой бой</h3></div><p>Авторитетный сервер с откатом попаданий, большие стримящиеся миры до 100 игроков, отдача и баллистика, боты.</p><code>weapon-policies, match-rules</code></article>
+<article class="card genre"><div class="genre-top"><h3>Транспорт и гонки</h3></div><p>Колёсные, гусеничные, ховер и летающие машины с местами; трассы на сплайновых дорогах, старт, чекпоинты, круги, гоночные боты.</p><code>vehicle-controllers, aiverse-races</code></article>
+<article class="card genre"><div class="genre-top"><h3>Ближний бой</h3></div><p>Хитбоксы, комбо и окна отмены, i-frames уклонения, парирование, захват цели.</p><code>combat-actions, melee-combat</code></article>
+<article class="card genre"><div class="genre-top"><h3>Движение и мир</h3></div><p>Coyote time, буфер прыжка, уступы, лестницы, плавание; гейты способностей и проверка на софтлоки.</p><code>character-locomotion, zone-graph</code></article>
+<article class="card genre"><div class="genre-top"><h3>Восприятие и взаимодействие</h3></div><p>Конусы зрения, слух, подозрение и тревога, маскировка; перенос, броски, верёвки, двери.</p><code>stealth-senses, physical-interactions</code></article>
+<article class="card genre"><div class="genre-top"><h3>Сюжет и постановка</h3></div><p>Диалоги с условиями, отношения и последствия, бэклог; таймлайны, QTE, замедление.</p><code>narrative-graphs, cinematic-gameplay</code></article>
+<article class="card genre"><div class="genre-top"><h3>Ходы, карты, скрытая информация</h3></div><p>Инициатива, очки действий, реакции; зоны, стек приоритета, тактическая сетка.</p><code>turn-scheduler, card-runtime</code></article>
+<article class="card genre"><div class="genre-top"><h3>Головоломки, ритм, спорт</h3></div><p>Правила сокобана, undo/redo и решатель, VM для задач; темповые карты; владение мячом, пасы, удары, периоды.</p><code>grid-puzzles, rhythm-timing, sports-rules</code></article>
+<article class="card genre"><div class="genre-top"><h3>Забеги и лут</h3></div><p>Сидированные забеги, бюджеты встреч, таблицы лута с гарантированной редкостью.</p><code>run-graph, loot-tables</code></article>
+<article class="card genre"><div class="genre-top"><h3>Большие числа и производство</h3></div><p>Точный офлайн-прогресс, многослойный престиж, производственные сети и логистика.</p><code>big-numbers, offline-production</code></article>
+<article class="card genre"><div class="genre-top"><h3>Мета мобильной игры</h3></div><p>Магазин, валюты, квесты, пассы, энергия, кланы, турниры, сундуки — в JSON.</p><code>aiverse::meta, LiveOps</code></article>
 </div>
 <div class="card card-ink plugins" style="margin-top:20px">
 <span class="tag">своя механика</span>
@@ -220,10 +220,10 @@
 </div>
 </div>
 <div class="grid net-cards">
-<article class="card"><span class="tag">сеть · модель 1</span><h3>Rollback lockstep</h3><p>По сети идут только команды. Откат по вводу со сверкой хэшей, сглаживание коррекций, реконнект и поздний вход.</p></article>
-<article class="card"><span class="tag">сеть · модель 2</span><h3>Авторитетный сервер</h3><p>Клиент и сервер, который решает всё сам: большие стримящиеся миры до 100 игроков и боты прямо на сервере.</p></article>
+<article class="card"><span class="tag">сеть, модель 1</span><h3>Rollback lockstep</h3><p>По сети идут только команды. Откат по вводу со сверкой хэшей, сглаживание коррекций, реконнект и поздний вход.</p></article>
+<article class="card"><span class="tag">сеть, модель 2</span><h3>Авторитетный сервер</h3><p>Клиент и сервер, который решает всё сам: большие стримящиеся миры до 100 игроков и боты прямо на сервере.</p></article>
 <article class="card"><span class="tag">свой хостинг</span><h3>Свой сервер битв</h3><p>aiverse_server на вашей машине: шифрованный UDP и WebSocket, билеты на матч, пинг до серверов, матчмейкинг по Elo, вердикты по реплеям.</p></article>
-<article class="card meta"><span class="tag">мета · LiveOps</span><h3>Мета-сервис</h3><p>Магазин, валюты, квесты, пассы, энергия, лидерборды, чат, друзья и кланы, турниры — из JSON, со своим бэкендом и готовым клиентом.</p></article>
+<article class="card meta"><span class="tag">мета, LiveOps</span><h3>Мета-сервис</h3><p>Магазин, валюты, квесты, пассы, энергия, лидерборды, чат, друзья и кланы, турниры — из JSON, со своим бэкендом и готовым клиентом.</p></article>
 </div>
 </div>
 </section>
@@ -235,12 +235,12 @@
 <p style="margin:0;font-size:18px;color:var(--text-2)">Каждый шаблон — полностью играбельная игра с ботами. Откройте в редакторе и меняйте.</p>
 </div>
 <div class="list">
-<div class="list-row"><h3>Классические RTS</h3><p>Iron and Gold · Iron Front · Starfall Sectors · Frost Crown · Four Ages · Amber Sands · Metal Tide</p></div>
-<div class="list-row"><h3>Захват и гарнизоны</h3><p>Mushroom Clash · Shroom Wars · Spore Lanes · Spell Bunkers · Border Rush · Clan Lands · Flag Sectors</p></div>
-<div class="list-row"><h3>Отряды, волны, выживание</h3><p>Hold the Line · Last Colony · Lane Clash</p></div>
-<div class="list-row"><h3>Экономика и стройка</h3><p>Hearth and Haul · Underlord</p></div>
-<div class="list-row"><h3>2D и эксперименты</h3><p>Crystal Dunes · Green Hills · Planets · Wildfire</p></div>
-<div class="list-row"><h3>FPS</h3><p>Crossfire Arena · Breach Protocol · Last Survivor (100 игроков) · Aim Lab</p></div>
+<div class="list-row"><h3>Классические RTS</h3><p>Iron and Gold, Iron Front, Starfall Sectors, Frost Crown, Four Ages, Amber Sands, Metal Tide</p></div>
+<div class="list-row"><h3>Захват и гарнизоны</h3><p>Mushroom Clash, Shroom Wars, Spore Lanes, Spell Bunkers, Border Rush, Clan Lands, Flag Sectors</p></div>
+<div class="list-row"><h3>Отряды, волны, выживание</h3><p>Hold the Line, Last Colony, Lane Clash</p></div>
+<div class="list-row"><h3>Экономика и стройка</h3><p>Hearth and Haul, Underlord</p></div>
+<div class="list-row"><h3>2D и эксперименты</h3><p>Crystal Dunes, Green Hills, Planets, Wildfire</p></div>
+<div class="list-row"><h3>FPS</h3><p>Crossfire Arena, Breach Protocol, Last Survivor (100 игроков), Aim Lab</p></div>
 </div>
 </section>
 
@@ -253,7 +253,7 @@
 </div>
 <div style="display:flex;flex-direction:column;gap:16px">
 <p class="eyebrow">Плагины сторов и рекламы</p>
-<p style="margin:0;font-size:22px;line-height:1.7;font-weight:500">App Store · Google Play · RuStore · Yandex Games · Steam · Xsolla · AdMob · AppLovin · ironSource · Yandex Ads · AppMetrica · AppsFlyer · GameAnalytics · Push · Deeplinks</p>
+<p style="margin:0;font-size:22px;line-height:1.7;font-weight:500">App Store, Google Play, RuStore, Yandex Games, Steam, Xsolla, AdMob, AppLovin, ironSource, Yandex Ads, AppMetrica, AppsFlyer, GameAnalytics, Push, Deeplinks</p>
 </div>
 </div>
 </section>
@@ -286,7 +286,7 @@
 <div><span>Разработчикам</span><a href="docs.html">Документация</a><a href="devlog.html">Ход разработки</a><a href="roadmap.html">Роадмап</a><a href="releases.html">Релизы</a></div>
 <div><span>Сообщество</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </div>
 </footer>

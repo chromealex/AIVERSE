@@ -23,11 +23,11 @@
   "limitsEn": "The example uses a flat map and a geometric tower model. Planet maps and sprite appearances have not received separate visual runs.",
   "links": [
     {
-      "title": "Watchtower orders · WebGL 2",
+      "title": "Play Web",
       "href": "https://chromealex.github.io/AIVERSE/demos/order-upgrade/index.html?map=0&lang=en"
     },
     {
-      "title": "Watchtower orders · source",
+      "title": "Source",
       "href": "demos/order-upgrade/README.md"
     }
   ],

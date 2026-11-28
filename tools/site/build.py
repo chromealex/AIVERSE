@@ -609,7 +609,7 @@ def cmd_build(args):
         for s in paged:
             body = system_page(s, paged, loc_entries, ctx, manifest['repoBlob'], doc_pages)
             (d / f'system-{s["id"]}.html').write_text(render_page(
-                layout, ctx, f'system-{s["id"]}.html', f'{ctx.loc(s, "name")} — {ctx.loc(s, "tagline")} · AIVERSE',
+                layout, ctx, f'system-{s["id"]}.html', f'{ctx.loc(s, "name")} — {ctx.loc(s, "tagline")} | AIVERSE',
                 ctx.loc(s, 'essence'), body, nav='systems', script=TRACK_JS), encoding='utf-8')
             pages += 1
             for it in s['includes']:
@@ -642,7 +642,7 @@ def cmd_build(args):
                         body_html = f'<p class="doc-note">{esc(T["incRuOnly"])}</p>' + body_html
                 name = f'system-{s["id"]}-{it["id"]}.html'
                 (d / name).write_text(render_page(
-                    layout, ctx, name, f'{ctx.loc(it, "name")} — {s["name"]} · AIVERSE', ctx.loc(it, 'text'),
+                    layout, ctx, name, f'{ctx.loc(it, "name")} — {s["name"]} | AIVERSE', ctx.loc(it, 'text'),
                     feature_page(s, it, body_html, ctx), nav='systems', script=FEATURE_JS), encoding='utf-8')
                 pages += 1
         # Keep bookmarked posts and topic filters in the same language.
@@ -658,11 +658,11 @@ def cmd_build(args):
                 continue
             name = f'devblog-{s["id"]}.html'
             (d / name).write_text(render_page(
-                layout, ctx, name, f'{T["blogTitle"]}: {s["name"]} · AIVERSE', T['blogLead'].format(s=s['name']),
+                layout, ctx, name, f'{T["blogTitle"]}: {s["name"]} | AIVERSE', T['blogLead'].format(s=s['name']),
                 devblog_page(s, mine, ctx, s['id'] in {p['id'] for p in paged}), nav='devlog', script=FEATURE_JS), encoding='utf-8')
             pages += 1
         (d / 'gallery.html').write_text(render_page(
-            layout, ctx, 'gallery.html', f'{T["galTitle"]} · AIVERSE', T['galLead'],
+            layout, ctx, 'gallery.html', f'{T["galTitle"]} | AIVERSE', T['galLead'],
             gallery_page(loc_entries, systems, ctx), nav='gallery', script=FEATURE_JS + GALLERY_JS), encoding='utf-8')
         pages += 1
         (d / 'roadmap.html').write_text(render_page(layout, ctx, 'roadmap.html', T['rmPageTitle'], T['rmDesc'],
@@ -713,9 +713,30 @@ def cmd_build(args):
             f'<link rel="canonical" href="../{page.name}">'
             f'<meta http-equiv="refresh" content="0; url=../{page.name}">'
             f'<script>location.replace("../{page.name}"+location.hash)</script>', encoding='utf-8')
+    # Web demos open in a popup (site/demo-player.js) on every page that can link to one.
+    for page in out.rglob('*.html'):
+        rel = page.relative_to(out).parts
+        if rel[0] in ('demos', 'en') or 'media' in rel:
+            continue
+        t = page.read_text(encoding='utf-8')
+        if 'demo-player.js' in t or '</body>' not in t:
+            continue
+        prefix = '../' * (len(rel) - 1)
+        page.write_text(t.replace('</body>', f'<script src="{prefix}demo-player.js" defer></script></body>', 1), encoding='utf-8')
+    # Owner rule: the site never uses the middle dot as a separator. Templates and data avoid it;
+    # this pass catches text that comes from documents (code blocks stay as written).
+    for page in [*out.rglob('*.html'), *out.rglob('*.json')]:
+        t = page.read_text(encoding='utf-8')
+        if '\u00b7' not in t:
+            continue
+        parts = re.split(r'(<pre[\s>].*?</pre>)', t, flags=re.S)
+        t2 = ''.join(x if x.startswith('<pre') else x.replace(' \u00b7 ', ', ').replace('\u00b7', ' ')
+                     for x in parts)
+        if t2 != t:
+            page.write_text(t2, encoding='utf-8')
     # Cache busting: the CDN and browsers keep style.css / devlog.js for minutes, so a fresh page
     # could meet a stale stylesheet. Every page asks for the exact version it was built with.
-    for asset in ('style.css', 'devlog.js'):
+    for asset in ('style.css', 'devlog.js', 'demo-player.js'):
         f = out / asset
         if f.is_file():
             v = hashlib.sha1(f.read_bytes()).hexdigest()[:10]

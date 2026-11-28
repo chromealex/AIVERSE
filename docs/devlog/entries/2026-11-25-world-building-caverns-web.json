@@ -21,7 +21,7 @@
   "limitsEn": "The planetary travel and checkpoint scenario runs in a separate native example.",
   "links": [
     {
-      "title": "Building Graph / Caverns · source",
+      "title": "Source",
       "href": "examples/world/building-caverns-web/README.md"
     }
   ],

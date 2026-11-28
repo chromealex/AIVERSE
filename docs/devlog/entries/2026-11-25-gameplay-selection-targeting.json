@@ -22,8 +22,8 @@
   "limits": "Настройки меняют выбор мышью и автоматическую стрельбу. Демонстрационная карта плоская.",
   "limitsEn": "The controls cover pointer selection and automatic fire. The training range uses a flat map.",
   "links": [
-    {"title": "Training range · Web", "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"},
-    {"title": "Training range · source", "href": "demos/selection-targeting/README.md"}
+    {"title": "Play Web", "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"},
+    {"title": "Source", "href": "demos/selection-targeting/README.md"}
   ],
   "media": [
     {"src": "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg", "caption": "Щелчок по кроне открыл карточку разведчика. Он стреляет в мишень в верхней строке.", "captionEn": "Clicking the canopy opened the scout's card. It is firing at the target in the earlier row."},

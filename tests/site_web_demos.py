@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools/site'))
-from web_demos import copy_web_demos
+from web_demos import copy_web_demos, versioned_index
 
 
 class WebDemoPublication(unittest.TestCase):
@@ -43,6 +43,18 @@ class WebDemoPublication(unittest.TestCase):
                 copy_web_demos(manifest, out, None, repo)
             with self.assertRaisesRegex(ValueError, 'invalid demo asset'):
                 copy_web_demos({'range': {'../escape': '0' * 64, 'index.html': '0' * 64}}, out, root, repo)
+
+    def test_index_pins_its_runtime_and_reports_errors(self):
+        page = (b'<script>var Module={arguments:[]};'
+                b'window.onerror=function(){Module.setStatus("Error: see the browser console")}</script>'
+                b'<script async src=index.js></script>')
+        files = {'index.html': 'a' * 64, 'index.js': 'b' * 64, 'index.wasm': 'c' * 64}
+        text = versioned_index(page, files).decode()
+        version = hashlib.sha256(''.join(files[k] for k in sorted(files)).encode()).hexdigest()[:12]
+        self.assertIn(f'src=index.js?v={version}>', text)
+        self.assertIn(f'var Module={{locateFile:function(p){{return p+"?v={version}"}},arguments:[]', text)
+        self.assertIn('Module.setStatus("Error: "+(m||', text)
+        self.assertEqual(versioned_index(page, files), versioned_index(page, files))
 
 
 if __name__ == '__main__':
