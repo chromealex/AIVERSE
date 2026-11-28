@@ -131,13 +131,32 @@ call("physis_nature_preview", enabled=True, playing=True, grass=True, flames=Tru
      windSpeed=9, windDirection=20, humidity=0.1, cellMeters=4)
 time.sleep(6)
 measure("physis-wind", window="physis", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
-fire = call("physis_nature_preview", ignite={"x": 271, "z": 207}, advanceTicks=8)
-time.sleep(3)
-measure("physis-fire", window="physis", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
+# Probe dry ground eastward from the riverbank. Keep the accepted cell
+# under the camera and advance the private simulation explicitly between shots.
+for fire_x in range(271, 336, 8):
+    fire_z = 207
+    fire = call("physis_nature_preview", playing=False, ignite={"x": fire_x, "z": fire_z})
+    if fire.get("ignited"):
+        break
+    if not fire.get("igniteError"):
+        raise RuntimeError(f"PHYSIS ignition failed: {fire}")
+else:
+    raise RuntimeError(f"No burnable cell found on the east bank: {fire}")
+fire_y = height(fire_x, fire_z) + 1.2
+first = call("physis_nature_preview", advanceTicks=8)
+for _ in range(20):
+    if first.get("burningAreaM2", 0) > 0:
+        break
+    time.sleep(0.1)
+    first = call("physis_nature_preview")
+else:
+    raise RuntimeError(f"No active fire after ignition: {first}")
+measure("physis-fire", window="physis", x=fire_x, y=fire_y, z=fire_z, distance=45, pitch=35, yaw=0)
 fire2 = call("physis_nature_preview", advanceTicks=40)
-time.sleep(3)
-measure("physis-fire-later", window="physis", x=262, y=1.2, z=205, distance=55, pitch=40, yaw=0)
-fire = {"first": fire, "later": fire2}
+if fire2.get("advanced") != 40:
+    raise RuntimeError(f"PHYSIS fire did not advance: {fire2}")
+measure("physis-fire-later", window="physis", x=fire_x, y=fire_y, z=fire_z, distance=55, pitch=40, yaw=0)
+fire = {"ignition": fire, "x": fire_x, "z": fire_z, "first": first, "later": fire2}
 measure("physis-overview", window="physis", x=256, y=8, z=256, distance=120, pitch=24, yaw=110)
 # Direction gizmos (viewport UI, so clean:false captures).
 call("view_gizmos", physisWind=True, physisFire=True, nereidFlow=True, terraSlope=True,
