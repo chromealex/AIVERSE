@@ -9,10 +9,10 @@ import './LightingPanel.css';
 import LightingWeatherPreview from './LightingWeatherPreview';
 import RenderLightingControls from './RenderLightingControls';
 
-interface LightingPanelProps { openScene: () => void; projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
+interface LightingPanelProps { dirty: boolean; saveMap: () => Promise<void>; openScene: () => void; projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
 const empty: LightingState = { lighting: null, lights: [] };
 
-export default function LightingPanel({ openScene, projectPath, documentEpoch, selectedId, onSelect }: LightingPanelProps) {
+export default function LightingPanel({ dirty, saveMap, openScene, projectPath, documentEpoch, selectedId, onSelect }: LightingPanelProps) {
   const [state, setState] = useState<LightingState>(empty);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -165,6 +165,12 @@ export default function LightingPanel({ openScene, projectPath, documentEpoch, s
             </div>}
           </>}
       </div>}
-    <div className="panel-footer">Authoring data · use Save in the main toolbar to persist</div>
+    <div className="panel-footer">
+      <button className="au-button au-button--sm" disabled={!dirty||busy||loading||!available||!nativeConnected()} onClick={async()=>{
+        setBusy(true);setError('');
+        try{await saveMap();}catch(e){setError(e instanceof Error?e.message:String(e));}
+        finally{setBusy(false);}
+      }}>Save map</button>
+    </div>
   </section>;
 }
