@@ -25,6 +25,15 @@ function menuElement(target: EventTarget | null): Element | null {
   return node?.closest('[data-au-menu]') ?? null;
 }
 
+function moveMenuFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  event.stopPropagation();
+  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+  const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  buttons[(index + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length]?.focus();
+}
+
 /**
  * Shared right-click menu for every Studio panel. Positioned at the pointer and
  * kept inside the window; closes on outside click, Escape, scroll or blur.
@@ -68,20 +77,13 @@ export function StudioContextMenu({ x, y, items, onClose, label = 'Context menu'
   return <div ref={ref} className="au-menu" role="menu" aria-label={label} data-au-menu=""
     style={{ left: pos.x, top: pos.y, minWidth }}
     onContextMenu={event => event.preventDefault()}
-    onKeyDown={event => {
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-      event.preventDefault();
-      const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
-      const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      const next = buttons[(index + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length];
-      next?.focus();
-    }}>
+    onKeyDown={moveMenuFocus}>
     <MenuRows items={items} onClose={onClose}/>
   </div>;
 }
 
 function MenuRows({ items, onClose }: { items: StudioMenuItem[]; onClose: () => void }) {
-  const [fly, setFly] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [fly, setFly] = useState<{ id: string; rect: DOMRect; opener?: HTMLButtonElement } | null>(null);
   const timer = useRef<number | null>(null);
   const clearTimer = () => { if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null; } };
   useEffect(() => () => clearTimer(), []);
@@ -103,10 +105,17 @@ function MenuRows({ items, onClose }: { items: StudioMenuItem[]; onClose: () => 
         aria-expanded={row.children ? fly?.id === row.id : undefined}
         className={'au-menu__item' + (row.danger ? ' is-danger' : '')}
         disabled={row.disabled}
+        onKeyDown={event => {
+          if (event.key !== 'ArrowRight' || !row.children) return;
+          event.preventDefault();
+          event.stopPropagation();
+          clearTimer();
+          setFly({id: row.id, rect: event.currentTarget.getBoundingClientRect(), opener: event.currentTarget});
+        }}
         onClick={event => {
           if (row.children) {
             const parent = event.currentTarget.parentElement;
-            if (parent) setFly({ id: row.id, rect: parent.getBoundingClientRect() });
+            if (parent) setFly({ id: row.id, rect: parent.getBoundingClientRect(), opener: event.detail === 0 ? event.currentTarget : undefined });
             return;
           }
           onClose();
@@ -118,7 +127,7 @@ function MenuRows({ items, onClose }: { items: StudioMenuItem[]; onClose: () => 
           : row.shortcut && <kbd className="au-menu__shortcut">{row.shortcut}</kbd>}
       </button>}
     </div>)}
-    {item?.children && fly && <Flyout anchor={fly.rect} label={item.label} items={item.children} onClose={onClose}
+    {item?.children && fly && <Flyout opener={fly.opener} back={()=>{clearTimer();setFly(null);fly.opener?.focus();}} anchor={fly.rect} label={item.label} items={item.children} onClose={onClose}
       onEnter={clearTimer} onLeave={() => {
         clearTimer();
         timer.current = window.setTimeout(() => setFly(null), 180);
@@ -127,8 +136,8 @@ function MenuRows({ items, onClose }: { items: StudioMenuItem[]; onClose: () => 
 }
 
 /** Drawn on document.body so a scrolling menu cannot clip it. */
-function Flyout({ anchor, label, items, onClose, onEnter, onLeave }: {
-  anchor: DOMRect; label: string; items: StudioMenuItem[]; onClose: () => void;
+function Flyout({ opener, back, anchor, label, items, onClose, onEnter, onLeave }: {
+  opener?: HTMLButtonElement; back: () => void; anchor: DOMRect; label: string; items: StudioMenuItem[]; onClose: () => void;
   onEnter: () => void; onLeave: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -144,9 +153,17 @@ function Flyout({ anchor, label, items, onClose, onEnter, onLeave }: {
     if (y + height > window.innerHeight - 4) y = Math.max(4, window.innerHeight - height - 4);
     setPos({ x, y });
   }, [anchor, items]);
+  useLayoutEffect(() => {
+    if (opener) ref.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  }, [opener]);
   return createPortal(
     <div ref={ref} className="au-menu au-menu--sub" role="menu" aria-label={label} data-au-menu=""
       style={{ left: pos.x, top: pos.y }}
+      onKeyDown={event => {
+        if (event.key === 'ArrowLeft' || event.key === 'Escape') {
+          event.preventDefault(); event.stopPropagation(); back();
+        } else moveMenuFocus(event);
+      }}
       onMouseEnter={onEnter} onMouseLeave={onLeave}
       onContextMenu={event => event.preventDefault()}>
       <MenuRows items={items} onClose={onClose}/>
