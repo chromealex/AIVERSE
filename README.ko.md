@@ -257,9 +257,16 @@ CMake, Node.js 필요, WebView2 Runtime과 Vulkan에서 동작).
 `studio_mac.command`는 웹 UI와 네이티브 Studio를 빌드하고 엽니다. 엔진만 빌드하려면:
 `cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`.
 
-Linux: `cmake --preset linux-release && cmake --build build/linux-release`. 직접 컴파일하고 싶지 않다면
-`builds` 브랜치에 미리 빌드된 에디터와 도구가 있습니다
-([자세히](docs/ko/overview.md#미리-빌드된-엔진builds-브랜치과-컴파일러-없는-aiversemcp)).
+Linux에서 HTML5 Studio는 WebKitGTK 4.1(2.40 이상), SQLite, X11, Vulkan을 사용합니다. 이들의 개발 패키지와 Node.js, CMake, Ninja를 설치한 뒤 Studio를 구성하기 전에 웹 UI를 빌드하세요.
+
+```bash
+(cd apps/studio-web && npm install && npm run build)
+cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF
+cmake --build --preset linux-release --target aiverse_studio
+./build/linux-release/apps/studio-native/AiverseStudio
+```
+
+Linux에서 엔진만 빌드하려면 `cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_EDITOR=OFF`와 `cmake --build --preset linux-release`를 사용하세요. `builds` 브랜치에는 미리 빌드된 도구도 있습니다. [미리 빌드된 엔진과 도구](docs/ko/overview.md#미리-빌드된-엔진builds-브랜치과-컴파일러-없는-aiversemcp)
 
 **2. 게임 만들기.** 허브에서 **"게임 만들기"**를 누르거나 템플릿으로 프로젝트를 만드세요. Game 창에서
 바로 봇과 플레이할 수 있습니다.

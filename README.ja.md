@@ -260,9 +260,16 @@ CMake、Node.js が必要。WebView2 Runtime と Vulkan で動作）。
 `studio_mac.command` は Web UI とネイティブの Studio をビルドして開きます。エンジンだけなら：
 `cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`。
 
-Linux：`cmake --preset linux-release && cmake --build build/linux-release`。コンパイルしたくない場合は、
-`builds` ブランチにビルド済みのエディターとツールがあります
-（[詳細](docs/ja/overview.md#ビルド済みエンジンbuilds-ブランチとコンパイラー不要の-aiversemcp)）。
+Linux では HTML5 Studio は WebKitGTK 4.1（2.40 以降）、SQLite、X11、Vulkan を使います。これらの開発パッケージと Node.js、CMake、Ninja を入れ、Studio を構成する前に Web UI をビルドします。
+
+```bash
+(cd apps/studio-web && npm install && npm run build)
+cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF
+cmake --build --preset linux-release --target aiverse_studio
+./build/linux-release/apps/studio-native/AiverseStudio
+```
+
+Linux でエンジンだけをビルドするには `cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_EDITOR=OFF` と `cmake --build --preset linux-release` を使います。`builds` ブランチにはビルド済みのツールもあります。 [ビルド済みのエンジンとツール](docs/ja/overview.md#ビルド済みエンジンbuilds-ブランチとコンパイラー不要の-aiversemcp)
 
 **2. ゲームを作る。** ハブで**「ゲームを作る」**を押すか、テンプレートからプロジェクトを作成します。
 Game ウィンドウですぐにボットと遊べます。

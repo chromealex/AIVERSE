@@ -255,9 +255,16 @@ CMake、Node.js；运行于 WebView2 Runtime 和 Vulkan）。
 `studio_mac.command` 会构建 Web 界面和原生 Studio 并打开它。只构建引擎：
 `cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`。
 
-Linux：`cmake --preset linux-release && cmake --build build/linux-release`。如果不想编译，
-`builds` 分支提供预构建的编辑器和工具
-（[详情](docs/zh-CN/overview.md#预构建引擎builds-分支与无需编译器的-aiversemcp)）。
+在 Linux 上，HTML5 Studio 使用 WebKitGTK 4.1（2.40 或更新）、SQLite、X11 和 Vulkan。安装它们的开发包以及 Node.js、CMake 和 Ninja 后，先构建 Web 界面，再配置 Studio。
+
+```bash
+(cd apps/studio-web && npm install && npm run build)
+cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF
+cmake --build --preset linux-release --target aiverse_studio
+./build/linux-release/apps/studio-native/AiverseStudio
+```
+
+只构建 Linux 引擎：`cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_EDITOR=OFF`，然后 `cmake --build --preset linux-release`。`builds` 分支也提供预构建的工具。 [预构建的引擎和工具](docs/zh-CN/overview.md#预构建引擎builds-分支与无需编译器的-aiversemcp)
 
 **2. 制作游戏。** 在项目中心点击**“制作游戏”**，或从模板创建项目。可以立即在 Game 窗口中与机器人对战。
 

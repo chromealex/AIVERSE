@@ -260,9 +260,16 @@ CMake, Node.js; работает на WebView2 Runtime и Vulkan).
 `studio_mac.command` собирает веб-интерфейс и нативную Studio и открывает её. Только движок:
 `cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`.
 
-Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Если компилировать не хочется,
-в ветке `builds` есть готовые сборки редактора и инструментов
-([подробнее](docs/ru/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)).
+В Linux HTML5 Studio использует WebKitGTK 4.1 (2.40 или новее), SQLite, X11 и Vulkan. Установите их пакеты для разработки, Node.js, CMake и Ninja и соберите веб-интерфейс до настройки Studio.
+
+```bash
+(cd apps/studio-web && npm install && npm run build)
+cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF
+cmake --build --preset linux-release --target aiverse_studio
+./build/linux-release/apps/studio-native/AiverseStudio
+```
+
+Только движок под Linux: `cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_EDITOR=OFF` и `cmake --build --preset linux-release`. В ветке `builds` есть и готовые инструменты. [Готовые сборки движка и инструментов](docs/ru/overview.md#готовые-сборки-движка-ветка-builds-и-aiversemcp-без-компилятора)
 
 **2. Сделать игру.** В хабе нажмите **«Сделать игру»** или создайте проект из шаблона. Игру можно
 сразу запустить с ботами в окне Game.
