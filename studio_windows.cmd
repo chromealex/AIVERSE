@@ -13,7 +13,7 @@ if not exist node_modules call npm install --no-audit --no-fund || (popd & echo 
 call npx vite build || (popd & echo WEB BUILD FAILED & exit /b 1)
 popd
 echo == configure
-cmake -S . -B build\windows -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF "-DAIVERSE_STUDIO_WEB_DIST=%CD%\apps\studio-web\dist" || (echo CONFIGURE FAILED & exit /b 1)
+cmake -S . -B build\windows -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_CLIENT=ON "-DAIVERSE_STUDIO_WEB_DIST=%CD%\apps\studio-web\dist" || (echo CONFIGURE FAILED & exit /b 1)
 echo == build
 cmake --build build\windows --config Release --target aiverse_studio --parallel || (echo BUILD FAILED & exit /b 1)
 set "EXE=build\windows\apps\studio-native\Release\AiverseStudio.exe"

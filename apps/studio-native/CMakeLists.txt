@@ -95,10 +95,16 @@ if(TARGET aiverse_studio)
     if(TARGET aiverse_client)
         target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_GAME_CLIENT="$<TARGET_FILE:aiverse_client>")
         add_dependencies(aiverse_studio aiverse_client)
-        if(AIVERSE_PLATFORM STREQUAL "linux")
+        if(AIVERSE_PLATFORM MATCHES "^(linux|windows)$")
+            if(WIN32)
+                set(studio_player_name AiverseGame.exe)
+            else()
+                set(studio_player_name aiverse_client)
+            endif()
             add_custom_target(aiverse_studio_game_player
+                COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
                 COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiverse_client>"
-                    "$<TARGET_FILE_DIR:aiverse_studio>/aiverse_client"
+                    "$<TARGET_FILE_DIR:aiverse_studio>/${studio_player_name}"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_ENGINE_ASSETS}"
                     "$<TARGET_FILE_DIR:aiverse_studio>/content/engine"
                 DEPENDS aiverse_client

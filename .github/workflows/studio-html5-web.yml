@@ -129,7 +129,7 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
       - name: Configure Studio (Visual Studio 2022, x64)
-        run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
+        run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=ON -DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
       - name: Build AiverseStudio.exe and the session contract
         run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests aiverse_studio_win_device_overlay_tests --parallel 4
       - name: Studio session contract (Windows)
@@ -140,7 +140,7 @@ jobs:
         run: |
           $out = 'build/studio-windows-ci/apps/studio-native/Release'
           $stage = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'Studio distribution')
-          foreach ($file in 'AiverseStudio.exe','aiversemcp.exe','aiversebuild.exe','WebView2Loader.dll','studio-web','engine') {
+          foreach ($file in 'AiverseStudio.exe','AiverseGame.exe','content','aiversemcp.exe','aiversebuild.exe','WebView2Loader.dll','studio-web','engine') {
             Copy-Item (Join-Path $out $file) $stage.FullName -Recurse
           }
           python -B apps/studio-native/tests/standalone_bundle.py --require-build-tool $stage.FullName
