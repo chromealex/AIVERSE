@@ -373,9 +373,13 @@ if(AIVERSE_BUILD_TESTS)
         else()
             set(studio_distribution "$<TARGET_FILE_DIR:aiverse_studio>")
         endif()
+        set(studio_player_check)
+        if(TARGET aiverse_client)
+            set(studio_player_check --require-player)
+        endif()
         add_test(NAME studio_standalone_bundle
             COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone_bundle.py"
-                "${studio_distribution}")
+                "${studio_distribution}" ${studio_player_check})
         set_tests_properties(studio_standalone_bundle PROPERTIES LABELS "EDITOR;MCP")
         add_test(NAME studio_wizard_art_download
             COMMAND "${Python3_EXECUTABLE}" -B "${PROJECT_SOURCE_DIR}/tests/wizard_art_download.py")

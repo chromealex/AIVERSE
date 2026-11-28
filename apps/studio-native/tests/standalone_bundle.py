@@ -20,25 +20,30 @@ class PageAssets(HTMLParser):
             self.urls.append(attributes["href"])
 
 
-def check_files(package, require_build_tool, require_windows_player=False):
+def check_files(package, require_build_tool, require_player=False):
     required = []
     if package.suffix == ".app":
         host = package / "Contents/MacOS/AiverseStudioHTML5"
         server = host.with_name("aiversemcp")
         resources = package / "Contents/Resources"
+        player_bundle = package / "Contents/Helpers/AiverseGame.app/Contents"
+        player = player_bundle / "MacOS/AiverseGame"
+        player_resources = player_bundle / "Resources"
     elif (package / "AiverseStudio").is_file():
         host = package / "AiverseStudio"
         server = package / "aiversemcp"
-        resources = package
+        resources = player_resources = package
+        player = package / "aiverse_client"
     else:
         host = package / "AiverseStudio.exe"
         server = package / "aiversemcp.exe"
-        resources = package
+        resources = player_resources = package
+        player = package / "AiverseGame.exe"
         required.append(package / "WebView2Loader.dll")
 
     required.extend([host, server, resources / "engine/fonts/ui.ttf"])
-    if require_windows_player:
-        required.extend([package / "AiverseGame.exe", package / "content/engine/fonts/ui.ttf"])
+    if require_player:
+        required.extend([player, player_resources / "content/engine/fonts/ui.ttf"])
     if require_build_tool:
         required.append(server.with_name("aiversebuild" + server.suffix))
     for relative in ("flame_16x4.png", "smoke_8x8.png"):
@@ -59,8 +64,8 @@ def check_files(package, require_build_tool, require_windows_player=False):
     return server, len(page.urls)
 
 
-def check(package, files_only=False, require_build_tool=False, require_windows_player=False):
-    server, entries = check_files(package, require_build_tool, require_windows_player)
+def check(package, files_only=False, require_build_tool=False, require_player=False):
+    server, entries = check_files(package, require_build_tool, require_player)
     if files_only:
         print(f"Verified Studio distribution files and {entries} web entry assets")
         return
@@ -82,6 +87,6 @@ if __name__ == "__main__":
     parser.add_argument("package", type=Path, help="macOS .app or Linux/Windows executable directory")
     parser.add_argument("--files-only", action="store_true", help="Inspect a cross-built package without running its MCP server")
     parser.add_argument("--require-build-tool", action="store_true", help="Verify the packager is bundled")
-    parser.add_argument("--require-windows-player", action="store_true", help="Verify the Windows standalone player and its engine resources")
+    parser.add_argument("--require-player", "--require-windows-player", action="store_true", help="Verify the standalone player and its engine resources")
     args = parser.parse_args()
-    check(args.package.resolve(), args.files_only, args.require_build_tool, args.require_windows_player)
+    check(args.package.resolve(), args.files_only, args.require_build_tool, args.require_player)
