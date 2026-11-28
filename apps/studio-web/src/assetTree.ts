@@ -30,6 +30,17 @@ export function assetKind(path: string): AssetKind {
   return 'document';
 }
 export function assetFileName(path:string):string {return path.slice(path.lastIndexOf('/')+1);}
+export function assetDisplayName(path:string):string {
+  const name=assetFileName(path);
+  if(!name.endsWith('.material.json'))return name;
+  return name.replace(/(?:%[89a-f][0-9a-f])+/gi, bytes=>{
+    try { return decodeURIComponent(bytes); } catch { return bytes; }
+  });
+}
+export function matchesAssetSearch(path:string,query:string):boolean {
+  return path.toLowerCase().includes(query) ||
+    (path.endsWith('.material.json') && assetDisplayName(path).toLowerCase().includes(query));
+}
 export function assetParent(path:string):string {
   const index=path.lastIndexOf('/');
   return index<0?'':path.slice(0,index);
@@ -57,7 +68,7 @@ export function visibleAssetFiles(files:readonly StudioAsset[],parent:string,sea
   return files.flatMap(asset=>{
     const path=safeAssetPath(asset.path);
     if(!path)return [];
-    if(query ? !path.toLowerCase().includes(query) : assetParent(path)!==parent)return [];
+    if(query ? !matchesAssetSearch(path,query) : assetParent(path)!==parent)return [];
     return [{...asset,path}];
   }).sort((a,b)=>a.path.localeCompare(b.path));
 }

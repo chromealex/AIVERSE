@@ -16,7 +16,7 @@ import type {
 } from '../types';
 import AssetThumb from './AssetThumb';
 import ProjectDirectory, {absoluteChildPath} from './ProjectDirectory';
-import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
+import { assetKind, assetFolders, assetDisplayName, matchesAssetSearch, assetFileName, assetBreadcrumbs,
   childFolders, visibleAssetFiles, safeAssetPath } from '../assetTree';
 import type { AssetFolder, AssetKind } from '../assetTree';
 import './AssetsPanel.css';
@@ -280,7 +280,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const shownFolders=useMemo(()=>search.trim()?[]:childFolders(folders,folder),[folders,folder,search]);
   const shownFiles=useMemo(()=>{
     // "Unused" lists matching files of the whole project, wherever the folder is.
-    if(unusedOnly&&unused)return catalog.files.filter(f=>unused.has(f.path)&&(!search||f.path.toLowerCase().includes(search.toLowerCase())));
+    if(unusedOnly&&unused)return catalog.files.filter(f=>unused.has(f.path)&&(!search||matchesAssetSearch(f.path,search.trim().toLowerCase())));
     return visibleAssetFiles(catalog.files,folder,search);
   },[catalog.files,folder,search,unusedOnly,unused]);
   const filtering=Boolean(search.trim()) || unusedOnly;
@@ -610,7 +610,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
                     ? <AssetThumb path={'content/'+asset.path} fallback={<AssetIcon kind={kind} size={24}/>}/>
                     : <AssetIcon kind={kind} size={mode==='grid'?24:14}/>}</span>
                   <span className="studio-assets-name">{kind==='material' && mode==='grid'
-                    ? assetFileName(asset.path).slice(0,-'.material.json'.length) : assetFileName(asset.path)}</span>
+                    ? assetDisplayName(asset.path).slice(0,-'.material.json'.length) : assetDisplayName(asset.path)}</span>
                   {kind==='material' && mode==='grid' && <small className="studio-assets-type">Material</small>}
                   <span className="studio-assets-meta">{formatBytes(asset.bytes)}</span>
                 </button>;
