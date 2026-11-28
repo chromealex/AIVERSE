@@ -9,7 +9,7 @@ import PhysisPreviewWind from './PhysisPreviewWind';
 import PhysisCellReading from './PhysisCellReading';
 import './PhysisDiagnosticsPanel.css';
 
-const layers=['Temperature (°C)','Relative humidity','Pressure (hPa)','Rain','Snow','Surface wetness','Snowpack (m)','Surface ice','Wind speed (m/s)','Vertical wind (m/s)','Gravity (m/s²)','Fire','Quake','Local flood (m)'];
+import { physisLayers as layers } from '../physisLayers';
 const initial={layer:0,palette:0,size:32,stride:1,centerX:0,centerZ:0};
 type View=typeof initial;
 const ringColor:Record<string,string>={Wind:'#83efff',Tornado:'#ffcb69',Hurricane:'#ffcb69',Gravity:'#e0aaff'};

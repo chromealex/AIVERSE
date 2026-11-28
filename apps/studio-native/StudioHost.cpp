@@ -1889,6 +1889,7 @@ void StudioHost::tickScene() {
             if(natureLayers_.physisHeatmap){
                 if(const auto* world=game_->localPhysisWorld()){
                     editor::PhysisSceneOverlayState overlay;
+                    overlay.layer=static_cast<physis::DiagnosticLayer>(natureLayers_.physisLayer);
                     editor::updatePhysisOverlayTiles(overlay,*world,camera.target.x,camera.target.z);
                     heatmap_=std::make_shared<const StudioScene::HeatmapTiles>(std::move(overlay.tiles));
                 }

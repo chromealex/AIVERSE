@@ -15,6 +15,7 @@ struct StudioNatureLayers {
     bool mapRoutes=true,playerStarts=true,resourceFields=true,rampTiles=false,regionBorders=false,triggerAreas=true;
     unsigned char modelDebugMode=0;
     int strataColor=0;
+    int physisLayer=0;
     float radius=48,spacing=6;
     bool operator==(const StudioNatureLayers&) const = default;
 
@@ -56,6 +57,13 @@ struct StudioNatureLayers {
                 throw std::runtime_error("Invalid Scene model visualization");
             next.modelDebugMode=static_cast<unsigned char>(value);
         }
+        if(input.has("physisLayer")){
+            const auto& field=input["physisLayer"];
+            const double layer=field.toDouble(-1);
+            if(!field.isNumber() || !(layer>=0 && layer<=13 && std::floor(layer)==layer))
+                throw std::runtime_error("Invalid PHYSIS diagnostic layer");
+            next.physisLayer=int(layer);
+        }
         if(input.has("strataColor")){
             const auto color=input["strataColor"].toDouble(-1);
             if(!(color>=0 && color<=3 && std::floor(color)==color))throw std::runtime_error("Invalid STRATA color mode");
@@ -76,6 +84,7 @@ struct StudioNatureLayers {
         Json out=Json::object();
         for(const auto& flag:flags)out.set(agent?flag.agent:flag.toolbar,Json::fromBool(this->*flag.member));
         out.set("modelDebugMode",Json::number(int64_t(modelDebugMode)));
+        out.set("physisLayer",Json::number(int64_t(physisLayer)));
         out.set("strataColor",Json::number(int64_t(strataColor)));
         out.set(agent?"radius":"natureRadius",Json::number(double(radius),6));
         out.set(agent?"spacing":"natureSpacing",Json::number(double(spacing),6));
