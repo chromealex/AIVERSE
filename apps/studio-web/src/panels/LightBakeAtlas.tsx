@@ -25,11 +25,11 @@ export function LightBakeAtlas({pages,hash,epoch}:{pages:AtlasPage[];hash:string
     <summary>Atlas preview</summary>
     {open && <>
       <StudioField label="Atlas page" htmlFor="bake-page"><StudioSelect id="bake-page" value={page} disabled={busy}
-        onChange={e=>{const n=Number(e.target.value);setPage(n);if(!pages[n].mask)setChannel('lightmap');}}>
+        onChange={e=>{const n=Number(e.target.value);setImage('');setPage(n);if(!pages[n].mask)setChannel('lightmap');}}>
         {pages.map((p,i)=><option key={i} value={i}>Page {i+1} · {p.width} × {p.height}</option>)}
       </StudioSelect></StudioField>
       <StudioField label="Channel" htmlFor="bake-channel"><StudioSelect id="bake-channel" value={channel} disabled={busy}
-        onChange={e=>setChannel(e.target.value==='mask'?'mask':'lightmap')}>
+        onChange={e=>{setImage('');setChannel(e.target.value==='mask'?'mask':'lightmap');}}>
         <option value="lightmap">Baked irradiance</option>
         {pages[page]?.mask && <option value="mask">Sun visibility</option>}
       </StudioSelect></StudioField>
