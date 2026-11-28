@@ -9,6 +9,7 @@ import GameSpeedSlider from './GameSpeedSlider';
 import GameRoleLaunch from './GameRoleLaunch';
 import GameDevicePicker from './GameDevicePicker';
 import './GamePanel.css';
+import { ActorNetworkPlay } from './ActorNetworkPlay';
 import { gameViewportSize } from './gameViewport';
 
 export default function GamePanel({snapshot,connected,busy,setBusy,showPanel}:StudioPanelContext) {
@@ -181,7 +182,8 @@ export default function GamePanel({snapshot,connected,busy,setBusy,showPanel}:St
             }}/>
         : !state?.active && loaded && actorSession
         ? <StudioEmptyState title="First-person play" description="Play the saved map in this window. Click the viewport to control your character."
-            action={<StudioButton variant="primary" disabled={busy} onClick={()=>void act('map')}>Play map</StudioButton>}/>
+            action={<><StudioButton variant="primary" disabled={busy} onClick={()=>void act('map')}>Play map</StudioButton>
+              <ActorNetworkPlay key={projectPath} project={projectPath} hostOnly/></>}/>
         : !state?.active && <StudioEmptyState title={loaded?'Ready to play':'Open a project'}
         description={loaded?'Run the saved map or open the project’s own menus. Stop returns to authoring without copying runtime changes into the map.':'Play uses the native game client and renderer.'}/>}
     </div>

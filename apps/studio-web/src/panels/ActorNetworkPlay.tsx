@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { invoke, onNativeEvent } from '../bridge';
 import { StudioButton, StudioField, StudioInput, StudioSection } from '../ui';
 
-export function ActorNetworkPlay({project}:{project:string}) {
+export function ActorNetworkPlay({project,hostOnly=false}:{project:string;hostOnly?:boolean}) {
   const [address,setAddress]=useState('udp://127.0.0.1:27100');
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
@@ -22,6 +22,7 @@ export function ActorNetworkPlay({project}:{project:string}) {
     finally { setBusy(false); }
   }
   return <div className="actor-simulation">
+    {hostOnly ? <StudioButton disabled={busy} onClick={()=>void launch('listen')}>Start host</StudioButton> : <>
     <StudioSection title="Host a session">
       <p>Open the saved map in a game window. Players can join on UDP port 27100 or WebSocket port 27101.</p>
       <StudioButton disabled={busy} onClick={()=>void launch('listen')}>Start host</StudioButton>
@@ -32,6 +33,7 @@ export function ActorNetworkPlay({project}:{project:string}) {
         <StudioButton type="submit" disabled={busy||!address.trim()}>Connect</StudioButton>
       </form>
     </StudioSection>
+    </>}
     {message&&<p role="status">{message}</p>}
     {error&&<p role="alert">{error}</p>}
   </div>;
