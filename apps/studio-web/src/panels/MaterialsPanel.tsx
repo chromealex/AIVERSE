@@ -285,7 +285,10 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
       {(['properties','dependencies','quick'] as const).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
       <StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>
      </div>}
-     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
+     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} onOpenMaterial={base=>{
+       if(!names.includes(base)){setError('Base material not found: '+base);return;}
+       switchTo(base);
+     }} mode={materialMode}/></div>}
      <div className="materials-fields" hidden={materialMode!=='properties'}>
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}

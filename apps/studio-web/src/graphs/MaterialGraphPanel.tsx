@@ -12,7 +12,7 @@ import {materialGraph,textureRecipeParams,textureChannelForOutput} from './mater
 import type {TextureRecipe,TextureOutput} from './materialGraph';
 
 const object=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
-export default function MaterialGraphPanel({documentEpoch,name,material,draft,projectPath,disabled,onEdit,mode}:{documentEpoch?:string;name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void;mode:'properties'|'texture'|'dependencies'|'quick'}){
+export default function MaterialGraphPanel({documentEpoch,name,material,draft,projectPath,disabled,onEdit,onOpenMaterial,mode}:{documentEpoch?:string;name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onOpenMaterial:(name:string)=>void;onEdit:(key:MaterialKey,value:FieldValue)=>void;mode:'properties'|'texture'|'dependencies'|'quick'}){
  const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [selected,setSelected]=useState(''),[patterns,setPatterns]=useState<string[]>([]);
  const [recipe,setRecipe]=useState<TextureRecipe>({pattern:'',output:'color',seed:1,size:256,scale:8,name:''});
@@ -79,6 +79,7 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
   <div className="material-dependency-canvas">
    <GraphCanvas view={view} selected={selected} label="Material dependency graph" enhancedNavigation readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
+  {selected==='base'&&typeof material.base==='string'&&<StudioButton size="sm" disabled={disabled} onClick={()=>onOpenMaterial(String(material.base))}>Open base material: {material.base}</StudioButton>}
   {typeof reference==='string' && reference && <div className="material-texture-reference"><code>{reference}</code><StudioButton size="sm" onClick={()=>void revealTexture(reference)}>Show texture in Assets</StudioButton></div>}
   {revealError&&<StudioAlert tone="danger">{revealError}</StudioAlert>}
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
