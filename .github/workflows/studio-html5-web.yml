@@ -99,7 +99,7 @@ jobs:
           cmake -S . -B build/studio-native-ci \
             -DCMAKE_BUILD_TYPE=Debug \
             -DAIVERSE_BUILD_EDITOR=OFF \
-            -DAIVERSE_BUILD_CLIENT=OFF \
+            -DAIVERSE_BUILD_CLIENT=ON -DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF \
             -DAIVERSE_BUILD_TOOLS=ON \
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_STUDIO_HTML5=ON

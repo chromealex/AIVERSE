@@ -342,7 +342,9 @@ public:
     }
     PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
         const std::filesystem::path bundle=NSBundle.mainBundle.bundlePath.UTF8String;
-        const auto exe=studio::studioNetworkPlayer(bundle.parent_path()/"AiverseGame.app/Contents/MacOS/AiverseGame");
+        const auto player=std::filesystem::path("AiverseGame.app/Contents/MacOS/AiverseGame");
+        const auto embedded=bundle/"Contents/Helpers"/player;
+        const auto exe=studio::studioNetworkPlayer(std::filesystem::is_regular_file(embedded)?embedded:bundle.parent_path()/player);
         return launchExecutable(exe,args);
     }
     void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
