@@ -48,7 +48,12 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev \
-            libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri xvfb
+            libvulkan-dev libwebkit2gtk-4.1-dev libsqlite3-dev mesa-vulkan-drivers libgl1-mesa-dri xvfb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build HTML Studio assets
+        run: bash tools/studio/build-validation-web.sh
       - name: Configure full editor, tests and HDR fixture
         shell: bash
         run: |
@@ -57,7 +62,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_HDR_TESTS=ON \
-            -DAIVERSE_BUILD_EDITOR=ON 2>&1 | tee prisma-configure.log
+            -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON 2>&1 | tee prisma-configure.log
       - name: Build all native targets once
         shell: bash
         run: |
