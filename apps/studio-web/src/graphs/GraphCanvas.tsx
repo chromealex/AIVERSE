@@ -186,17 +186,17 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     {node.thumbnail&&<image href={node.thumbnail} x="35" y={height-86} width="60" height="60" preserveAspectRatio="xMidYMid meet" style={{imageRendering:"pixelated"}} pointerEvents="none"/>}
     {node.thumbnail&&<text x="65" y={height-17} textAnchor="middle" fill="var(--au-text-muted)" fontSize="8">CPU</text>}
     {geometry.ports.filter(p=>p.node===node.id).map(p=><g key={p.direction+':'+p.port}>{typedPorts&&<text x={p.direction==='input'?9:nodeWidth-9} y={p.y-node.y+3} textAnchor={p.direction==='input'?'start':'end'} fill={portColor(p.type)} fontSize="9" pointerEvents="none">{p.direction==='input'?p.port+': '+p.type:p.type}</text>}<circle key={p.direction+':'+p.port}
-     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
+     cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} aria-disabled={disabled||readOnly||undefined} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
      aria-label={node.id+' '+p.direction+' '+p.port+' '+p.type}
      aria-pressed={p.direction==='output'?samePort(pendingOutput,p):undefined}
      fill={p.direction==='output'&&samePort(pendingOutput,p)?'var(--au-accent-ink)':portColor(p.type)}
      data-graph-input={p.direction==='input'?'true':undefined} data-node={p.node} data-port={p.port}
      onPointerDown={e=>{e.stopPropagation();suppressClick.current=false;if(disabled||readOnly||!onConnect||p.direction!=='output'||e.button!==0)return;e.currentTarget.focus({preventScroll:true});wireDrag.current={pointer:e.pointerId,from:{node:p.node,port:p.port},x:e.clientX,y:e.clientY,moved:false};onOutput?.({node:p.node,port:p.port});e.currentTarget.setPointerCapture(e.pointerId);}}
      onPointerMove={e=>{const d=wireDrag.current;if(d?.pointer===e.pointerId&&Math.hypot(e.clientX-d.x,e.clientY-d.y)>4)d.moved=true;}}
-     onPointerUp={e=>{const d=wireDrag.current;if(d?.pointer!==e.pointerId)return;wireDrag.current=null;suppressClick.current=true;if(!d.moved)return;const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-graph-input="true"]');const node=el?.getAttribute('data-node'),port=el?.getAttribute('data-port');if(node&&port!==null&&port!==undefined)onConnect?.(d.from,{node,port});else onCancel?.();}}
+     onPointerUp={e=>{const d=wireDrag.current;if(d?.pointer!==e.pointerId)return;wireDrag.current=null;suppressClick.current=true;if(disabled||readOnly){onCancel?.();return;}if(!d.moved)return;const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-graph-input="true"]');const node=el?.getAttribute('data-node'),port=el?.getAttribute('data-port');if(node&&port!==null&&port!==undefined)onConnect?.(d.from,{node,port});else onCancel?.();}}
      onPointerCancel={()=>{wireDrag.current=null;onCancel?.();}}
      onClick={()=>{if(suppressClick.current){suppressClick.current=false;return;}if(!disabled&&!readOnly)(p.direction==='output'?onOutput:onInput)?.({node:p.node,port:p.port})}}
-     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();if(!disabled)(p.direction==='output'?onOutput:onInput)?.({node:p.node,port:p.port})}}}><title>{p.port+' · '+p.type}</title></circle></g>)}
+     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();if(!disabled&&!readOnly)(p.direction==='output'?onOutput:onInput)?.({node:p.node,port:p.port})}}}><title>{p.port+' · '+p.type}</title></circle></g>)}
    </g>})}
    {rect&&<rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill="var(--au-accent)" fillOpacity="0.12" stroke="var(--au-accent)" strokeDasharray="4 3" pointerEvents="none"/>}
   </svg>
