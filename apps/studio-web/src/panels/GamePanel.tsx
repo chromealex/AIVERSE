@@ -143,7 +143,16 @@ export default function GamePanel({snapshot,connected,busy,setBusy,showPanel}:St
     <div className="studio-game__devices">
       <GameDevicePicker devices={devices} selected={device?.id ?? 'none'} disabled={!connected || busy}
         onSelect={id => void configure({id})}/>
-      <StudioButton disabled={!device?.width||busy} onClick={()=>void configure({landscape:!device?.landscape})}>{device?.landscape?'Landscape':'Portrait'}</StudioButton>
+      <div className="studio-game__orientation" role="group" aria-label="Device orientation">
+        {(['Portrait','Landscape'] as const).map(label => {
+          const landscape = label === 'Landscape';
+          const active = framed && device?.landscape === landscape;
+          return <StudioButton key={label} aria-pressed={active} disabled={!framed || busy}
+            variant={active ? 'primary' : 'secondary'} onClick={() => { if (!active) void configure({landscape}); }}>
+            {label}
+          </StudioButton>;
+        })}
+      </div>
       <StudioCheckbox label="Safe area" checked={device?.safeArea??true} disabled={!device?.width||busy} onChange={e=>void configure({safeArea:e.target.checked})}/>
       {!!device?.width && <StudioBadge>{device.width} × {device.height} · {device.touch?'Touch':'Mouse'}</StudioBadge>}
       {insets && Object.values(insets).some(value=>value>0) ?

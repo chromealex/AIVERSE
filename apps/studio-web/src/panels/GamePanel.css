@@ -36,3 +36,5 @@
 .studio-game__insets dt { text-transform:capitalize; color:var(--au-text-muted); }
 .studio-game__insets dd { margin:0; font-variant-numeric:tabular-nums; }
 .studio-game__insets[data-enabled=false] { color:var(--au-text-muted); }
+
+.studio-game__orientation { display: inline-flex; gap: var(--au-space-1); }
