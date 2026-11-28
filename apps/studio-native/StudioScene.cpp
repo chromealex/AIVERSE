@@ -3515,6 +3515,15 @@ std::optional<float3> StudioScene::natureGroundPoint(float x,float y,float width
     if(!std::isfinite(t))return {};
     return origin+direction*t;
 }
+static void drawFieldOutline(Renderer3D& renderer,Vec3 center,Fixed radius,physis::DebugColor c) {
+    const float r=float(radius.toDouble()), y=float(center.y.toDouble());
+    const auto point=[&](int i){
+        const float angle=float(i%48)*6.28318530718f/48.f;
+        return float3{float(center.x.toDouble())+r*std::cos(angle),y,float(center.z.toDouble())+r*std::sin(angle)};
+    };
+    for (int i=0;i<48;++i) renderer.line(point(i),point(i+1),rgba(c.r,c.g,c.b,c.a));
+}
+
 static void drawHeatmapTiles(Renderer3D& renderer,const StudioScene::HeatmapTiles& tiles,float alpha) {
     for (const auto& tile:tiles) {
         float3 corners[4];
@@ -3589,12 +3598,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
         if (state.overlay.drawVolumes) {
             editor::eachPhysisOverlayVolume(source,view.display.tick(),[&](Vec3 center,Fixed radius,physis::DebugColor c){
                 if (overlayVolumes>=32 || radius<=Fixed{}) return;
-                const float r=float(radius.toDouble()), y=float(center.y.toDouble());
-                const auto point=[&](int i){
-                    const float angle=float(i%48)*6.28318530718f/48.f;
-                    return float3{float(center.x.toDouble())+r*std::cos(angle),y,float(center.z.toDouble())+r*std::sin(angle)};
-                };
-                for (int i=0;i<48;++i) renderer_.line(point(i),point(i+1),rgba(c.r,c.g,c.b,c.a));
+                drawFieldOutline(renderer_,center,radius,c);
                 ++overlayVolumes;
             });
         }
@@ -4853,6 +4857,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             }
         }
         if(heatmapTiles_&&!planetaryChart)drawHeatmapTiles(renderer_,*heatmapTiles_,.35f);
+        if(fieldOutlines_&&!planetaryChart){
+            for(const auto& ring:*fieldOutlines_)drawFieldOutline(renderer_,ring.center,ring.radius,ring.color);
+        }
         if(natureFrame_&&!planetaryChart){
             const float step=natureLayers_.spacing;
             editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
@@ -6062,7 +6069,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(natureLayers_.triggerAreas);value(natureLayers_.modelDebugMode);value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(heatmapTiles_.get());value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(natureLayers_.triggerAreas);value(natureLayers_.modelDebugMode);value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(fieldOutlines_.get());value(heatmapTiles_.get());value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

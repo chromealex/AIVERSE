@@ -8,7 +8,7 @@ namespace aiverse::studio {
 // Toolbar preferences use natureWind/natureFire and metre-valued natureRadius/
 // natureSpacing. Keep the original MCP argument names on the wire.
 struct StudioNatureLayers {
-    bool physisHeatmap=false;
+    bool physisHeatmap=false,physisOutlines=false;
     bool physisWind=false,physisFire=false,nereidFlow=true,nereidAllWater=false;
     bool terraSlope=true,terraSlopeAtTarget=false,terraTreeWind=true,erosionZones=true;
     bool strataBounds=false,strataWire=false,strataFill=false,strataRoutes=false;
@@ -26,6 +26,7 @@ struct StudioNatureLayers {
         {"strataWire","strataWire",&StudioNatureLayers::strataWire},
         {"strataFill","strataFill",&StudioNatureLayers::strataFill},
         {"strataRoutes","strataRoutes",&StudioNatureLayers::strataRoutes},
+        {"physisOutlines","physisOutlines",&StudioNatureLayers::physisOutlines},
         {"physisHeatmap","physisHeatmap",&StudioNatureLayers::physisHeatmap},
         {"physisWind","natureWind",&StudioNatureLayers::physisWind},
         {"physisFire","natureFire",&StudioNatureLayers::physisFire},

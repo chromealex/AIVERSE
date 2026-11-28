@@ -204,6 +204,7 @@ private:
         std::string selected, project, hover, geometryFile;
         float levelHeight = 1.5f;
         std::set<std::string> selection, hidden, locked;
+        std::shared_ptr<const StudioScene::FieldOutlines> outlines;
         std::shared_ptr<const StudioScene::HeatmapTiles> heatmap;
         std::shared_ptr<const world::NaturePresentationFrame> nature;
         StudioNatureLayers natureLayers;
@@ -310,6 +311,7 @@ private:
     std::optional<StudioSceneDocument> erosionHighlightDocument_;
     int erosionHighlight_=-2; // -2 none, -1 all, otherwise a document-scoped zone index
     double nextNatureSample_=0;
+    std::shared_ptr<const StudioScene::FieldOutlines> outlines_;
     std::shared_ptr<const StudioScene::HeatmapTiles> heatmap_;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     FrameInputs renderInputs_;

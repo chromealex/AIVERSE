@@ -408,6 +408,9 @@ public:
     void setRegionBorders(char letter) {
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
+    struct FieldOutline { Vec3 center; Fixed radius; physis::DebugColor color; };
+    using FieldOutlines = std::vector<FieldOutline>;
+    void setFieldOutlines(std::shared_ptr<const FieldOutlines> outlines) { fieldOutlines_=std::move(outlines); }
     using HeatmapTiles = std::vector<physis::SceneDiagnosticTile>;
     void setHeatmapTiles(std::shared_ptr<const HeatmapTiles> tiles) { heatmapTiles_=std::move(tiles); }
     void setNatureFrame(std::shared_ptr<const world::NaturePresentationFrame> frame) { natureFrame_=std::move(frame); }
@@ -814,6 +817,7 @@ private:
     bool regionBordersDirty_=true;
     std::vector<StudioMapCell> rampTiles_,resourceTiles_;
     std::vector<editor::RoutePreviewLine> mapRoutes_;
+    std::shared_ptr<const FieldOutlines> fieldOutlines_;
     std::shared_ptr<const HeatmapTiles> heatmapTiles_;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     StudioNatureLayers natureLayers_;
