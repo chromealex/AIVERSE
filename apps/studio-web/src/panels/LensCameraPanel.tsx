@@ -89,7 +89,12 @@ export default function LensCameraPanel({project, operations,openScene,actorSess
     try {
       const response=save?await request('lens_scene_set',{scene,expectedRevision:document?.revision}):await request('lens_scene_get',{});
       accept(response);setNotice(save?'Saved cameras.json':'');
-    } catch(e){setError(e instanceof Error?e.message:String(e));}
+    } catch(e){
+      const message=e instanceof Error?e.message:String(e);
+      setError(save && /expectedRevision is stale|revision mismatch/.test(message)
+        ? 'cameras.json changed since you opened it. Your draft is still here. Choose Discard edits to load the saved cameras.'
+        : message);
+    }
     finally{setBusy(false);}
   }
   useEffect(()=>{if(project&&!drafts.has(project))void refresh(false);},[project]);
