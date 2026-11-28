@@ -37,7 +37,8 @@ bbb28200f) passes.
 1. Mac quick gate on `release/3.1.0` head; on pass, fast-forward `main` to it.
 2. Close PRs #226 #229 #231 #232 #233 #234 (and #230 if merged) with the integration commit; close issue #206 if the
    Windows run passes.
-3. Tag `v3.1.0`, GitHub release, add the entry below to the top of `docs/devlog/releases.json` with the tag commit,
+3. Tag `v3.1.0`, GitHub release, add the entry below to the top of `docs/devlog/releases.json` with the tag commit
+   and set `next.version` to `3.2.0` (the site check rejects a released next version),
    republish `builds` (release-site contract §8).
 
 ## Draft `releases.json` entry (fill `commit` at tag time)
