@@ -47,12 +47,19 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
 
 export function FogPanel(ctx: Ctx & { playing: boolean; openGame: () => void }) {
   const [starting, setStarting] = useState(false);
+  const [hasFogSettings, setHasFogSettings] = useState(false);
   const [fog, setFog] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const path = ctx.snapshot?.project.path ?? '';
   const read = useCallback(async () => {
     // Whole rules (no path): a game without a fogOfWar block is not an error.
-    try { const v = (await op('rules_get')).value; setFog(v && typeof v.fogOfWar === 'object' ? v.fogOfWar : {}); setError(''); }
+    try {
+      const rules = (await op('rules_get')).value;
+      const settings = rules?.fogOfWar;
+      setHasFogSettings(settings !== undefined);
+      setFog(settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {});
+      setError('');
+    }
     catch (e) { setError(message(e)); }
   }, []);
   useEffect(() => { if (path) void read(); }, [path, ctx.snapshot, read]);
@@ -104,7 +111,7 @@ export function FogPanel(ctx: Ctx & { playing: boolean; openGame: () => void }) 
         <label className="ptp__row"><span>Line color</span><input type="color" value={rgbHex(grid?.color, '#ffffff')} onChange={e => void set('grid', { ...grid, color: hexRgb(e.target.value) })}/></label>
       </>}
       <div className="ptp__actions">
-        <button type="button" className="au-button au-button--sm" onClick={() => void op('rules_delete', { path: 'fogOfWar' }).then(read).then(() => refreshSnapshot(ctx)).catch(e => setError(message(e)))}>
+        <button type="button" className="au-button au-button--sm" disabled={!hasFogSettings} onClick={() => void op('rules_delete', { path: 'fogOfWar' }).then(read).then(() => refreshSnapshot(ctx)).catch(e => setError(message(e)))}>
           <RotateCcw size={13}/>Reset to defaults</button>
         <button type="button" className="au-button au-button--sm" disabled={starting}
           onClick={ctx.playing ? ctx.openGame : () => void previewInGame()}>
