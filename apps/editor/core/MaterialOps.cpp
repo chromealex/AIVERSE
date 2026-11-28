@@ -679,12 +679,13 @@ void registerMaterialOps(Workspace& ws) {
         [modelTechniques](const Json& p) { return modelTechniques(p, true); });
 
     add("material_list",
-        "The game's material library (materials.json) and, per type with a model, its material overrides, node assignments, "
+        "Resolved project materials (library), indexed project-relative asset paths by material name (files), and per-type overrides, node assignments, "
         "the model's own material names and mesh nodes (targets for material_apply).",
         R"({"properties": {"type": {"type": "string", "description": "only this type"}}})", [w](const Json& p) {
             needProject(*w);
             Json r = okJson();
             r.set("library", loadMaterialLibrary(*w));
+            r.set("files", materialFilePaths(*w));
             Json types = Json::array();
             const std::string only = p.getStr("type");
             for (const auto& [id, t] : w->project.rulesJson["types"].members()) {
@@ -741,7 +742,7 @@ void registerMaterialOps(Workspace& ws) {
         });
 
     add("material_set",
-        std::string("Create or replace a material in the game's library (materials.json), usable by name from any type: "
+        std::string("Create or replace a material asset. New files are saved under content/materials/ and indexed by materials.json. Use material_list.files for the current path. Assign a material by name using "
                     "material_apply, or a view's \"materials\" / \"assign\". ") + kMaterialDoc +
             " merge: true keeps the existing keys and changes only the given ones.",
         R"J({"properties": {"name": {"type": "string", "description": "e.g. steel, rusty_iron, team_cloth"},
