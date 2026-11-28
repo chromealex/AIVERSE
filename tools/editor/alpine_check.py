@@ -71,11 +71,6 @@ def shot(name, window="scene", **cam):
         time.sleep(1)
     raise RuntimeError(f"{window} capture failed for {name}: {r}")
 
-def height(x, z):
-    r = call("terrain_heights", points=[[x, z]])
-    try: return float(r["heights"][0])
-    except Exception: return 0.0
-
 call("map_open", file="maps/valley.json")
 # Entity ids near the river for the TERRA / NEREID gizmo shots.
 import math
@@ -127,14 +122,18 @@ measure("river-up", x=261, y=1.2, z=300, distance=60, pitch=35, yaw=180)
 measure("river-down", x=258, y=1.2, z=200, distance=34, pitch=16, yaw=0)
 measure("forest-edge", x=300, y=14, z=250, distance=90, pitch=40, yaw=250)
 # PHYSIS nature preview: grass + wind, then a grass fire on the east bank.
+bank_points = [[x, 207] for x in range(271, 336, 8)]
+ground = call("view_ground", points=bank_points)
+heights = ground.get("heights", [])
+if len(heights) != len(bank_points) or not all(isinstance(y, (int, float)) and math.isfinite(y) for y in heights):
+    raise RuntimeError(f"Could not sample the displayed riverbank: {ground}")
 call("physis_nature_preview", enabled=True, playing=True, grass=True, flames=True, sound=False,
      windSpeed=9, windDirection=20, humidity=0.1, cellMeters=4)
 time.sleep(6)
 measure("physis-wind", window="physis", x=262, y=1.2, z=205, distance=45, pitch=35, yaw=0)
 # Probe dry ground eastward from the riverbank. Keep the accepted cell
 # under the camera and advance the private simulation explicitly between shots.
-for fire_x in range(271, 336, 8):
-    fire_z = 207
+for (fire_x, fire_z), bank_y in zip(bank_points, heights):
     fire = call("physis_nature_preview", playing=False, ignite={"x": fire_x, "z": fire_z})
     if fire.get("ignited"):
         break
@@ -142,7 +141,7 @@ for fire_x in range(271, 336, 8):
         raise RuntimeError(f"PHYSIS ignition failed: {fire}")
 else:
     raise RuntimeError(f"No burnable cell found on the east bank: {fire}")
-fire_y = height(fire_x, fire_z) + 1.2
+fire_y = bank_y + 1.2
 first = call("physis_nature_preview", advanceTicks=8)
 for _ in range(20):
     if first.get("burningAreaM2", 0) > 0:
@@ -156,7 +155,7 @@ fire2 = call("physis_nature_preview", advanceTicks=40)
 if fire2.get("advanced") != 40:
     raise RuntimeError(f"PHYSIS fire did not advance: {fire2}")
 measure("physis-fire-later", window="physis", x=fire_x, y=fire_y, z=fire_z, distance=55, pitch=40, yaw=0)
-fire = {"ignition": fire, "x": fire_x, "z": fire_z, "first": first, "later": fire2}
+fire = {"ignition": fire, "x": fire_x, "z": fire_z, "groundY": bank_y, "first": first, "later": fire2}
 measure("physis-overview", window="physis", x=256, y=8, z=256, distance=120, pitch=24, yaw=110)
 # Direction gizmos (viewport UI, so clean:false captures).
 call("view_gizmos", physisWind=True, physisFire=True, nereidFlow=True, terraSlope=True,
