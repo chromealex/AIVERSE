@@ -1,11 +1,14 @@
 @echo off
 rem AIVERSE Studio on Windows: builds the web UI and the native Studio (WebView2 + Vulkan), then opens it.
-rem Usage: studio_windows.cmd [project folder]   (default: the last opened project / templates\skirmish)
+rem Usage: studio_windows.cmd [project folder]   (default: the skirmish template package)
 rem Needs: Visual Studio 2022 (Desktop C++), CMake, Node.js; at run time the WebView2 Runtime and a Vulkan driver.
 setlocal
 cd /d "%~dp0"
 set "PROJECT=%~1"
-if "%PROJECT%"=="" set "PROJECT=templates\skirmish"
+rem Same lookup order as AIVERSE_TEMPLATES_DIR in CMakeLists.txt, which installs the template packages.
+if "%PROJECT%"=="" if defined AIVERSE_TEMPLATES_DIR set "PROJECT=%AIVERSE_TEMPLATES_DIR%\skirmish"
+if "%PROJECT%"=="" if defined AIVERSE_PACKAGES_HOME set "PROJECT=%AIVERSE_PACKAGES_HOME%\templates\skirmish"
+if "%PROJECT%"=="" set "PROJECT=%USERPROFILE%\.aiverse\packages\templates\skirmish"
 where node >nul 2>nul || (echo Node.js is missing: https://nodejs.org & exit /b 1)
 where cmake >nul 2>nul || (echo CMake is missing: https://cmake.org/download & exit /b 1)
 echo == web
