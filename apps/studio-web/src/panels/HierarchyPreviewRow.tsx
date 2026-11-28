@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Eye } from 'lucide-react';
 import type { StudioEntity } from '../types';
 
 interface Props {
+  occurrence:string;
   node:StudioEntity;
   depth:number;
   selected?:boolean;
@@ -11,15 +12,15 @@ interface Props {
   toggle:()=>void;
 }
 
-export function HierarchyPreviewRow({node,depth,selected,onSelect,childCount,collapsed,toggle}:Props){
+export function HierarchyPreviewRow({occurrence,node,depth,selected,onSelect,childCount,collapsed,toggle}:Props){
   const details=node.preview!;
-  return <div className="hier-preview" data-hierarchy-label={node.name} data-selected={selected || undefined} style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id} data-nested-leaf={childCount===0 || undefined}
+  return <div className="hier-preview" data-hierarchy-key={occurrence} data-hierarchy-label={node.name} data-selected={selected || undefined} style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id} data-nested-leaf={childCount===0 || undefined}
     onKeyDown={event=>{
       // A focused preview must not dispatch map deletion or duplication shortcuts.
       if(['Delete','Backspace'].includes(event.key) || ((event.metaKey||event.ctrlKey) && event.key.toLowerCase()==='d')){
         event.preventDefault();event.stopPropagation();
       }
-      if(['Enter',' ','ArrowUp','ArrowDown'].includes(event.key))event.stopPropagation();
+      if(['Enter',' '].includes(event.key) || (event.shiftKey && ['ArrowUp','ArrowDown'].includes(event.key)))event.stopPropagation();
     }}>
     {!!childCount && <button type="button" className="hier__disclosure" aria-expanded={!collapsed}
       aria-label={(collapsed?'Expand ':'Collapse ')+node.name} onClick={toggle}>

@@ -216,6 +216,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         anchor.current = next.dataset.occurrence ?? next.dataset.id;
         next.focus();
         void select(next.dataset.id, 'replace');
+      } else if (next?.dataset.previewId) {
+        next.querySelector('summary')?.focus();
       } else {
         next?.querySelector('button')?.focus();
       }
@@ -266,7 +268,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const nextKey = 'members' in next ? next.key : next.occurrence ?? next.node.id;
         const target = listRef.current?.querySelector<HTMLElement>(`[data-hierarchy-key="${CSS.escape(nextKey)}"]`);
         if ('members' in next) target?.querySelector('button')?.focus();
-        else if (!next.node.preview) {
+        else if (next.node.preview) target?.querySelector('summary')?.focus();
+        else {
           target?.focus();
           anchor.current = nextKey;
           void select(next.node.id, 'replace');
@@ -387,7 +390,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const hidden = node.visible === false;
         const dragging = editable(node.id) && canReorder;
         const occurrence=row.occurrence ?? node.id;
-        if(node.preview)return <HierarchyPreviewRow key={occurrence} onSelect={()=>void selectPreview(node.id)} selected={snapshot?.selectedPreviewIds?.includes(node.id)} node={node} depth={depth}
+        if(node.preview)return <HierarchyPreviewRow key={occurrence} occurrence={occurrence} onSelect={()=>void selectPreview(node.id)} selected={snapshot?.selectedPreviewIds?.includes(node.id)} node={node} depth={depth}
           childCount={row.children} collapsed={collapsed.has(node.id)} toggle={()=>toggleCollapsed(node.id)}/>;
         return <div key={occurrence} data-hierarchy-key={occurrence} data-occurrence={occurrence} data-id={node.id} data-nested-leaf={row.children===0 || undefined} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
