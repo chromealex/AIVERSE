@@ -30,7 +30,7 @@ def main():
         request("initialize", dict(protocolVersion="2025-06-18", capabilities={}, clientInfo=dict(name="physis-test", version="1")))
         listed = request("tools/list", {})["tools"]
         names = [t["name"] for t in listed if t["name"].startswith("physis_")]
-        assert sorted(names) == ["physis_demo", "physis_get", "physis_set", "physis_validate", "physis_zone", "physis_zone_group"], names
+        assert sorted(names) == ["physis_demo", "physis_get", "physis_nature_preview", "physis_set", "physis_validate", "physis_zone", "physis_zone_group"], names
         before = call("physis_get", {})
         assert not call("physis_demo", dict(action="view"))["active"]
         reset = call("physis_demo", dict(action="reset", size=8, stride=2))
