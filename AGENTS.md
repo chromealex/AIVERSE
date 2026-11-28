@@ -13,7 +13,7 @@ Read this file completely before changing anything. The linked contracts are bin
 - For local verification, build the smallest targets that exercise the changed code, then run the relevant tests. Reuse a compatible build tree on KINGSTON so unchanged objects and libraries stay compiled. Follow the target-selection and cache rules in [Build and testing](docs/agents/contracts/build-testing.md); focused checks do not replace the merged-tree Mac quick gate.
 - Default HTML5 builds to [fast startup](docs/agents/contracts/build-testing.md#html5-fast-startup). Verify the first interactive screen on a cold and a repeat visit.
 - Every applicable feature exposes native API, skill, MCP and Studio, with appropriate persistence, tests and examples. Visible features require real captures and web demos subject to the publishing contract.
-- Current release: 3.0.0 released; next 3.1.0. MAIN integrator owns release tags and publication.
+- Current release: 3.1.0 released; next 3.2.0. MAIN integrator owns release tags and publication.
 
 ## Contract routing
 

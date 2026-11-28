@@ -7,7 +7,7 @@
       "## Mandatory feature delivery gate"
     ],
     "docs/agents/contracts/release-site.md": [
-      "## Current release: 3.0.0 released, 3.1.0 in preparation (2026-11-22)",
+      "## Current release: 3.1.0 released, 3.2.0 in preparation (2026-11-28)",
       "## Ход разработки на сайте — обязательная запись (2026-11-21, указание пользователя)",
       "## 8. Published builds (`builds` branch)",
       "## 11. README: keep it current when you ship a feature"
