@@ -18,8 +18,24 @@ branch, as `AGENTS.md` requires.
 | d60992c9c | `studio-only-editor` + `review/minimap-shared-raster` | HTML5 Studio is the desktop editor; shared minimap raster fix |
 | next | roadmap, README translations, this handoff | |
 
-PR #230 (issue #206 Windows fixture bytes) joins when the third Windows run (Actions run 46122852377, source
-bbb28200f) passes.
+| 15bc0acce | PR #230 `codex/issue206-windows-session-bytes-20261127` | binary fixtures, plus the 20 text-mode fixture writes the Studio-only branch added |
+
+Issue #206 (Windows `studio_session`, 0xc0000409), runs of `.github/workflows/impostor-227-platforms.yml` on
+`codex/issue206-windows-verification-20261127` (7ea98a178 now prints `ctest.xml` into the job log):
+- 46122852377 on PR #230 head bbb28200f: fails, no message in the log.
+- 46127522630 on 15bc0acce: the fixture assertions now pass; fails at `StudioSessionTests.cpp:2638`
+  (`worldSceneInspectorProperties`: `studio.redo` / `studio.save` after renaming a world-space map).
+- The same test passes on Linux (GCC 13, release tree, `ctest -R ^studio_session$`), so the remaining failure is
+  Windows-specific. Diagnostic commits print the owner's error message.
+- 46133334841 on 507859be8: `studio.save failed: Project document path or permissions changed: …\.aiverse-cache\map-history-<sha256("map.json")>.json`.
+  Cause: `ProjectDocumentJournal` creates new outputs with 0600 and later demands `status().permissions()==0600`;
+  Windows keeps only the read-only attribute, so the file reads back as 0666. Fixed by `samePermissions()` in
+  `apps/editor/core/ProjectDocumentJournal.h` (Windows: owner-write bit only). Linux `studio_session` still passes.
+- 46136295196 on the fix: 12 s further, then 0xc0000409 with empty output; `main` now prints uncaught exceptions.
+- 46139423876: `remove_all … being used by another process` for `studio-agent-scopes-*` (the session still owns
+  the project when the test deletes it). Temporary fixture cleanup is best effort (`removeFixtureRoot`).
+- **46142631120 on bf6b76e8c: `studio_session` PASS on Windows (windows-2022, MSVC 17, 100% of 1).** Linux PASS on the
+  same source. Issue #206 can close once `main` carries these commits.
 
 ## Verification actually run (Linux, cloud)
 
@@ -29,6 +45,10 @@ bbb28200f) passes.
 - CMake (Ninja, GCC 13, Release): `aiverse_motionweave_walk_generator_tests` built, ctest passed.
 - g++ 13 `-fsyntax-only` of `apps/client/GameClient.cpp`, `apps/client/Minimap.cpp`, `GfxGL.cpp` (merged tree),
   `tests/tests.cpp`.
+- Linux full `aiverse_tests` (GCC 13 Release, templates from `tools/pkg/fetch_templates.py`): 275471 checks, 0 failed,
+  including the new `planar_minimap_shared_bounds_and_scene_guards`.
+- Linux `studio_session` (local-only CMake registration, not committed): passed.
+- Compile of every changed `.cpp` in the release diff (84 objects, Linux): 0 errors.
 - NOT RUN: merged-tree Mac quick gate (`./run-tests.sh --quick --build-dir /Volumes/KINGSTON/AIVERSE-builds/release-3.1.0/all-tests`),
   full Linux CTest, Windows Studio, Android/web devices.
 
