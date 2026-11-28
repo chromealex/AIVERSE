@@ -250,6 +250,14 @@ function CameraPreview({project,scene,camera,onChange,openScene}:{openScene:()=>
     catch(e){if(!published)setVisible(false);setMessage(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
+  async function hidePreview(){
+    setBusy(true);setMessage('');
+    try {
+      await invoke('studio.lensPreview',{project,close:true});
+      setVisible(false);setPublishedCamera('');setSaved('');
+    } catch(e){setMessage(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
   async function capture(){
     setCapturing(true);setSaved('');setMessage('');
     try{await invoke('studio.lensPreview',{project,capture:true,id:camera.id});}
@@ -269,6 +277,7 @@ function CameraPreview({project,scene,camera,onChange,openScene}:{openScene:()=>
   }
   return <section ref={preview} className="lens-model-preview"><div className="lens-flags">
     <button className="au-button au-button--sm" type="button" disabled={busy||capturing} onClick={()=>void publish()}>{published?'Update preview':'Preview camera'}</button>
+    {published&&<button className="au-button au-button--sm" type="button" disabled={busy||capturing} onClick={()=>void hidePreview()}>Hide preview</button>}
     <button className="au-button au-button--sm" type="button" disabled={busy} onClick={()=>void copyView()}>Copy Scene pose</button>
     <button className="au-button au-button--sm" type="button" disabled={busy||capturing} onClick={()=>void useInScene()}>Use in Scene</button>
     {published&&<button className="au-button au-button--sm" type="button" disabled={busy||capturing||needsUpdate} title={needsUpdate?'Update the preview to capture your changes':'Save the displayed camera frame to captures/lens'} onClick={()=>void capture()}>{capturing?'Capturing…':'Capture PNG'}</button>}</div>
