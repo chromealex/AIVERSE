@@ -3515,6 +3515,19 @@ std::optional<float3> StudioScene::natureGroundPoint(float x,float y,float width
     if(!std::isfinite(t))return {};
     return origin+direction*t;
 }
+static void drawHeatmapTiles(Renderer3D& renderer,const StudioScene::HeatmapTiles& tiles,float alpha) {
+    for (const auto& tile:tiles) {
+        float3 corners[4];
+        for (int i=0;i<4;++i) {
+            const auto& p=tile.corners[i];
+            corners[i]={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+        }
+        const auto color=rgba(tile.color.r,tile.color.g,tile.color.b,int(alpha*tile.color.a));
+        renderer.triangle(corners[0],corners[1],corners[2],color);
+        renderer.triangle(corners[0],corners[2],corners[3],color);
+    }
+}
+
 Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const World& source,const editor::MapDoc& map,
                              const std::string& project,float levelHeight,const editor::SceneScreenshotOptions& capture) {
     if(width<2 || height<2)return Json::object();
@@ -3571,17 +3584,8 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     int overlayTiles=0, overlayVolumes=0;
     if (state.overlay.enabled) {
         editor::updatePhysisOverlayTiles(state.overlay,source,camera.target.x,camera.target.z);
-        for (const auto& tile:state.overlay.tiles) {
-            float3 corners[4];
-            for (int i=0;i<4;++i) {
-                const auto& p=tile.corners[i];
-                corners[i]={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
-            }
-            const auto color=rgba(tile.color.r,tile.color.g,tile.color.b,int(state.overlay.alpha*tile.color.a));
-            renderer_.triangle(corners[0],corners[1],corners[2],color);
-            renderer_.triangle(corners[0],corners[2],corners[3],color);
-            ++overlayTiles;
-        }
+        drawHeatmapTiles(renderer_,state.overlay.tiles,state.overlay.alpha);
+        overlayTiles=int(state.overlay.tiles.size());
         if (state.overlay.drawVolumes) {
             editor::eachPhysisOverlayVolume(source,view.display.tick(),[&](Vec3 center,Fixed radius,physis::DebugColor c){
                 if (overlayVolumes>=32 || radius<=Fixed{}) return;
@@ -4848,6 +4852,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 });
             }
         }
+        if(heatmapTiles_&&!planetaryChart)drawHeatmapTiles(renderer_,*heatmapTiles_,.35f);
         if(natureFrame_&&!planetaryChart){
             const float step=natureLayers_.spacing;
             editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
@@ -6057,7 +6062,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(natureLayers_.triggerAreas);value(natureLayers_.modelDebugMode);value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(natureLayers_.triggerAreas);value(natureLayers_.modelDebugMode);value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(heatmapTiles_.get());value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

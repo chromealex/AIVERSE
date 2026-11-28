@@ -1882,14 +1882,24 @@ void StudioHost::tickScene() {
     const auto ids = session_->selectedObjectIds();
     in.selection = std::set<std::string>(ids.begin(), ids.end());
     in.hidden = session_->hiddenIds(); in.locked = session_->lockedIds(); in.hover = hoverId_;
-    if((natureLayers_.physisWind||natureLayers_.physisFire)&&game_&&!map.data.planet()&&game_->launchedMapCurrent()&&studioPlaySourceMatches(game_->launchPlan(),ws)){
+    if((natureLayers_.physisHeatmap||natureLayers_.physisWind||natureLayers_.physisFire)&&game_&&!map.data.planet()&&game_->launchedMapCurrent()&&studioPlaySourceMatches(game_->launchPlan(),ws)){
         if(now>=nextNatureSample_){
             const auto camera=onScene([&]{return preview_->cameraState();});
-            natureFrame_=game_->natureFrame(std::floor(camera.target.x/natureLayers_.spacing)*natureLayers_.spacing,std::floor(camera.target.z/natureLayers_.spacing)*natureLayers_.spacing,natureLayers_.radius);
+            heatmap_.reset();
+            if(natureLayers_.physisHeatmap){
+                if(const auto* world=game_->localPhysisWorld()){
+                    editor::PhysisSceneOverlayState overlay;
+                    editor::updatePhysisOverlayTiles(overlay,*world,camera.target.x,camera.target.z);
+                    heatmap_=std::make_shared<const StudioScene::HeatmapTiles>(std::move(overlay.tiles));
+                }
+            }
+            if(natureLayers_.physisWind||natureLayers_.physisFire)
+                natureFrame_=game_->natureFrame(std::floor(camera.target.x/natureLayers_.spacing)*natureLayers_.spacing,std::floor(camera.target.z/natureLayers_.spacing)*natureLayers_.spacing,natureLayers_.radius);
             nextNatureSample_=now+.25;
         }
+        if(natureLayers_.physisHeatmap)in.heatmap=heatmap_;
         in.nature=natureFrame_;
-    }else{natureFrame_.reset();nextNatureSample_=0;}
+    }else{heatmap_.reset();natureFrame_.reset();nextNatureSample_=0;}
     in.wind = session_->windPreview();
     {
         std::lock_guard<std::mutex> io(renderIoMutex_);
@@ -1924,6 +1934,7 @@ void StudioHost::renderSceneFrame() {
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setErosionHighlight(in.erosionHighlight);
+            preview_->setHeatmapTiles(in.heatmap);
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);

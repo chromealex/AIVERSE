@@ -3,6 +3,7 @@
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include "engine/physis/PhysisSceneGeometry.h"
 #include <future>
 #include "apps/editor/core/RouteOps.h"
 #include "apps/studio-native/StudioMapAreaBounds.h"
@@ -407,6 +408,8 @@ public:
     void setRegionBorders(char letter) {
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
+    using HeatmapTiles = std::vector<physis::SceneDiagnosticTile>;
+    void setHeatmapTiles(std::shared_ptr<const HeatmapTiles> tiles) { heatmapTiles_=std::move(tiles); }
     void setNatureFrame(std::shared_ptr<const world::NaturePresentationFrame> frame) { natureFrame_=std::move(frame); }
     void setNatureLayers(const StudioNatureLayers& layers){natureLayers_=layers;}
     void setErosionHighlight(int index){erosionHighlight_=index;}
@@ -811,6 +814,7 @@ private:
     bool regionBordersDirty_=true;
     std::vector<StudioMapCell> rampTiles_,resourceTiles_;
     std::vector<editor::RoutePreviewLine> mapRoutes_;
+    std::shared_ptr<const HeatmapTiles> heatmapTiles_;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     StudioNatureLayers natureLayers_;
     const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);
