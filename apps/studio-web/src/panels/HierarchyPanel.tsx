@@ -258,16 +258,18 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       event.preventDefault();
       if (branch && collapsed.has(collapseKey) === (event.key === 'ArrowRight')) {
         toggleCollapsed(collapseKey);
-      } else if (event.key === 'ArrowLeft') {
-        const parent = display.slice(0, rowIndex).reverse().find(candidate => candidate.depth < row.depth);
-        if (!parent) return;
-        const parentKey = 'members' in parent ? parent.key : parent.occurrence ?? parent.node.id;
-        const target = listRef.current?.querySelector<HTMLElement>(`[data-hierarchy-key="${CSS.escape(parentKey)}"]`);
-        if ('members' in parent) target?.querySelector('button')?.focus();
-        else if (!parent.node.preview) {
+      } else {
+        const next = event.key === 'ArrowLeft'
+          ? display.slice(0, rowIndex).reverse().find(candidate => candidate.depth < row.depth)
+          : display[rowIndex + 1];
+        if (!next || (event.key === 'ArrowRight' && (!branch || next.depth <= row.depth))) return;
+        const nextKey = 'members' in next ? next.key : next.occurrence ?? next.node.id;
+        const target = listRef.current?.querySelector<HTMLElement>(`[data-hierarchy-key="${CSS.escape(nextKey)}"]`);
+        if ('members' in next) target?.querySelector('button')?.focus();
+        else if (!next.node.preview) {
           target?.focus();
-          anchor.current = parentKey;
-          void select(parent.node.id, 'replace');
+          anchor.current = nextKey;
+          void select(next.node.id, 'replace');
         }
       }
       return;
