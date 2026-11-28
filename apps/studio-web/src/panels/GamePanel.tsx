@@ -11,7 +11,7 @@ import GameDevicePicker from './GameDevicePicker';
 import './GamePanel.css';
 import { gameViewportSize } from './gameViewport';
 
-export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelContext) {
+export default function GamePanel({snapshot,connected,busy,setBusy,showPanel}:StudioPanelContext) {
   const [state,setState]=useState<StudioGameState|null>(null);
   const [error,setError]=useState('');
   const [reviewOpen,setReviewOpen]=useState(false),[review,setReview]=useState<StudioPlayReview|null>(null);
@@ -131,6 +131,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
   return <StudioPanel title="Game" className="studio-game" flush
     actions={<>
       {/* Play / Pause / Step / Stop live in the title bar (⌘P); only what it lacks is here. */}
+      {actorSession && <StudioButton onClick={()=>showPanel('actor')}>Actors &amp; Cameras</StudioButton>}
       {!actorSession && <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>}
       <StudioButton disabled={!loaded||busy} onClick={()=>void launchStandalone()} title="Open the saved project in AiverseGame"><ExternalLink size={14}/>Standalone player</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>void control('restart')}><RotateCcw size={14}/>Restart</StudioButton>
