@@ -96,7 +96,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  };
 
  const create=async()=>{
-  if(busy||loading||!connected||!projectPath)return;
+  if(busy||loading||!connected||!projectPath||!recipe.valid)return;
   if(changes>0){setError('Apply or discard the current material draft first.');return;}
   if(!/^[A-Za-z0-9_-]{1,64}$/.test(newName)){setError('Use 1–64 letters, digits, underscore or hyphen.');return;}
   setBusy(true);setError('');setMessage('');
@@ -249,13 +249,13 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
    {showTarget&&<aside className="materials-list">
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}
       onClick={()=>setCreating(value=>!value)}>{creating?'Cancel new material':'+ New material'}</button>
-    {creating&&<div className="materials-new-form">
-      <label>Name<input aria-label="New material name" value={newName}
+    {creating&&<form className="materials-new-form" onSubmit={event=>{event.preventDefault();void create();}}>
+      <label>Name<input autoFocus aria-label="New material name" value={newName}
         placeholder="matte_stone" maxLength={64} onChange={e=>setNewName(e.target.value)}/></label>
       <MaterialRecipeFields recipe={recipe} busy={busy}/>
       {changes>0&&<small>Save or discard your edits to {name} before creating this material.</small>}
-      <button disabled={busy||!newName||!recipe.valid||changes>0} onClick={()=>void create()}>Create and save</button>
-    </div>}
+      <button type="submit" disabled={busy||!newName||!recipe.valid||changes>0}>Create and save</button>
+    </form>}
     <label className="materials-search"><Search size={14}/>
      <input placeholder="Filter materials…" aria-label="Filter materials"
       value={query} onChange={e=>setQuery(e.target.value)}/>
