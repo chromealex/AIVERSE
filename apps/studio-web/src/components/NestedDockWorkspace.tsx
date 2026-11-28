@@ -64,7 +64,7 @@ function ModelingTab({active,renderPanel}:{active:boolean;renderPanel:Properties
 function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
                     stacks, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag, maximized, toggleMaximize }: BranchProperties & { node: DockStack }) {
   const [hover, setHover] = useState<DockEdge | 'center' | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; panel: StudioPanel } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; panel: StudioPanel; opener?: HTMLElement } | null>(null);
   const stackRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const stack = stackRef.current;
@@ -119,6 +119,14 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
     if (adopted) onAdopt?.(panel);
   };
   const selectWithKeyboard = (event: ReactKeyboardEvent<HTMLElement>, panel: StudioPanel) => {
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault();
+      event.stopPropagation();
+      const opener = event.currentTarget;
+      const rect = opener.getBoundingClientRect();
+      setMenu({ x: rect.left, y: rect.bottom, panel, opener });
+      return;
+    }
     const index = node.tabs.indexOf(panel);
     const count = node.tabs.length;
     let next: number;
@@ -169,7 +177,7 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
           setMenu({x:r.right-180,y:r.bottom+2,panel:node.active!});}}><MoreVertical size={13}/></button>}
     </div>
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Dock actions"
-      items={dockMenu(menu.panel)} onClose={()=>setMenu(null)}/>}
+      items={dockMenu(menu.panel)} onClose={()=>{setMenu(null);menu.opener?.focus({preventScroll:true});}}/>}
     <div className="nested-stack-body studio-page" data-panel={node.active} role="tabpanel" aria-label={node.active ? STUDIO_PANEL_TITLES[node.active] : 'Empty dock'}>
       {node.tabs.includes('modeling')&&<ModelingTab active={node.active==='modeling'} renderPanel={renderPanel}/>}
       {node.active ? node.active!=='modeling'&&renderPanel(node.active) : <div className="nested-empty">Drop a panel here</div>}
