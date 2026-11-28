@@ -237,7 +237,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  const discard=()=>{if(document){resetDraft(structuredClone(document.graph));setMessage('Draft discarded.');setError('');}};
  return <section className="studio-shader-graphs">
   <header className="graph-heading"><span><GitBranch size={16}/> Shader Graphs</span>
-   <button disabled={busy||dirty||!projectPath} onClick={()=>setCreating(v=>!v)}>New graph</button>
+   <button disabled={busy||dirty||!projectPath} aria-expanded={creating} onClick={()=>setCreating(v=>!v)}>{creating?'Cancel new graph':'New graph'}</button>
    <button className="icon-button" aria-label="Graph controls" title="Graph controls" aria-expanded={showControls}
     onClick={()=>setShowControls(value=>!value)}><CircleHelp size={15}/></button>
    <button className="icon-button" aria-label="Reload Shader Graphs"
@@ -247,7 +247,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
    Shift-click or drag a box to select multiple nodes. Use middle-drag or Alt-drag to pan.
    Validate checks the draft. Save graph writes it to the project.</p>}
   {creating&&<form className="graph-asset-form" onSubmit={e=>{e.preventDefault();void createGraph();}}>
-   <label>Asset name<input required value={newName} pattern="[A-Za-z0-9_\-]{1,64}" maxLength={64}
+   <label>Asset name<input autoFocus required value={newName} pattern="[A-Za-z0-9_\-]{1,64}" maxLength={64}
     onChange={event=>setNewName(event.target.value)}/></label>
    <label>Domain<StudioSelect value={newDomain} onChange={e=>setNewDomain(e.target.value)}>
     {['material','postfx','particle'].map(d=><option key={d}>{d}</option>)}</StudioSelect></label>
