@@ -138,7 +138,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         <div className="rules__rawbox">
           <textarea disabled={busy} aria-invalid={!!syntaxError} aria-label={section==='triggers'?'Trigger definitions':'Damage multipliers'} spellCheck={false}
             value={raw??JSON.stringify(rules[section]??(section==='triggers'?[]:{}),null,2)}
-            onChange={event=>{setError('');setRaw(event.target.value);}}/>
+            onChange={event=>{setError('');const saved=JSON.stringify(rules[section]??(section==='triggers'?[]:{}),null,2);setRaw(event.target.value===saved?null:event.target.value);}}/>
           <button disabled={busy||raw===null||!!syntaxError} onClick={()=>{
             try{const value=JSON.parse(raw!);void write(section,value).then(saved=>{if(saved)setRaw(null);});}
             catch(e){setError(String(e));}
