@@ -53,6 +53,9 @@ function DebugLayersMenu({children}:{children:ReactNode}) {
           row.toggleAttribute('hidden',!show);
           visible ||= show;
         }
+        if(group.querySelector('label[data-debug-requires-live]:not([hidden])')) {
+          group.querySelector('label[data-debug-live-toggle]')?.removeAttribute('hidden');
+        }
         group.toggleAttribute('hidden',!visible);
         if(visible)matches++;
       }
