@@ -2098,7 +2098,7 @@ void Workspace::registerCoreOps() {
 
     // ---------------------------------------------------------------- editor-only (implemented by the GUI)
     auto gui = [this](const char* name, const char* desc, const char* sch) {
-        Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true};
+        Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("Open HTML5 Studio and connect its agent link to use this tool"); }, true};
         registerOp(std::move(op));
     };
     gui("view_screenshot", "HTML Studio captures its full main window by default (window: all). Game and PHYSIS capture their own visible native viewports. Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
@@ -2129,7 +2129,7 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"owner": {"type": "integer"}, "type": {"type": "string"}, "limit": {"type": "integer"}}})");
     registerOp({"play_command", "Issue a player command in the running play-test, exactly like player input (the user sees it live). command: " +
         commandNames() + ". " + kCommandHelp, schema((std::string(R"({"properties": {)") + commandSchemaProps() + R"(}, "required": ["command"]})").c_str()),
-        [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true});
+        [](const Json&) -> Json { throw std::runtime_error("Open HTML5 Studio and connect its agent link to use this tool"); }, true});
     gui("device_list", "Device presets for the simulator (phones, tablets, desktops).", "{}");
     gui("device_set", "Show the viewport in a device frame (resolution, notch/safe area, orientation) like a phone simulator. 'none' turns it off.",
         R"({"properties": {"device": {"type": "string"}, "orientation": {"type": "string", "enum": ["portrait", "landscape"]}}, "required": ["device"]})");
