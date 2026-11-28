@@ -24,17 +24,28 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
  },[raw]);
   const typeDraftDirty = section === 'types' && raw !== null && raw !== JSON.stringify(rules?.types[typeId], null, 2);
   const navigationLocked = busy || (section === 'types' ? typeDraftDirty : raw !== null);
-  const draftProject=useRef<string|null>(null);
-  useEffect(()=>{
-    draftProject.current=raw!==null&&(section==='global'||section==='document') ? projectPath : null;
-  },[raw,section]);
+  const draftTarget = useRef<{ section: typeof section; id: string; original: string | undefined } | null>(null);
+  useEffect(() => {
+    const value = section === 'types' ? rules?.types[typeId]
+      : section === 'triggers' || section === 'damageTable' ? rules?.[section] : undefined;
+    draftTarget.current = raw === null ? null : { section, id: typeId, original: JSON.stringify(value) };
+  }, [raw, section, typeId, rules]);
   useEffect(() => {
     let live = true;
-    if(draftProject.current!==projectPath){
-      setRules(null); setError(''); setRaw(null);
-    }
     if (!projectPath) return;
-    void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
+    void invoke('studio.rules', {}).then(r => {
+      if (!live) return;
+      const draft = draftTarget.current;
+      if (draft && (draft.section === 'types' || draft.section === 'damageTable' || draft.section === 'triggers')) {
+        const updated = draft.section === 'types' ? r.types[draft.id] : r[draft.section];
+        if (JSON.stringify(updated) !== draft.original) {
+          setRaw(null);
+          setError('This rule changed elsewhere. The editor reloaded its latest value.');
+        }
+      }
+      setRules(r);
+      setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? '');
+    })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
     return () => { live = false; };
   }, [projectPath, historyVersion]);
@@ -110,7 +121,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
       {syntaxError&&section!=='global'&&section!=='document'&&<div className="rules__error" role="alert">{syntaxError}</div>}
       {error && <div className="rules__error" role="alert">{error}<button type="button" aria-label="Dismiss" onClick={() => setError('')}>×</button></div>}
       {!rules ? <p className="rules__empty">Loading rules…</p> : section==='global'||section==='document' ? <RulesDocumentEditor key={projectPath+section}
-        section={section} projectPath={projectPath} syntaxError={syntaxError} raw={raw} setRaw={setRaw} onChanged={async()=>{
+        section={section} historyVersion={historyVersion} projectPath={projectPath} syntaxError={syntaxError} raw={raw} setRaw={setRaw} onChanged={async()=>{
           setRules(await invoke('studio.rules',{})); onChanged();
         }}/> : section!=='types' ? <>
         <h3>{section==='triggers'?'Triggers':'Damage matrix'}</h3>
@@ -159,20 +170,23 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   </div></div>;
 }
 
-function RulesDocumentEditor({section,projectPath,syntaxError,raw,setRaw,onChanged}:{
- section:'global'|'document';projectPath:string;syntaxError:string;raw:string|null;setRaw:(v:string|null)=>void;onChanged:()=>Promise<void>;
+function RulesDocumentEditor({section,historyVersion,projectPath,syntaxError,raw,setRaw,onChanged}:{
+ section:'global'|'document';historyVersion?:string;projectPath:string;syntaxError:string;raw:string|null;setRaw:(v:string|null)=>void;onChanged:()=>Promise<void>;
 }){
  const [original,setOriginal]=useState<string|null>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [revision,reload]=useState(0);
+ const editing=useRef(false);
+ useEffect(()=>{editing.current=raw!==null;},[raw]);
  useEffect(()=>{
+  if(editing.current)return;
   let live=true;
   setOriginal(null);setError('');
   invoke('studio.rulesDocument',{section}).then(r=>{if(live)setOriginal(r.text);})
    .catch(e=>{if(live)setError(String(e));});
   return ()=>{live=false;};
- },[section,revision]);
+ },[section,revision,historyVersion]);
  async function save(){
   if(original===null||raw===null||busy||syntaxError)return;
   setBusy(true);setError('');
