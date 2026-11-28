@@ -231,7 +231,16 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       return;
     }
     const index = focused ? occurrenceKeys.indexOf(focused) : visible.findIndex(({node}) => node.id === selectedId);
-    if ((event.metaKey || event.ctrlKey) && key === 'a') { event.preventDefault(); void selectIds([...new Set(visible.map(r => r.node.id))]); return; }
+    if ((event.metaKey || event.ctrlKey) && key === 'a') {
+      event.preventDefault();
+      if (group >= 0 && !paths) return;
+      const expanded = group >= 0 && parents
+        ? nestedDocumentRows(matches, parents, new Set())
+        : groupedHierarchy(matches, grouping, new Set(), paths);
+      const ids = new Set(expanded.flatMap(row => 'node' in row && !row.node.preview ? [row.node.id] : []));
+      if (ids.size) void selectIds([...ids]);
+      return;
+    }
     if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[role=option]')) {
       const id = event.target.dataset.id;
       if (id) { event.preventDefault(); anchor.current = focused ?? id; void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace'); }
