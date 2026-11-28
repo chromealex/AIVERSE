@@ -250,7 +250,7 @@ Json resolveMaterialLibraryIndex(const fs::path& root,const Json& index,size_t m
     });
 }
 
-static void saveMaterialLibraryLocked(Workspace& ws,const graph_asset::Transaction& tx,const Json& lib,const std::string& what,
+static Json saveMaterialLibraryLocked(Workspace& ws,const graph_asset::Transaction& tx,const Json& lib,const std::string& what,
                          const std::map<std::string,std::string>& relocated = {}) {
     const fs::path root=ws.project.dir;
     Json index=readMaterialIndex(root);
@@ -311,6 +311,7 @@ static void saveMaterialLibraryLocked(Workspace& ws,const graph_asset::Transacti
         throw;
     }
     ws.note({Change::Rules,0,0,-1,-1,-1,what});
+    return index;
 }
 void migrateInlineMaterials(Workspace& ws) {
     const fs::path root=ws.project.dir;
@@ -742,7 +743,7 @@ void registerMaterialOps(Workspace& ws) {
         });
 
     add("material_set",
-        std::string("Create or replace a material asset. New files are saved under content/materials/ and indexed by materials.json. Use material_list.files for the current path. Assign a material by name using "
+        std::string("Create or replace a material asset. New files are saved under content/materials/ and indexed by materials.json. Returns the saved project-relative path in file. Assign a material by name using "
                     "material_apply, or a view's \"materials\" / \"assign\". ") + kMaterialDoc +
             " merge: true keeps the existing keys and changes only the given ones.",
         R"J({"properties": {"name": {"type": "string", "description": "e.g. steel, rusty_iron, team_cloth"},
@@ -772,8 +773,9 @@ void registerMaterialOps(Workspace& ws) {
                     !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
             const bool existed = lib.has(name);
             lib.set(name, mat);
-            saveMaterialLibraryLocked(*w, tx, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
+            const Json savedIndex = saveMaterialLibraryLocked(*w, tx, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
             Json r = okJson();
+            r.set("file", savedIndex["materials"][name]);
             r.set("summary", Json::string(std::string(existed ? "Материал изменён: " : "Материал создан: ") + name));
             r.set("warnings", strs(warnings));
             return r;
