@@ -72,10 +72,23 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   return ()=>{canceled=true};
  },[projectPath,nonce,connected]);
  useEffect(()=>{setDraft({});setPending(null);setName('');setMessage('');},[projectPath]);
+ const requestedPreview=useRef<string|null>(null);
+ useEffect(()=>{requestedPreview.current=null;},[projectPath]);
+ useEffect(()=>{
+  if(previewMaterial===requestedPreview.current)requestedPreview.current=null;
+ },[previewMaterial]);
+ const selectMaterial=(next:string)=>{
+  setName(next);
+  if(textureOnly||!name||(previewMaterial!==name&&requestedPreview.current!==name))return;
+  requestedPreview.current=next;
+  void invoke('studio.materialPreview',{name:next}).catch(e=>{
+   if(requestedPreview.current===next){requestedPreview.current=null;setError(String(e));}
+  });
+ };
  const switchTo=(next:string)=>{
   if(next===name)return;
   if(changes>0){setPending(next);setMessage('Open '+next+'? Save or discard the changes to '+name+', or keep editing.');return;}
-  setName(next);setError('');setMessage('');setPending(null);setDraft({});
+  selectMaterial(next);setError('');setMessage('');setPending(null);setDraft({});
  };
  const edit=(key:string,value:string|number|boolean)=>{
   setDraft(current=>({...current,[key as MaterialKey]:value}));
@@ -90,7 +103,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   try{
    const response=await invoke('studio.materialCreate',{name:newName,...recipe.params});
    setQuery(current=>newName.toLowerCase().includes(current.toLowerCase())?current:'');
-   setLibrary(response);setName(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
+   setLibrary(response);selectMaterial(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
    const file=response.files?.[newName];
    if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
    setMessage(file ? 'Created '+file : 'Material created.');
@@ -103,7 +116,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   try {
    const response=await invoke('studio.materialPatch',{name,patch:editablePatch(draft)});
    setLibrary(response);setDraft({});
-   if(pending!==null){setName(pending);setPending(null);}
+   if(pending!==null){selectMaterial(pending);setPending(null);}
    setMessage('Material file saved.');
   } catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
@@ -137,7 +150,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
    window.removeEventListener('studio:open-material',onOpen);
    window.removeEventListener('storage',onStorage);
   };
- },[library,projectPath,changes,textureOnly,name]);
+ },[library,projectPath,changes,textureOnly,name,previewMaterial]);
  const preview=async()=>{
   if(busy||previewing||!connected||!projectPath||!name||changes>0)return;
   setPreviewing(true);setError('');
@@ -197,7 +210,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  };
  const discard=()=>{
   setDraft({});
-  if(pending!==null){setName(pending);setPending(null);}
+  if(pending!==null){selectMaterial(pending);setPending(null);}
   setMessage('Draft discarded.');
  };
  const showTarget=!textureOnly||targetExpanded||!name||changes>0;
