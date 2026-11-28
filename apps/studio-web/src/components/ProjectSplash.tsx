@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
-import { onNativeEvent } from '../bridge';
+import { nativeWindowAction, onNativeEvent } from '../bridge';
 import type { ProjectLoadState } from './ProjectLoading';
 import { pickSky, splashStages } from './projectSplashLogic';
 import SplashArt from './SplashArt';
@@ -96,5 +96,9 @@ export default function ProjectSplash({ state, onClose, onHub }: { state: Projec
         {state.phase !== 'project' && <button type="button" className="psplash__continue" onClick={() => setDismissed(true)}>Continue while loading</button>}
       </>}
     </div>
+    {/* The splash covers the title bar, so this strip moves the native window in its place. */}
+    <div className="psplash__drag" onMouseDown={event => {
+      if (event.button === 0) nativeWindowAction(event.detail === 2 ? 'studio.windowZoom' : 'studio.windowDrag');
+    }}/>
   </div>;
 }

@@ -4,6 +4,7 @@
 .psplash__shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,9,14,.62) 0%,rgba(6,9,14,.25) 40%,rgba(6,9,14,0) 70%),linear-gradient(0deg,rgba(6,9,14,.7) 0%,rgba(6,9,14,0) 28%)}
 .psplash__brand{position:absolute;right:36px;top:22px;font-weight:600;letter-spacing:.18em;display:flex;align-items:center;gap:6px;font-size:12px;color:#c7d0dc;letter-spacing:.02em}
 .psplash__logo{position:absolute;right:8%;top:50%;transform:translateY(-55%);max-width:30%;max-height:42%;object-fit:contain;filter:drop-shadow(0 10px 30px rgba(0,0,0,.45))}
+.psplash__drag{position:absolute;left:0;right:0;top:0;height:44px}
 .psplash__title{position:absolute;left:36px;top:34%;max-width:52%}
 .psplash__title small{font-size:13px;color:#9fb0c4}
 .psplash__title h1{margin:6px 0 10px;font-size:46px;text-shadow:0 2px 18px rgba(0,0,0,.35);line-height:1.08;font-weight:600;letter-spacing:-.01em}
