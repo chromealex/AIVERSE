@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Meadow grass QA: drive a running aiverse_editor (--listen PORT) and capture
+"""Meadow grass QA: drive HTML5 Studio (--listen PORT) and capture
 before/after screenshots of TerraWeave grass in the PHYSIS nature preview:
 legacy uniform blades vs meadow species/clumps, close-up at eye height, mid
 field, field to the horizon, top view of clumps, wind on, wildfire.
-Also records geometry_stats (draw calls, triangles, GPU ms) per camera.
+Records PHYSIS grass, wind-preview and fire counters alongside each capture.
 Editor-only: the map is generated in memory and never saved.
 
 usage: grass_fields_shots.py PORT OUT_DIR [modes,comma,separated]
@@ -68,18 +68,17 @@ def call(_tool, **args):
 stats_log = open(os.path.join(out, "stats.jsonl"), "a")
 def shot(name, **cam):
     for attempt in range(5):
-        r = call("view_screenshot", window="scene", clean=True, width=1600, height=900, **cam)
+        r = call("view_screenshot", window="physis", **cam)
         if "png_base64" in r:
             with open(os.path.join(out, name + ".png"), "wb") as f:
                 f.write(base64.b64decode(r["png_base64"]))
             break
         time.sleep(1)
     else:
-        raise RuntimeError(f"No scene screenshot for {name}")
-    # counters of the frame just rendered with this camera
-    time.sleep(0.4)
-    st = call("geometry_stats")
-    keep = {k: st.get(k) for k in ("drawCalls", "cameraModelTriangles", "cameraMeshTriangles", "completedGpuFrameMs")}
+        raise RuntimeError(f"No PHYSIS screenshot for {name}")
+    st = call("view_wind")
+    keep = {k: st[k] for k in ("tick", "grassPatches", "grassMeadow", "flames", "smoke", "burningAreaM2")}
+    keep.update(window="physis", width=r["width"], height=r["height"])
     keep["shot"] = name
     stats_log.write(json.dumps(keep) + "\n"); stats_log.flush()
 
@@ -96,8 +95,6 @@ call("map_set", path="terrainPresentation", value="legacy")
 call("lighting_set", time=0.38, dayLength=0, clouds=0.3)
 call("map_set", path="postfx", value={"replace": True, "effects": [{"type": "fxaa"}]})
 cx, cz = 128, 128
-call("view_focus", x=cx, z=cz, distance=30)
-time.sleep(3)
 
 def cams():
     g = height(cx, cz)
@@ -127,7 +124,7 @@ for mode in modes:
         assert call("terraweave_meadow_get")["meadow"] == mode
     call("view_wind", forest=False, nature=True, grass=True, flames=False, sound=False,
          playing=True, windSpeed=0.5, windDirection=25, grassQuality=2, grassMeadow=("legacy" if mode == "legacy" else "auto"), debug="off")
-    call("view_focus", x=cx, z=cz, distance=30)
+    call("editor_window", id="physis", open=True)
     wait_for_grass()
     for tag, cam in cams():
         shot(f"{mode}-{tag}", **cam)
