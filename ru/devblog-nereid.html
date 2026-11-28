@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Дневник разработки: NEREID · AIVERSE</title>
+<title>Дневник разработки: NEREID | AIVERSE</title>
 <meta name="description" content="Каждый этап NEREID — со скриншотами, что проверено и что ещё нет.">
 <link rel="icon" href="../icon.svg" type="image/svg+xml">
 <link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32">
@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css?v=2aae09d86a">
+<link rel="stylesheet" href="../style.css?v=d1f2fb5002">
 </head>
 <body>
 <header class="top">
@@ -36,7 +36,7 @@
 </header>
 
 <main class="wrap">
-<section class="dl-hero"><div><p class="crumbs"><a href="./#systems">Системы движка</a> / <a href="system-nereid.html">NEREID</a> / Дневник</p><h1>Дневник разработки: NEREID</h1><p>Каждый этап NEREID — со скриншотами, что проверено и что ещё нет.</p></div><div class="dl-stats"><div><strong>1</strong><span>этапов</span></div><div><strong class="blog-stat-date">21.11.2026</strong><span>последняя</span></div></div></section><ol class="blog-list"><li class="blog-post" id="2026-11-21-nereid-turbidity" data-sys="nereid"><time class="blog-date mono" datetime="2026-11-21">21.11.2026</time><span class="blog-dot" aria-hidden="true"></span><article class="blog-card"><div class="entry-meta"><span class="st st-done">Готово</span><span>agent-wind-masks · 4a59b9212</span></div><h2>NEREID: мутность воды снаружи и под водой</h2><p class="summary">У воды появился параметр turbidity (и цвет ила): одно значение одинаково меняет вид сверху и видимость при погружении.</p><div class="blog-media n2"><figure><a href="../media/docs/devlog/media/2026-11-21-nereid-turbidity/01.jpg" data-cap="Мутность 0 / 0.25 / 0.6: сверху (вверху) и под водой (внизу)"><img src="../media/docs/devlog/media/2026-11-21-nereid-turbidity/01.jpg" alt="Мутность 0 / 0.25 / 0.6: сверху (вверху) и под водой (внизу)" loading="lazy"></a><figcaption>Мутность 0 / 0.25 / 0.6: сверху (вверху) и под водой (внизу)</figcaption></figure><figure><a href="../media/docs/devlog/media/2026-11-21-nereid-turbidity/02.jpg" data-cap="Мутность 0.25: дно уходит в бирюзовую толщу"><img src="../media/docs/devlog/media/2026-11-21-nereid-turbidity/02.jpg" alt="Мутность 0.25: дно уходит в бирюзовую толщу" loading="lazy"></a><figcaption>Мутность 0.25: дно уходит в бирюзовую толщу</figcaption></figure></div><p>resolvedWaterOptics() превращает мутность в общую экстинкцию, молочный цвет взвеси и долю рассеяния; их читают и шейдер поверхности, и подводный вид PRISMA. Сверху вода считает реальный оптический путь — спуск света к дну плюс наклонный луч взгляда, поэтому мутная вода и снаружи выглядит мутной, а не прозрачной.</p><p>При 0 вода как раньше. Параметр задаётся в стиле поверхности, в компоненте NereidWater и в каскадах, проверяется и входит в ключи кэша.</p><dl class="facts-list"><div><dt>Проверено</dt><dd>Mac (Metal), ревью‑копия AlpineValley: одинаковые кадры сверху и под водой при 0 / 0.25 / 0.6; тест ecs_nereid_renderer_contract.</dd></div></dl><div class=entry-links><a href="https://github.com/chromealex/AIVERSE/blob/main/docs/nereid/HANDOFF.md">NEREID handoff</a></div></article></li></ol><p class="blog-first mono">первая запись: 21.11.2026</p><div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><button type="button" id="lb-close" aria-label="×">×</button><img id="lb-img" alt=""><p id="lb-cap"></p></div>
+<section class="dl-hero"><div><p class="crumbs"><a href="./#systems">Системы движка</a> / <a href="system-nereid.html">NEREID</a> / Дневник</p><h1>Дневник разработки: NEREID</h1><p>Каждый этап NEREID — со скриншотами, что проверено и что ещё нет.</p></div><div class="dl-stats"><div><strong>1</strong><span>этапов</span></div><div><strong class="blog-stat-date">21.11.2026</strong><span>последняя</span></div></div></section><ol class="blog-list"><li class="blog-post" id="2026-11-21-nereid-turbidity" data-sys="nereid"><time class="blog-date mono" datetime="2026-11-21">21.11.2026</time><span class="blog-dot" aria-hidden="true"></span><article class="blog-card"><div class="entry-meta"><span class="st st-done">Готово</span><span>agent-wind-masks</span><span>4a59b9212</span></div><h2>NEREID: мутность воды снаружи и под водой</h2><p class="summary">У воды появился параметр turbidity (и цвет ила): одно значение одинаково меняет вид сверху и видимость при погружении.</p><div class="blog-media n2"><figure><a href="../media/docs/devlog/media/2026-11-21-nereid-turbidity/01.jpg" data-cap="Мутность 0 / 0.25 / 0.6: сверху (вверху) и под водой (внизу)"><img src="../media/docs/devlog/media/2026-11-21-nereid-turbidity/01.jpg" alt="Мутность 0 / 0.25 / 0.6: сверху (вверху) и под водой (внизу)" loading="lazy"></a><figcaption>Мутность 0 / 0.25 / 0.6: сверху (вверху) и под водой (внизу)</figcaption></figure><figure><a href="../media/docs/devlog/media/2026-11-21-nereid-turbidity/02.jpg" data-cap="Мутность 0.25: дно уходит в бирюзовую толщу"><img src="../media/docs/devlog/media/2026-11-21-nereid-turbidity/02.jpg" alt="Мутность 0.25: дно уходит в бирюзовую толщу" loading="lazy"></a><figcaption>Мутность 0.25: дно уходит в бирюзовую толщу</figcaption></figure></div><p>resolvedWaterOptics() превращает мутность в общую экстинкцию, молочный цвет взвеси и долю рассеяния; их читают и шейдер поверхности, и подводный вид PRISMA. Сверху вода считает реальный оптический путь — спуск света к дну плюс наклонный луч взгляда, поэтому мутная вода и снаружи выглядит мутной, а не прозрачной.</p><p>При 0 вода как раньше. Параметр задаётся в стиле поверхности, в компоненте NereidWater и в каскадах, проверяется и входит в ключи кэша.</p><dl class="facts-list"><div><dt>Проверено</dt><dd>Mac (Metal), ревью‑копия AlpineValley: одинаковые кадры сверху и под водой при 0 / 0.25 / 0.6; тест ecs_nereid_renderer_contract.</dd></div></dl><div class=entry-links><a href="https://github.com/chromealex/AIVERSE/blob/main/docs/nereid/HANDOFF.md">NEREID handoff</a></div></article></li></ol><p class="blog-first mono">первая запись: 21.11.2026</p><div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><button type="button" id="lb-close" aria-label="×">×</button><img id="lb-img" alt=""><p id="lb-cap"></p></div>
 </main>
 
 <footer class="dark">
@@ -46,7 +46,7 @@
 <div><span>Сайт</span><a href="./">Главная</a><a href="roadmap.html">Роадмап</a><a href="releases.html">Релизы</a><a href="catalog.html">Каталог</a><a href="devlog.html">Ход разработки</a><a href="docs.html">Документация</a></div>
 <div><span>Сообщество</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </footer>
 <script>
@@ -57,5 +57,5 @@ im.src=a.getAttribute('href');cp.textContent=a.dataset.cap||'';lb.classList.add(
 document.getElementById('lb-close').addEventListener('click',close);lb.addEventListener('click',function(e){if(e.target===lb)close();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});})();
 </script>
-</body>
+<script src="../demo-player.js?v=39814628ef" defer></script></body>
 </html>

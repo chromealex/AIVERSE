@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Development diary: Звук · AIVERSE</title>
+<title>Development diary: Звук | AIVERSE</title>
 <meta name="description" content="Every stage of Звук with screenshots, what was verified and what was not yet.">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2aae09d86a">
+<link rel="stylesheet" href="style.css?v=d1f2fb5002">
 </head>
 <body>
 <header class="top">
@@ -36,7 +36,7 @@
 </header>
 
 <main class="wrap">
-<section class="dl-hero"><div><p class="crumbs"><a href="./#systems">Engine systems</a> / <a href="system-audio.html">Звук</a> / Diary</p><h1>Development diary: Звук</h1><p>Every stage of Звук with screenshots, what was verified and what was not yet.</p></div><div class="dl-stats"><div><strong>1</strong><span>stages</span></div><div><strong class="blog-stat-date">Nov 27, 2026</strong><span>latest</span></div></div></section><ol class="blog-list"><li class="blog-post" id="2026-11-27-selection-voices" data-sys="audio"><time class="blog-date mono" datetime="2026-11-27">Nov 27, 2026</time><span class="blog-dot" aria-hidden="true"></span><article class="blog-card"><div class="entry-meta"><span class="st st-done">Done</span><span>main · 25d057a5195f6b6ade1a6b2c38e25a48cf9d184b</span></div><h2>Selection voices in authored order</h2><p class="summary">Repeated clicks cycle voices in order; commands and switching objects restart the sequence.</p><div class="blog-media n1"><figure><a href="media/docs/evidence/issues-selection-voices-web-20261127/selected.png" data-cap="WebGL: selected object with authored voices."><img src="media/docs/evidence/issues-selection-voices-web-20261127/selected.png" alt="WebGL: selected object with authored voices." loading="lazy"></a><figcaption>WebGL: selected object with authored voices.</figcaption></figure></div><p>The demo has two objects with short tones: two normal 440 Hz responses followed by 660 and 880 Hz. Click one object with gaps longer than 0.3 seconds.</p><p>Settings use ordinary audio.json data; a zero window retains the sequence across long pauses.</p><dl class="facts-list"><div><dt>Verified</dt><dd>Native mixer output capture confirmed ordering and resets after Stop and switching objects. Three regressions: 119 checks. WebGL scene loading and repeated selection checked.</dd></div><div><dt>Limitations</dt><dd>Browser audio and physical speaker output were not recorded.</dd></div></dl><div class=entry-links><a href="https://chromealex.github.io/AIVERSE/demos/selection-voices/?map=0">Play · Web</a><a href="https://github.com/chromealex/AIVERSE/blob/main/demos/selection-voices/README.md">Source</a></div></article></li></ol><p class="blog-first mono">first entry: Nov 27, 2026</p><div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><button type="button" id="lb-close" aria-label="×">×</button><img id="lb-img" alt=""><p id="lb-cap"></p></div>
+<section class="dl-hero"><div><p class="crumbs"><a href="./#systems">Engine systems</a> / <a href="system-audio.html">Звук</a> / Diary</p><h1>Development diary: Звук</h1><p>Every stage of Звук with screenshots, what was verified and what was not yet.</p></div><div class="dl-stats"><div><strong>1</strong><span>stages</span></div><div><strong class="blog-stat-date">Nov 27, 2026</strong><span>latest</span></div></div></section><ol class="blog-list"><li class="blog-post" id="2026-11-27-selection-voices" data-sys="audio"><time class="blog-date mono" datetime="2026-11-27">Nov 27, 2026</time><span class="blog-dot" aria-hidden="true"></span><article class="blog-card"><div class="entry-meta"><span class="st st-done">Done</span><span>main</span><span>25d057a5195f6b6ade1a6b2c38e25a48cf9d184b</span></div><h2>Selection voices in authored order</h2><p class="summary">Repeated clicks cycle voices in order; commands and switching objects restart the sequence.</p><div class="blog-media n1"><figure><a href="media/docs/evidence/issues-selection-voices-web-20261127/selected.png" data-cap="WebGL: selected object with authored voices."><img src="media/docs/evidence/issues-selection-voices-web-20261127/selected.png" alt="WebGL: selected object with authored voices." loading="lazy"></a><figcaption>WebGL: selected object with authored voices.</figcaption></figure></div><p>The demo has two objects with short tones: two normal 440 Hz responses followed by 660 and 880 Hz. Click one object with gaps longer than 0.3 seconds.</p><p>Settings use ordinary audio.json data; a zero window retains the sequence across long pauses.</p><dl class="facts-list"><div><dt>Verified</dt><dd>Native mixer output capture confirmed ordering and resets after Stop and switching objects. Three regressions: 119 checks. WebGL scene loading and repeated selection checked.</dd></div><div><dt>Limitations</dt><dd>Browser audio and physical speaker output were not recorded.</dd></div></dl><div class=entry-links><a href="https://chromealex.github.io/AIVERSE/demos/selection-voices/?map=0">Play Web</a><a href="https://github.com/chromealex/AIVERSE/blob/main/demos/selection-voices/README.md">Source</a></div></article></li></ol><p class="blog-first mono">first entry: Nov 27, 2026</p><div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><button type="button" id="lb-close" aria-label="×">×</button><img id="lb-img" alt=""><p id="lb-cap"></p></div>
 </main>
 
 <footer class="dark">
@@ -46,7 +46,7 @@
 <div><span>Site</span><a href="./">Home</a><a href="roadmap.html">Roadmap</a><a href="releases.html">Releases</a><a href="catalog.html">Catalog</a><a href="devlog.html">Devlog</a><a href="docs.html">Docs</a></div>
 <div><span>Community</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </footer>
 <script>
@@ -57,5 +57,5 @@ im.src=a.getAttribute('href');cp.textContent=a.dataset.cap||'';lb.classList.add(
 document.getElementById('lb-close').addEventListener('click',close);lb.addEventListener('click',function(e){if(e.target===lb)close();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});})();
 </script>
-</body>
+<script src="demo-player.js?v=39814628ef" defer></script></body>
 </html>

@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2aae09d86a">
+<link rel="stylesheet" href="style.css?v=d1f2fb5002">
 </head>
 <body>
 <header class="top">
@@ -47,7 +47,7 @@ python3 tools/pkg/aiverse_pkg.py add terrain-pbr --project ~/Games/MyGame</code>
 <div><span>Site</span><a href="./">Home</a><a href="roadmap.html">Roadmap</a><a href="releases.html">Releases</a><a href="catalog.html">Catalog</a><a href="devlog.html">Devlog</a><a href="docs.html">Docs</a></div>
 <div><span>Community</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </footer>
 <script>window.CAT_CFG={"index": "https://raw.githubusercontent.com/chromealex/AIVERSE-PACKAGES/main/index.json", "lang": "en", "t": {"more": "More", "engine": "Engine", "size": "Size", "license": "Licence", "kind": "Type", "copy": "Copy", "copied": "Copied", "download": "Download", "readme": "README", "none": "Nothing found", "error": "Could not load the catalog. The package list is in index.json of the catalog repository.", "view3d": "3D preview", "view3dClose": "Close 3D", "link": "Link", "linkCopied": "Link copied"}, "cats": {"templates": "Templates", "materials": "Materials", "textures": "Textures", "models": "Models", "audio": "Audio", "vfx": "Effects", "ui": "UI", "scripts": "Scripts", "plugins": "Plugins", "tools": "Tools"}, "kinds": {"content": "project content", "template": "project template", "source": "sources", "script": "scripts", "plugin": "plugin", "tool": "tool"}};</script><script>
@@ -74,7 +74,7 @@ var cmd=(p.kind==='content'?'add '+p.id+' --project <project>':p.kind==='templat
 var pre=el('div','cat-cmd'),code=el('code',null,'python3 tools/pkg/aiverse_pkg.py '+cmd),cp=el('button','cat-copy',T.copy);cp.type='button';
 cp.onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(code.textContent).then(function(){cp.textContent=T.copied;setTimeout(function(){cp.textContent=T.copy;},1500);});};
 pre.appendChild(code);pre.appendChild(cp);body.appendChild(pre);
-var act=el('div','cat-actions'),dl=el('a','btn btn-ink btn-sm',T.download+' · '+mb(v.size));dl.href=v.url;dl.title='sha256 '+v.sha256;act.appendChild(dl);
+var act=el('div','cat-actions'),dl=el('a','btn btn-ink btn-sm',T.download+' '+mb(v.size));dl.href=v.url;dl.title='sha256 '+v.sha256;act.appendChild(dl);
 if(p.readme){var r=el('a','btn btn-line btn-sm',T.readme);r.href=p.readme;act.appendChild(r);}
 a.item=0;a.link=function(){return location.origin+location.pathname+'#pkg-'+p.id+(a.classList.contains('is-open')&&a.item?'/'+a.item:'');};
 if(p.viewer){var v3=el('button','btn btn-accent btn-sm cat-3d',T.view3d);v3.type='button';
@@ -114,5 +114,5 @@ var f=c.el.querySelector('.cat-frame');if(f&&f.contentWindow===e.source){c.el.it
 }).catch(function(){status.textContent=T.error;});
 search.addEventListener('input',apply);})();
 </script>
-</body>
+<script src="demo-player.js?v=39814628ef" defer></script></body>
 </html>

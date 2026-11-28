@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-27T15:31:27+00:00",
+ "generated": "2026-11-28T14:22:42+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -177,7 +177,7 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/selection-voices/?map=0"
     },
     {
@@ -214,7 +214,7 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/projectile-segments/?map=0"
     },
     {
@@ -254,11 +254,11 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/material-effects/?map=0"
     },
     {
-     "title": "Demo · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/material-effects/README.md"
     }
    ],
@@ -314,11 +314,11 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/client-command-controls/?map=0"
     },
     {
-     "title": "Controls · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/client-command-controls/README.md"
     },
     {
@@ -344,7 +344,7 @@
    "limits": "Планетарный маршрут с сохранением и восстановлением запускается в отдельном нативном примере.",
    "links": [
     {
-     "title": "Building Graph / Caverns · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/world/building-caverns-web/README.md"
     }
    ],
@@ -441,6 +441,29 @@
    "author": "TerraWeave"
   },
   {
+   "id": "2026-11-25-studio-world-scene",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "fafcd1d9a",
+   "author": null,
+   "links": [],
+   "title": "Свойства сцены в мировых координатах",
+   "summary": "Inspector показывает имя сцены, число коллайдеров и точек появления.",
+   "body": [
+    "Откройте вкладку Scene в Inspector. Измените имя и нажмите Apply. Сохранение проекта запишет имя в файл сцены."
+   ],
+   "verified": "Проверено на Arena в macOS. После Undo, Redo и сохранения все исходные поля карты совпали.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-world-scene/world-scene-inspector.png",
+     "caption": "Сцена Harbor terminal в отдельном Inspector"
+    }
+   ]
+  },
+  {
    "id": "2026-11-25-studio-workspace-redesign",
    "date": "2026-11-25",
    "system": "studio",
@@ -467,6 +490,383 @@
    ],
    "links": [],
    "author": null
+  },
+  {
+   "id": "2026-11-25-studio-type-blocks",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "a7c3bafe0",
+   "author": null,
+   "links": [],
+   "title": "Блоки свойств для типов объектов",
+   "summary": "В Project доступны 36 шаблонов для типов объектов.",
+   "body": [
+    "В Project → Types выберите объект и блок в Add property block. Его значения появятся в All properties. Сохраните черновик кнопкой Save item."
+   ],
+   "verified": "На macOS после перезапуска сохранились энергия, теги и параметры захвата. Исходные свойства объекта совпали с оригиналом.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-type-blocks/type-properties.png",
+     "caption": "Свойства типа Scout"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-shader-outputs",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "d9c9ad8f4",
+   "author": null,
+   "links": [],
+   "title": "Выходные каналы на узлах шейдера",
+   "summary": "В Shader Graph видно, какие узлы формируют цвет, свечение и другие выходы шейдера.",
+   "body": [
+    "Измените источник канала в Graph outputs. Подпись на узле обновится в черновике. Холст и панель команд сохраняют высоту в узком окне."
+   ],
+   "verified": "На macOS проверены привязка и снятие emission, Undo, сохранение и повторное открытие графа.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-shader-outputs/shader-outputs.png",
+     "caption": "Узел с выходами color и emission"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-shader-draft-apply",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "195725b25",
+   "author": null,
+   "links": [],
+   "title": "Применение черновика шейдера",
+   "summary": "Save & apply сохраняет граф и назначает его выбранной цели.",
+   "body": [
+    "В Shader Graph откройте Apply to target и укажите цель."
+   ],
+   "verified": "На macOS проверены материал, постэффект игры и второй эмиттер частиц.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-shader-draft-apply/shader-apply.png",
+     "caption": "Материал sea_glass"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-scene-handles",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "5eeca95af",
+   "author": null,
+   "links": [],
+   "title": "Масштаб и поворот коллайдера в Scene",
+   "summary": "При виде сверху центральная ручка меняет размер коллайдера по трём осям.",
+   "body": [
+    "Выберите коллайдер и потяните за центр инструмента масштаба. Для поворота переключитесь на Rotate и потяните за кольцо."
+   ],
+   "verified": "В macOS Studio проверены оба жеста, Undo, Redo и карта после сохранения.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-scene-handles/oriented-scene.png",
+     "caption": "Коллайдер после правки в Scene"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-scene-area",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "d466fcd4d",
+   "author": null,
+   "links": [],
+   "title": "Рисование зон в Scene",
+   "summary": "Протяните прямоугольник между клетками плоской карты.",
+   "body": [
+    "В Inspector → Areas выберите Draw in Scene. После отпускания мыши проверьте размеры и сохраните зону в форме."
+   ],
+   "verified": "В обычном режиме и с HTML-слоем на macOS проверены отмена рисования, создание зоны, Undo, Redo и координаты в файле карты.",
+   "limits": "Инструмент работает на клеточных плоских картах. Проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-scene-area/scene-area-drag.png",
+     "caption": "Контур зоны во время перетаскивания"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-scene-area/scene-area-inspector.png",
+     "caption": "Сохранённая зона в Inspector"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-region-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "2175433a6",
+   "author": null,
+   "links": [],
+   "title": "Территории в Inspector",
+   "summary": "Вкладка Regions показывает имя, число клеток и схему территории.",
+   "body": [
+    "Выберите букву, чтобы увидеть территорию на плоской карте. На больших картах клетки объединяются только для обзора.",
+    "Save name сохраняет имя в документе. Paint in Scene включает кисть выбранной буквы."
+   ],
+   "verified": "На macOS переименован регион из 164 клеток. Проверены Undo, Redo, сохранённый файл и включение кисти.",
+   "limits": "Подсветка границ в Scene и проверка Windows ещё предстоят.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-region-inspector/region-inspector.png",
+     "caption": "Территория Harbor ridge в отдельном Inspector"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-region-brush",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "63d0cda21",
+   "author": null,
+   "links": [],
+   "title": "Кисть регионов карты",
+   "summary": "Окно Tiles управляет кистью регионов для плоской карты.",
+   "body": [
+    "В разделе Regions выберите букву или ластик, задайте радиус в клетках и включите Brush. Каждый мазок по карте образует один шаг Undo."
+   ],
+   "verified": "На macOS проверены выбор буквы и ластика в отдельном окне, отмена мазка в нативном тесте и сохранение имени пустого региона. В окне macOS мазок через AppKit, Undo, Redo и Save оставили 96 клеток региона K в файле карты.",
+   "limits": "Имена и счётчики клеток в Inspector ещё предстоит перенести.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-region-brush/map-regions.png",
+     "caption": "Регион K с радиусом в четыре клетки"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-region-borders",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "a73088f94",
+   "author": null,
+   "links": [],
+   "title": "Границы регионов в Scene",
+   "summary": "Границы клеток региона видны прямо на карте.",
+   "body": [
+    "В Inspector откройте Regions и включите Show borders in Scene. Кисть региона показывает границы автоматически."
+   ],
+   "verified": "На macOS мазок расширил регион с 91 до 175 клеток. Undo восстановил исходный контур.",
+   "limits": "На очень плотной карте при отдалении часть линий пропускается. Проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-region-borders/scene-regions.png",
+     "caption": "Границы двух соседних территорий"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-player-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "0b8159e06",
+   "author": null,
+   "links": [],
+   "title": "Игроки и стартовые условия карты",
+   "summary": "Во вкладке Players окна Inspector можно настроить участников карты и сохранить их стартовые условия.",
+   "body": [
+    "Выберите игрока или добавьте новый слот. Укажите имя, команду, фракцию и стартовые ресурсы. Для сценарной стороны включите Scripted waves.",
+    "Start position задаёт координаты старта. Для планеты также выбираются тело и грань. Apply player changes применяет правки одним шагом Undo. Перед удалением слота окно предупреждает о передаче его объектов нейтральной стороне.",
+    "Pick start in Scene переносит координаты поверхности в форму текущего игрока. Проверьте значения и нажмите Apply player changes."
+   ],
+   "verified": "В отдельном окне macOS добавлен и сохранён третий игрок. Значения независимо прочитаны из файла карты. На планете проверены первый клик в Scene из отдельного Inspector, перетаскивание, отмена и сохранение старта.",
+   "limits": "Проверка Windows ещё предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-player-inspector/player-inspector.png",
+     "caption": "Игрок Harbor scouts в Inspector на macOS"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-player-inspector/player-start.png",
+     "caption": "Выбранная точка старта на сеточной карте"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-player-inspector/player-planet.png",
+     "caption": "Старт на выбранной грани планеты"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-player-inspector/player-start-scene.png",
+     "caption": "Поверхность планеты перед выбором точки старта"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-oriented-collider",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "a2f22d3a4",
+   "author": null,
+   "links": [],
+   "title": "Повёрнутые коллайдеры в Inspector",
+   "summary": "В Inspector доступны угол поворота коллайдера и его размеры по трём осям.",
+   "body": [
+    "Укажите центр в Transform, затем задайте угол в градусах и размеры в Oriented Box Collider. Undo отменяет правку, Save сохраняет карту."
+   ],
+   "verified": "На macOS проверены угол 135°, размер Z 8, центр X 7, отмена и повтор изменения. Сохранённая карта сверена целиком.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-oriented-collider/oriented-collider.png",
+     "caption": "Inspector повёрнутого коллайдера"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-multiplayer",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "4350c3d70",
+   "author": null,
+   "links": [],
+   "title": "Сетевая игра из HTML Studio",
+   "summary": "Новая вкладка Multiplayer запускает хост и открывает отдельное игровое окно для подключения.",
+   "body": [
+    "Сохраните карту и откройте Actors & Cameras → Multiplayer. Нажмите Start host, затем укажите адрес сервера и нажмите Connect."
+   ],
+   "verified": "На macOS два клиента открыли вторую карту проекта и подключились по WebSocket и UDP. При подключении по UDP счётчик серверных тиков вырос с 849 до 1041.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-panel.png",
+     "caption": "Управление сетевой игрой"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-client.png",
+     "caption": "Подключённое игровое окно"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-movement-body",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "27f8640b5",
+   "author": null,
+   "links": [],
+   "title": "Радиус и масса подвижного объекта",
+   "summary": "В Rules видны размеры тела и масса, вычисленные движком для подвижного типа.",
+   "body": [
+    "Измените радиус в Rules → Unit types → Movement. Массу можно задать вручную или сбросить к расчёту по радиусу."
+   ],
+   "verified": "На macOS подтверждены автоматический пересчёт, сохранение ручной массы при изменении радиуса и возврат к массе 6.25 после перезапуска.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-movement-body/movement-rules.png",
+     "caption": "Масса по радиусу объекта"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-map-shader",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "bd3688af9",
+   "author": null,
+   "links": [],
+   "title": "Постэффект отдельной карты",
+   "summary": "Shader Graph указывает карту назначения и напоминает сохранить её после применения.",
+   "body": [
+    "Выберите карту в Apply to target. Применение постэффекта входит в историю изменений карты."
+   ],
+   "verified": "На macOS проверены Undo, Redo, сохранение и повторное открытие второй карты. Первая карта и game.json совпали с исходными побайтно. В запущенной игре контрольный цвет появился только на второй карте.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-map-shader/map-shader.png",
+     "caption": "Постэффект для harbor.json"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-map-shader/map-shader-runtime-before.png",
+     "caption": "Первая карта в игре"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-map-shader/map-shader-runtime-after.png",
+     "caption": "Вторая карта с контрольным цветом"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-map-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "92556c5bb",
+   "author": null,
+   "links": [],
+   "title": "Параметры и проверка карты в Inspector",
+   "summary": "Страница Map объединяет размер игровой сетки, режим движения и условия победы. Изменения формы можно отменить одним шагом.",
+   "body": [
+    "Откройте Map в Inspector. Здесь можно переименовать карту, изменить ширину и высоту в клетках и включить движение только по дорогам. Для особых условий победы раскройте Victory override.",
+    "После Apply нажмите Validate map. Inspector покажет ошибки и предупреждения текущей карты. Если сообщение привязано к объекту, его можно открыть в Inspector. Сохранение файла выполняется обычной командой Save."
+   ],
+   "verified": "В отдельном окне Studio на macOS изменены размеры тренировочной карты и условия победы, затем карта сохранена и проверена.",
+   "limits": "Страница предназначена для документов карт. Изменение размеров доступно для плоской сетки. Проверка Windows ещё предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-map-inspector/map-inspector.png",
+     "caption": "Inspector показывает свойства тренировочной карты и результат проверки"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-map-areas",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "1eb0c70fc",
+   "author": null,
+   "links": [],
+   "title": "Зоны карты в Inspector",
+   "summary": "Вкладка Areas позволяет рисовать зоны на сетке и менять их границы по координатам.",
+   "body": [
+    "При переименовании зоны обновляются ссылки в триггерах карты и маршрутах волн. Undo отменяет изменения одним шагом."
+   ],
+   "verified": "Проверены создание, удаление, переименование, Undo, Redo и сохранённый файл карты на macOS. В браузере проверена отрисовка зоны мышью при ширине окна 240 и 640 пикселей.",
+   "limits": "Ссылки в Lua-скриптах проверяются вручную. Проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-map-areas/map-areas.png",
+     "caption": "Границы зоны в отдельном окне macOS"
+    }
+   ]
   },
   {
    "id": "2026-11-25-studio-local-play-inspection",
@@ -524,6 +924,44 @@
    ]
   },
   {
+   "id": "2026-11-25-studio-hierarchy-groups",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "35e08058e",
+   "author": null,
+   "links": [],
+   "title": "Поиск объектов по компонентам в Hierarchy",
+   "summary": "В списке Group by можно выбрать категорию, происхождение или компонент. Эти режимы доступны и на карте, и во время игры.",
+   "body": [
+    "Раскройте группу компонента, чтобы увидеть все объекты с этим компонентом. Если у объекта несколько компонентов, выделение видно в каждой раскрытой группе.",
+    "Проект может добавить свои группировки, например по полю скрипта и владельцу. В режиме Live можно открыть вложенную группу, выбрать сущность и вернуться к списку по строке пути.",
+    "В режиме Nesting раскройте родительскую сущность. Два одноимённых спутника остаются разными объектами, и выбранный спутник снова подсвечивается после раскрытия ветки.",
+    "До запуска игры Hierarchy показывает также объекты, созданные скриптами предпросмотра. У строки Preview можно раскрыть тип, владельца, здоровье и компоненты. Кнопка обновления рядом с Group by повторно читает скрипты проекта."
+   ],
+   "verified": "В отдельном окне Studio на macOS выбранный дуб виден в группах «Положение» и «Владелец». В живой симуляции открыта группа Scouts.",
+   "limits": "Проверка на Windows ещё предстоит. Возможность показана в окнах редактора на macOS.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-builtins.png",
+     "caption": "Один дуб выделен в двух группах компонентов"
+    },
+    {
+     "src": "../media/docs/evidence/studio-project-catalog/hierarchy-live-groups.png",
+     "caption": "Живые сущности в группе Scouts"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-nesting.png",
+     "caption": "Второй из двух призванных спутников выделен под Scout"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-edit-preview.png",
+     "caption": "Два объекта предпросмотра под разведчиком до Play"
+    }
+   ]
+  },
+  {
    "id": "2026-11-25-studio-graph-visuals",
    "date": "2026-11-25",
    "system": "studio",
@@ -550,6 +988,121 @@
    "author": null,
    "verified": "Нативные кадры Studio на Mac с графами sg_brass и runtime_math_connected_v2.",
    "limits": "Проверено на macOS и в Chrome. Нативная Windows-проверка ещё предстоит."
+  },
+  {
+   "id": "2026-11-25-studio-box-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "0d83a2888",
+   "author": null,
+   "links": [],
+   "title": "Границы коллайдера в Inspector",
+   "summary": "Inspector позволяет редактировать минимальные и максимальные координаты прямоугольного коллайдера без поворота.",
+   "body": [
+    "Выберите коллайдер в Hierarchy, затем измените координаты в Box Collider. Минимум должен быть меньше максимума на каждой оси. Изменения можно отменить через Undo."
+   ],
+   "verified": "На карте Arena изменена верхняя граница. Проверены Undo, Redo, сохранение и отказ при устаревшем редактировании.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-box-inspector/box-inspector.png",
+     "caption": "Коллайдер на карте Arena"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-simulation",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "d1a22e1d5",
+   "author": null,
+   "links": [],
+   "title": "Настройки симуляции в Actors & Cameras",
+   "summary": "Три ползунка управляют частотой симуляции, частотой сетевых снимков и лимитом игроков.",
+   "body": [
+    "Откройте Simulation. Частота снимков ограничена частотой симуляции. Save settings записывает изменения в правила проекта."
+   ],
+   "verified": "На macOS сохранены значения 40 Гц, 40 Гц и 24 игрока. Остальные правила и карта сохранились без изменений.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-actor-simulation/actor-simulation.png",
+     "caption": "Настройки проекта Arena"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-rules",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "b41a30e57",
+   "author": null,
+   "links": [],
+   "title": "Настройки персонажей из окна Rules",
+   "summary": "В проектах персонажей Rules сразу показывает rules.json и открывает Actors & Cameras.",
+   "body": [
+    "Чтобы изменить скорость персонажа, откройте Rules → Open Actors & Cameras → Movement."
+   ],
+   "verified": "На macOS отделённое окно Rules прочитало проект без types и открыло настройки движения в основном окне. После перехода файл правил остался побайтно прежним.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-actor-rules/actor-rules.png",
+     "caption": "Правила проекта персонажей"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-movement",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "b39103483",
+   "author": null,
+   "links": [],
+   "title": "Скорость движения персонажа",
+   "summary": "В Actors & Cameras появились настройки скорости ходьбы и спринта.",
+   "body": [
+    "Откройте вкладку Movement. Скорость указана в метрах в секунду. Если увеличить скорость ходьбы выше скорости спринта, второй ползунок поднимется вместе с первым."
+   ],
+   "verified": "В окне macOS сохранены 12,25 и 16,5 м/с. Проверены остальные поля правил и файл карты.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-actor-movement/actor-movement.png",
+     "caption": "Настройки движения"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-loadout",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "ee59734cd",
+   "author": null,
+   "links": [],
+   "title": "Снаряжение в Actors & Cameras",
+   "summary": "Вкладка Loadout показывает игровые параметры каждого слота снаряжения.",
+   "body": [
+    "Настройте урон и вместимость магазина, затем нажмите Save loadout. Изменения всех слотов записываются вместе."
+   ],
+   "verified": "Проверены проекты с одним предметом и со списком из двух. После сохранения сверены все правила и файл карты.",
+   "limits": "Визуальная проверка Windows предстоит.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-actor-loadout/loadout-multi.png",
+     "caption": "Снаряжение с двумя слотами"
+    }
+   ]
   },
   {
    "id": "2026-11-25-spectrafx-smoke-flow",
@@ -670,7 +1223,7 @@
      "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/models.md"
     },
     {
-     "title": "WebGL2 · Egyptian Trouble",
+     "title": "Egyptian Trouble in WebGL2",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/quake3-bsp/README.md"
     }
    ]
@@ -881,11 +1434,11 @@
    "limits": "Настройки меняют выбор мышью и автоматическую стрельбу. Демонстрационная карта плоская.",
    "links": [
     {
-     "title": "Training range · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"
     },
     {
-     "title": "Training range · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/selection-targeting/README.md"
     }
    ],
@@ -922,11 +1475,11 @@
    "limits": "В примере показана плоская карта и геометрическая модель башни. Отдельный визуальный прогон для планет и спрайтов пока не выполнен.",
    "links": [
     {
-     "title": "Watchtower orders · WebGL 2",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/order-upgrade/index.html?map=0&lang=en"
     },
     {
-     "title": "Watchtower orders · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/order-upgrade/README.md"
     }
    ],
@@ -1100,6 +1653,101 @@
     }
    ],
    "author": "SpectraFX"
+  },
+  {
+   "id": "2026-11-23-motionweave-ada-natural-walk",
+   "date": "2026-11-23",
+   "system": "motionweave",
+   "title": "Походка Ada: перенос веса и мягкий шаг",
+   "summary": "Шаг Ada получил перенос веса в стороны, более плавный вынос ноги и движение рук с небольшим сгибом в локтях.",
+   "body": [
+    "Движение таза рассчитывается по длине ноги, поэтому его амплитуда сохраняется после импорта модели с другим масштабом. Во время шага таз слегка смещается к опорной ноге; плечи и руки следуют с задержкой, корпус немного поворачивается и наклоняется.",
+    "Поднятие свободной ноги стало ниже и мягче. Опорная стопа продолжает удерживаться двухзвенной кинематикой, а отдельные части модели Ada повторяют движение основного скелета."
+   ],
+   "status": "in-progress",
+   "verified": "Проверено на Ada в нативном просмотре macOS с Metal: записаны 48 кадров ходьбы с перемещением персонажа.",
+   "limits": "Движение остаётся процедурным: точный перекат подошвы, неровный рельеф и автоматическая настройка под разную обувь пока не реализованы.",
+   "branch": "feature/motionweave-walk-generator-current",
+   "commit": "d852d1c9a",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-23-motionweave-ada-natural-walk/01.png",
+     "caption": "Ada в опорной фазе: таз смещается к опорной ноге, руки сопровождают шаг."
+    }
+   ],
+   "links": [
+    {
+     "title": "MotionWeave handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+   ],
+   "author": "motionweave"
+  },
+  {
+   "id": "2026-11-23-motionweave-ada-cmu-walk",
+   "date": "2026-11-23",
+   "system": "motionweave",
+   "title": "Ходьба из записи движений на Ada",
+   "summary": "В предпросмотр Ada загружена запись ходьбы CMU: движение ног, таза и корпуса перенесено на её скелет вместе с перемещением персонажа.",
+   "body": [
+    "MotionWeave читает запись BVH и сопоставляет суставы с ригом персонажа. Масштаб движения вычисляется по длине ноги; положение таза и опорной стопы корректируется для ровной плоскости. Отдельные части модели Ada повторяют позу основного тела.",
+    "В показанном проходе использована запись 02_01 из базы CMU Graphics Lab. Плечи и локти адаптированы к исходной А-позе Ada, чтобы избежать неестественного поворота рук при переносе движения между разными ригами."
+   ],
+   "status": "in-progress",
+   "verified": "Показано на Ada в нативном просмотре macOS с Metal: записаны 48 кадров движения персонажа с перемещением по сцене.",
+   "limits": "Перенос рук пока использует адаптированные процедурные каналы. Контакт подошвы приближённый; запись ещё не превращена в бесшовный цикл для каталога.",
+   "branch": "feature/motionweave-walk-generator-current",
+   "commit": "6956a70ad",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-23-motionweave-ada-cmu-walk/01.png",
+     "caption": "Ada в шаге с движением ног и корпуса из записи CMU 02_01."
+    }
+   ],
+   "links": [
+    {
+     "title": "CMU Graphics Lab source and terms",
+     "href": "https://mocap.cs.cmu.edu/"
+    },
+    {
+     "title": "CMU 02_01 BVH",
+     "href": "https://github.com/una-dinosauria/cmu-mocap/blob/master/data/002/02_01.bvh"
+    },
+    {
+     "title": "MotionWeave handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+   ],
+   "author": "motionweave"
+  },
+  {
+   "id": "2026-11-23-motionweave-ada",
+   "date": "2026-11-23",
+   "system": "motionweave",
+   "title": "Шаг Ada: опора стоп и движение корпуса",
+   "summary": "The generated walk now keeps an ankle in place during stance while the pelvis and upper torso move with each step.",
+   "body": [
+    "MotionWeave строит цикл по скелету: в опорной фазе цель стопы компенсирует движение персонажа, а двухзвенная кинематика задаёт положение колена. Таз переносит вес, корпус слегка поворачивается, голова движется с меньшей амплитудой.",
+    "В модульной модели Ada движение таза и корпуса передаётся также отдельным скелетам головы и волос. Предпросмотр доступен в диагностическом просмотре VIVID Creator."
+   ],
+   "status": "in-progress",
+   "verified": "Показано на Ada в нативном просмотре macOS с рендером Metal; записана двухсекундная последовательность с перемещением персонажа.",
+   "limits": "Пока используется ровная плоскость и высота стопы из исходной позы; адаптации к рельефу и точной опоры подошвы нет.",
+   "branch": "feature/motionweave-walk-generator-current",
+   "commit": "2c116ac7e",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-23-motionweave-ada/01.png",
+     "caption": "Ada во время шага: передняя стопа на плоскости, корпус следует за тазом."
+    }
+   ],
+   "links": [
+    {
+     "title": "MotionWeave handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+   ],
+   "author": "motionweave"
   },
   {
    "id": "2026-11-22-world-building-styles",

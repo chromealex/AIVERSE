@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2aae09d86a">
+<link rel="stylesheet" href="style.css?v=d1f2fb5002">
 </head>
 <body>
 <header class="top">
@@ -281,7 +281,7 @@ prisma.<span class="hl-fn">collectGpuRetirements</span>();          <span class=
 <p>In the editor <code>Editor::frame</code> tracks which view <strong>actually rendered postprocess</strong> this GUI frame. When a Scene or Game tab is hidden, closed, switched to non-postprocessed diagnostic mode, or stops rendering, the editor retires that camera's PRISMA state plus its Renderer3D motion targets <strong>once</strong>, then continues collecting backend-confirmed GPU completions on subsequent editor frames even with no 3D viewport rendered. Reopening a view seeds fresh temporal history instead of reusing stale exposure after a long hidden period.</p>
 <p>The Scene view uses stable ID <code>1</code> and Game uses <code>2</code>. The editor previously used Game ID <code>2</code> even when the Scene tab reused the game renderer during play; Stage 34 passes explicit ID <code>1</code> in that path to prevent simultaneous same-resolution Scene/Game motion and exposure contamination. A hosted standalone game client uses its own PRISMA instance and view ID <code>3</code>.</p>
 <p>The native <code>GameClient</code> similarly retires view <code>3</code> on a new match before camera and map replacement, and continues checking pending GPU work on menu/loading frames when the 3D renderer is not rendering.</p>
-<p>The editor's <strong>Statistics</strong> tab now shows a new <code>PRISMA · GPU resource retirement</code> section for completed GPU fence, active/retired size contexts, view histories, counts of fenced and unfenced textures, outstanding graph allocations, and the <strong>minimum known MiB</strong> retained by both PRISMA and Renderer3D. This is observational and creates no GPU readback or synchronizing GPU wait.</p>
+<p>The editor's <strong>Statistics</strong> tab now shows a new <code>PRISMA, GPU resource retirement</code> section for completed GPU fence, active/retired size contexts, view histories, counts of fenced and unfenced textures, outstanding graph allocations, and the <strong>minimum known MiB</strong> retained by both PRISMA and Renderer3D. This is observational and creates no GPU readback or synchronizing GPU wait.</p>
 <h3 id="project-asset-reloads">Project asset reloads<a class="anchor" href="#project-asset-reloads" aria-label="#">#</a></h3>
 <p><code>Prisma::setImageLoader</code> now GPU-fence-retires superseded LUT and user ShaderGraph textures rather than immediately destroying them while another frame might still reference them. Shared shader pipelines and graphs keep their existing ownership; this only changes the texture retirement policy.</p>
 <h3 id="limitations-compatibility">Limitations / compatibility<a class="anchor" href="#limitations-compatibility" aria-label="#">#</a></h3>
@@ -672,7 +672,7 @@ prisma.<span class="hl-fn">clearViewManualExposure</span>(stableViewId); <span c
 <div><span>Site</span><a href="./">Home</a><a href="roadmap.html">Roadmap</a><a href="releases.html">Releases</a><a href="catalog.html">Catalog</a><a href="devlog.html">Devlog</a><a href="docs.html">Docs</a></div>
 <div><span>Community</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </footer>
 <script>window.DS_L={"none": "Nothing found"};</script><script>
@@ -693,5 +693,5 @@ else if(e.key==='Enter'){var h=hs[sel>=0?sel:0];if(h){e.preventDefault();locatio
 document.addEventListener('click',function(e){if(!box.contains(e.target))res.hidden=true;});});
 document.addEventListener('keydown',function(e){if(e.key==='/'&&!/input|textarea/i.test((document.activeElement||{}).tagName||'')){e.preventDefault();boxes[0].querySelector('.ds-input').focus();}});})();
 </script>
-</body>
+<script src="demo-player.js?v=39814628ef" defer></script></body>
 </html>

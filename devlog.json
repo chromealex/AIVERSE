@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-27T15:31:27+00:00",
+ "generated": "2026-11-28T14:22:42+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -177,7 +177,7 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/selection-voices/?map=0"
     },
     {
@@ -214,7 +214,7 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/projectile-segments/?map=0"
     },
     {
@@ -254,11 +254,11 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/material-effects/?map=0"
     },
     {
-     "title": "Demo · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/material-effects/README.md"
     }
    ],
@@ -314,11 +314,11 @@
    ],
    "links": [
     {
-     "title": "Play · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/client-command-controls/?map=0"
     },
     {
-     "title": "Controls · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/client-command-controls/README.md"
     },
     {
@@ -344,7 +344,7 @@
    "limits": "The planetary travel and checkpoint scenario runs in a separate native example.",
    "links": [
     {
-     "title": "Building Graph / Caverns · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/world/building-caverns-web/README.md"
     }
    ],
@@ -441,6 +441,29 @@
    "author": "TerraWeave"
   },
   {
+   "id": "2026-11-25-studio-world-scene",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "fafcd1d9a",
+   "author": null,
+   "links": [],
+   "title": "World-space scene properties",
+   "summary": "Inspector shows the scene name, collider count and spawn count.",
+   "body": [
+    "Open Scene in Inspector, edit its name and choose Apply. Saving the project writes the name to the scene file."
+   ],
+   "verified": "Verified with Arena on macOS. All original map fields matched after Undo, Redo and Save.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-world-scene/world-scene-inspector.png",
+     "caption": "Harbor terminal in a detached Inspector"
+    }
+   ]
+  },
+  {
    "id": "2026-11-25-studio-workspace-redesign",
    "date": "2026-11-25",
    "system": "studio",
@@ -467,6 +490,383 @@
    ],
    "links": [],
    "author": null
+  },
+  {
+   "id": "2026-11-25-studio-type-blocks",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "a7c3bafe0",
+   "author": null,
+   "links": [],
+   "title": "Property blocks for object types",
+   "summary": "Project offers 36 property templates for object types.",
+   "body": [
+    "In Project → Types, select a type and choose Add property block. Review the defaults under All properties and use Save item."
+   ],
+   "verified": "On macOS the energy, tags and capture defaults persisted after restart. All pre-existing properties matched the source.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-type-blocks/type-properties.png",
+     "caption": "Scout type properties"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-shader-outputs",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "d9c9ad8f4",
+   "author": null,
+   "links": [],
+   "title": "Output channels on shader nodes",
+   "summary": "Shader Graph shows which nodes drive color, emission and other shader outputs.",
+   "body": [
+    "Choose a source under Graph outputs to update the node label in the draft. The canvas and action bar retain space in narrow windows."
+   ],
+   "verified": "macOS verification covered assigning and removing emission, undo, saving and reopening the graph.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-shader-outputs/shader-outputs.png",
+     "caption": "Node driving color and emission"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-shader-draft-apply",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "195725b25",
+   "author": null,
+   "links": [],
+   "title": "Apply a shader draft",
+   "summary": "Save & apply saves and assigns a shader graph.",
+   "body": [
+    "Open Apply to target in Shader Graph and choose a destination."
+   ],
+   "verified": "Verified the material file, game post-effect and second particle emitter on macOS.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-shader-draft-apply/shader-apply.png",
+     "caption": "The sea_glass material"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-scene-handles",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "5eeca95af",
+   "author": null,
+   "links": [],
+   "title": "Collider scale and rotation in Scene",
+   "summary": "The center handle scales the entire collider in the top view.",
+   "body": [
+    "Select a collider and drag the center of the scale tool. Switch to Rotate and drag the ring to change yaw."
+   ],
+   "verified": "Verified both drags, Undo, Redo and the complete saved map in macOS Studio.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-scene-handles/oriented-scene.png",
+     "caption": "Collider after editing in Scene"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-scene-area",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "d466fcd4d",
+   "author": null,
+   "links": [],
+   "title": "Draw map areas in Scene",
+   "summary": "Drag between two flat-map cells to define an area.",
+   "body": [
+    "Choose Draw in Scene in the Areas Inspector. Release the pointer to review the rectangle, then apply the draft."
+   ],
+   "verified": "Both native-surface and HTML composite macOS verification covered cancelling, creating an area, Undo, Redo and the coordinates in the saved map.",
+   "limits": "The tool supports flat grid maps. Windows verification is pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-scene-area/scene-area-drag.png",
+     "caption": "Area outline while dragging"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-scene-area/scene-area-inspector.png",
+     "caption": "Saved area in Inspector"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-region-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "2175433a6",
+   "author": null,
+   "links": [],
+   "title": "Territories in Inspector",
+   "summary": "The Regions tab shows the display name, cell count and coverage of a territory.",
+   "body": [
+    "Choose a letter to see its extent on a flat map. Larger maps group cells in the coverage preview.",
+    "Save name updates the document. Paint in Scene arms the brush for the selected letter."
+   ],
+   "verified": "A detached macOS Inspector renamed a 164-cell region. Checks covered Undo, Redo, the saved map and brush selection.",
+   "limits": "Scene boundary rendering and Windows verification remain open.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-region-inspector/region-inspector.png",
+     "caption": "Harbor ridge territory in a detached Inspector"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-region-brush",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "63d0cda21",
+   "author": null,
+   "links": [],
+   "title": "Map region brush",
+   "summary": "The Tiles window controls the region brush for flat maps.",
+   "body": [
+    "In Regions choose a letter or the eraser, set a radius in cells, enable Brush and drag in Scene. Each stroke is one Undo step."
+   ],
+   "verified": "macOS checks covered letter and eraser selection in a detached window, native stroke Undo and persistence of an empty named region. An AppKit drag followed by Undo, Redo and Save left 96 region K cells in the map file.",
+   "limits": "Region naming and cell counts in Inspector remain open.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-region-brush/map-regions.png",
+     "caption": "Region K with a four-cell radius"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-region-borders",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "a73088f94",
+   "author": null,
+   "links": [],
+   "title": "Region boundaries in Scene",
+   "summary": "Territory outlines follow the authored map cells.",
+   "body": [
+    "Open Regions in Inspector and enable Show borders in Scene. Painting a region also displays the outlines."
+   ],
+   "verified": "A macOS brush drag expanded a region from 91 to 175 cells. Undo restored the original outline.",
+   "limits": "Dense zoomed-out views skip some grid lines. Windows verification is pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-region-borders/scene-regions.png",
+     "caption": "Outlines of adjacent territories"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-player-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "0b8159e06",
+   "author": null,
+   "links": [],
+   "title": "Map players and starting conditions",
+   "summary": "The Players tab in Inspector edits map participants and their starting conditions.",
+   "body": [
+    "Select a player or add a slot. Edit the name, team, faction and starting stock. Select Scripted waves for a scripted side.",
+    "Start position takes map coordinates, plus body and face for planetary maps. Apply player changes commits the form in one Undo step. Removal asks for confirmation before transferring that player’s objects to neutral ownership.",
+    "Pick start in Scene fills in the coordinates for the current player. Review the position and choose Apply player changes."
+   ],
+   "verified": "A detached macOS window added and saved a third player. The saved map was independently parsed. Planetary acceptance covered the first Scene click from a detached Inspector, dragging, Undo and persistence.",
+   "limits": "Windows acceptance is pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-player-inspector/player-inspector.png",
+     "caption": "Harbor scouts player in the macOS Inspector"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-player-inspector/player-start.png",
+     "caption": "Picked start on a grid map"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-player-inspector/player-planet.png",
+     "caption": "Starting position on a planet face"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-player-inspector/player-start-scene.png",
+     "caption": "The planet surface before picking the start"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-oriented-collider",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "a2f22d3a4",
+   "author": null,
+   "links": [],
+   "title": "Oriented colliders in Inspector",
+   "summary": "Inspector exposes collider yaw and full dimensions on all three axes.",
+   "body": [
+    "Set the center in Transform and adjust yaw in degrees and full dimensions in Oriented Box Collider. Undo reverts an edit and Save writes the map."
+   ],
+   "verified": "On macOS, verified a 135-degree yaw, Z size of 8, X center of 7, Undo, Redo and the complete saved map.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-oriented-collider/oriented-collider.png",
+     "caption": "Oriented collider Inspector"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-multiplayer",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "4350c3d70",
+   "author": null,
+   "links": [],
+   "title": "Network play from HTML Studio",
+   "summary": "Multiplayer starts a listen server and launches independent game clients.",
+   "body": [
+    "Save the map and open Actors & Cameras → Multiplayer. Start the host, enter a server address and select Connect."
+   ],
+   "verified": "Two macOS clients opened the second project map and joined over loopback WebSocket and UDP. The UDP client HUD advanced from server tick 849 to 1041.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-panel.png",
+     "caption": "Multiplayer controls"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-multiplayer/multiplayer-client.png",
+     "caption": "Joined game window"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-movement-body",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "27f8640b5",
+   "author": null,
+   "links": [],
+   "title": "Movement body radius and mass",
+   "summary": "Rules shows the effective body radius and mass for mobile types.",
+   "body": [
+    "Edit radius in Rules → Unit types → Movement. Enter a mass override or reset it to resume automatic calculation."
+   ],
+   "verified": "The macOS host verified recalculation, retention of an explicit override on radius edits and automatic mass 6.25 after restart.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-movement-body/movement-rules.png",
+     "caption": "Mass from body radius"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-map-shader",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "bd3688af9",
+   "author": null,
+   "links": [],
+   "title": "Map-specific shader application",
+   "summary": "Shader Graph names the destination map and indicates when the override needs a map save.",
+   "body": [
+    "Choose the map in Apply to target. Its post-effect override participates in map history."
+   ],
+   "verified": "macOS verified undo, redo, save and reopen on the second map. The first map and game.json stayed byte-identical. The native game rendered the test color on the second map only.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-map-shader/map-shader.png",
+     "caption": "Post-effect override for harbor.json"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-map-shader/map-shader-runtime-before.png",
+     "caption": "First map in game"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-map-shader/map-shader-runtime-after.png",
+     "caption": "Second map with the test color"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-map-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "92556c5bb",
+   "author": null,
+   "links": [],
+   "title": "Map properties and validation in Inspector",
+   "summary": "The Map page brings grid dimensions, movement rules and victory conditions together. Undo reverts an applied form in one step.",
+   "body": [
+    "Open Map in Inspector to rename the map, adjust its grid dimensions or restrict movement to roads. Expand Victory override for map-specific win conditions.",
+    "After Apply, choose Validate map to inspect errors and warnings. Issues associated with an object offer a shortcut to inspect it. Save writes the current document to disk."
+   ],
+   "verified": "A detached macOS Inspector resized a training map, changed its victory conditions, saved the map and validated it.",
+   "limits": "The page works with map documents. Resizing is available for flat grids. Windows verification is pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-map-inspector/map-inspector.png",
+     "caption": "The Inspector shows training map properties and validation results"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-map-areas",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "1eb0c70fc",
+   "author": null,
+   "links": [],
+   "title": "Map areas in Inspector",
+   "summary": "Draw areas on the grid or enter their bounds in the Areas tab.",
+   "body": [
+    "Renaming an area updates map trigger references and wave routes in one undoable edit."
+   ],
+   "verified": "A detached macOS Inspector exercised create, remove, rename, Undo, Redo and save. Browser checks covered pointer drawing at 240 and 640 pixels.",
+   "limits": "Lua references require manual review. Windows acceptance is pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-map-areas/map-areas.png",
+     "caption": "Area bounds in a detached macOS Inspector"
+    }
+   ]
   },
   {
    "id": "2026-11-25-studio-local-play-inspection",
@@ -524,6 +924,44 @@
    ]
   },
   {
+   "id": "2026-11-25-studio-hierarchy-groups",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "35e08058e",
+   "author": null,
+   "links": [],
+   "title": "Finding objects by component in Hierarchy",
+   "summary": "Use Group by to browse objects by category, origin or component, both on the map and during play.",
+   "body": [
+    "Expand a component to see every object that owns it. Selecting an object highlights it in each expanded group it belongs to.",
+    "Projects can add groupings such as a script field followed by owner. In Live, open a nested group, select an entity and use the path to return to its ancestors.",
+    "In Nesting, expand a parent entity to see its children. Companions with identical names keep separate identities, and the selected companion stays highlighted when the branch reopens.",
+    "Before Play, Hierarchy also shows entities created by preview scripts. Expand a Preview row to inspect its type, owner, health and components. Refresh beside Group by reads the project scripts again."
+   ],
+   "verified": "In a detached macOS Studio window, the selected oak appears under both position and owner. The live simulation capture shows the Scouts group.",
+   "limits": "Windows verification is pending. The captures show the native macOS editor.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-builtins.png",
+     "caption": "The same oak selected in two component groups"
+    },
+    {
+     "src": "media/docs/evidence/studio-project-catalog/hierarchy-live-groups.png",
+     "caption": "Live entities in the Scouts group"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-nesting.png",
+     "caption": "The second summoned companion selected under Scout"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-edit-preview.png",
+     "caption": "Two preview entities beneath the scout before Play"
+    }
+   ]
+  },
+  {
    "id": "2026-11-25-studio-graph-visuals",
    "date": "2026-11-25",
    "system": "studio",
@@ -550,6 +988,121 @@
    "author": null,
    "verified": "Native Studio captures on Mac show sg_brass and runtime_math_connected_v2.",
    "limits": "Verified on macOS and in Chrome. Native Windows verification is pending."
+  },
+  {
+   "id": "2026-11-25-studio-box-inspector",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "0d83a2888",
+   "author": null,
+   "links": [],
+   "title": "Collider bounds in Inspector",
+   "summary": "Inspector exposes minimum and maximum coordinates for axis-aligned world colliders.",
+   "body": [
+    "Select a collider in Hierarchy and edit the Box Collider fields. The minimum must be below the maximum on each axis. Undo restores the previous bounds."
+   ],
+   "verified": "Edited an Arena collider in a detached Inspector. Verified Undo, Redo, Save and stale write rejection.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-box-inspector/box-inspector.png",
+     "caption": "Arena box collider"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-simulation",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "d1a22e1d5",
+   "author": null,
+   "links": [],
+   "title": "Simulation settings in Actors & Cameras",
+   "summary": "Three sliders set the tick rate, network snapshot rate and player limit.",
+   "body": [
+    "Open Simulation. The tick rate sets the upper bound for network snapshots. Save settings writes your changes to the project rules."
+   ],
+   "verified": "Saved 40 Hz, 40 Hz and 24 players on macOS. All other rules and the map were preserved.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-actor-simulation/actor-simulation.png",
+     "caption": "Arena simulation settings"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-rules",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "b41a30e57",
+   "author": null,
+   "links": [],
+   "title": "Actor settings from Rules",
+   "summary": "Actor projects open their complete rules document and link to Actors & Cameras.",
+   "body": [
+    "Open Rules → Open Actors & Cameras → Movement to edit actor speed."
+   ],
+   "verified": "On macOS, detached Rules loaded an actor project without types and routed to the main Movement controls. The rules file remained byte-identical.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-actor-rules/actor-rules.png",
+     "caption": "Actor project rules"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-movement",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "b39103483",
+   "author": null,
+   "links": [],
+   "title": "Actor movement speeds",
+   "summary": "Actors & Cameras now provides walk and sprint speed controls.",
+   "body": [
+    "Open Movement to edit speeds in metres per second. Raising walk speed above sprint speed moves both sliders together."
+   ],
+   "verified": "Saved 12.25 and 16.5 m/s on macOS and checked the remaining rules fields and map file.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-actor-movement/actor-movement.png",
+     "caption": "Movement settings"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-studio-actor-loadout",
+   "date": "2026-11-25",
+   "system": "studio",
+   "status": "in-progress",
+   "branch": "studio-only-editor",
+   "commit": "ee59734cd",
+   "author": null,
+   "links": [],
+   "title": "Loadout in Actors & Cameras",
+   "summary": "Loadout displays the game settings for each equipment slot.",
+   "body": [
+    "Adjust damage and magazine capacity, then choose Save loadout. All edited slots are saved together."
+   ],
+   "verified": "Verified the single and two-slot formats on macOS. Compared the complete saved rules and map file.",
+   "limits": "Windows visual verification remains pending.",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-actor-loadout/loadout-multi.png",
+     "caption": "Two-slot loadout"
+    }
+   ]
   },
   {
    "id": "2026-11-25-spectrafx-smoke-flow",
@@ -670,7 +1223,7 @@
      "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/models.md"
     },
     {
-     "title": "WebGL2 · Egyptian Trouble",
+     "title": "Egyptian Trouble in WebGL2",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/quake3-bsp/README.md"
     }
    ]
@@ -881,11 +1434,11 @@
    "limits": "The controls cover pointer selection and automatic fire. The training range uses a flat map.",
    "links": [
     {
-     "title": "Training range · Web",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"
     },
     {
-     "title": "Training range · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/selection-targeting/README.md"
     }
    ],
@@ -922,11 +1475,11 @@
    "limits": "The example uses a flat map and a geometric tower model. Planet maps and sprite appearances have not received separate visual runs.",
    "links": [
     {
-     "title": "Watchtower orders · WebGL 2",
+     "title": "Play Web",
      "href": "https://chromealex.github.io/AIVERSE/demos/order-upgrade/index.html?map=0&lang=en"
     },
     {
-     "title": "Watchtower orders · source",
+     "title": "Source",
      "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/order-upgrade/README.md"
     }
    ],
@@ -1100,6 +1653,101 @@
     }
    ],
    "author": "SpectraFX"
+  },
+  {
+   "id": "2026-11-23-motionweave-ada-natural-walk",
+   "date": "2026-11-23",
+   "system": "motionweave",
+   "title": "Ada walk: weight shift and softer step",
+   "summary": "Ada’s walk now shifts weight sideways, moves the swing foot in a softer arc, and adds delayed arm swing with slight elbow bend.",
+   "body": [
+    "Pelvis movement is measured against leg length, so its amplitude survives changes in imported model scale. During a step the pelvis shifts toward the supporting leg; shoulders and arms follow with a slight delay, while the torso turns and tilts subtly.",
+    "The swing foot follows a lower, softer arc. Two-bone IK continues to hold the stance ankle, and Ada’s separate model parts follow the main skeleton."
+   ],
+   "status": "in-progress",
+   "verified": "Verified on Ada in the native macOS Metal preview: 48 root-motion walking frames were captured.",
+   "limits": "The motion remains procedural; precise shoe-sole roll, uneven terrain and automatic tuning for different footwear are not yet implemented.",
+   "branch": "feature/motionweave-walk-generator-current",
+   "commit": "d852d1c9a",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-23-motionweave-ada-natural-walk/01.png",
+     "caption": "Ada in stance: the pelvis shifts toward the supporting leg while the arms follow the step."
+    }
+   ],
+   "links": [
+    {
+     "title": "MotionWeave handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+   ],
+   "author": "motionweave"
+  },
+  {
+   "id": "2026-11-23-motionweave-ada-cmu-walk",
+   "date": "2026-11-23",
+   "system": "motionweave",
+   "title": "Motion capture walk on Ada",
+   "summary": "Ada’s preview now uses a CMU walking recording: leg, pelvis and torso motion is retargeted to her skeleton with root travel.",
+   "body": [
+    "MotionWeave reads BVH motion and maps its joints onto a character rig. Travel is scaled by leg length; pelvis height and the supporting shoe are adjusted for a flat floor. Ada’s separate model parts follow the main body pose.",
+    "The preview uses motion 02_01 from the CMU Graphics Lab database. Shoulder and elbow tracks are adapted to Ada’s A-pose to avoid awkward arm rotations between the different rigs."
+   ],
+   "status": "in-progress",
+   "verified": "Shown on Ada in the native macOS Metal preview: 48 frames of character motion and scene travel were captured.",
+   "limits": "The arms currently use adapted procedural tracks. Shoe contact is approximate, and the recording has not yet been turned into a seamless catalog loop.",
+   "branch": "feature/motionweave-walk-generator-current",
+   "commit": "6956a70ad",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-23-motionweave-ada-cmu-walk/01.png",
+     "caption": "Ada walking with leg and torso motion from CMU recording 02_01."
+    }
+   ],
+   "links": [
+    {
+     "title": "CMU Graphics Lab source and terms",
+     "href": "https://mocap.cs.cmu.edu/"
+    },
+    {
+     "title": "CMU 02_01 BVH",
+     "href": "https://github.com/una-dinosauria/cmu-mocap/blob/master/data/002/02_01.bvh"
+    },
+    {
+     "title": "MotionWeave handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+   ],
+   "author": "motionweave"
+  },
+  {
+   "id": "2026-11-23-motionweave-ada",
+   "date": "2026-11-23",
+   "system": "motionweave",
+   "title": "Ada walk: planted stance and body motion",
+   "summary": "The generated walk now holds an ankle during stance and moves the pelvis and upper torso with each step.",
+   "body": [
+    "MotionWeave builds the walk from a skeleton. During stance, an ankle target offsets character travel, and two-bone IK positions the knee. The pelvis shifts weight, the torso turns slightly, and head motion is reduced.",
+    "Ada’s separate head and groom skeletons receive the same pelvis and torso tracks. The result is visible in the VIVID Creator diagnostic preview."
+   ],
+   "status": "in-progress",
+   "verified": "Shown on Ada in the native macOS preview with Metal rendering; a two-second root-motion sequence was captured.",
+   "limits": "The current walk uses a flat plane and the bind-pose foot height; terrain adaptation and precise shoe-sole contact remain open.",
+   "branch": "feature/motionweave-walk-generator-current",
+   "commit": "2c116ac7e",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-23-motionweave-ada/01.png",
+     "caption": "Ada mid-step: front foot on the floor, torso following the pelvis."
+    }
+   ],
+   "links": [
+    {
+     "title": "MotionWeave handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/animation-walk-generator-2026-11-23.md"
+    }
+   ],
+   "author": "motionweave"
   },
   {
    "id": "2026-11-22-world-building-styles",

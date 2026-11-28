@@ -5,11 +5,11 @@
     ru: { status: { 'done': 'Готово', 'in-progress': 'В работе', 'experimental': 'Эксперимент' },
           months: ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'],
           open: 'Открыть снимок: ', verified: 'Проверено', limits: 'Ограничения', more: 'Подробнее', all: 'Все системы',
-          none: 'Записей с такими условиями нет.', failed: 'Не удалось загрузить devlog.json.', updated: 'MIT License · обновлено ' },
+          none: 'Записей с такими условиями нет.', failed: 'Не удалось загрузить devlog.json.', updated: 'MIT License, обновлено ' },
     en: { status: { 'done': 'Done', 'in-progress': 'In progress', 'experimental': 'Experimental' },
           months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
           open: 'Open frame: ', verified: 'Verified', limits: 'Limitations', more: 'Details', all: 'All systems',
-          none: 'No entries match these filters.', failed: 'Could not load devlog.json.', updated: 'MIT License · updated ' }
+          none: 'No entries match these filters.', failed: 'Could not load devlog.json.', updated: 'MIT License, updated ' }
   };
   var L = I18N[document.documentElement.lang] || I18N.en;
   var STATUS = L.status;
@@ -64,7 +64,8 @@
       el('span', { class: 'st st-' + e.status, text: STATUS[e.status] || e.status }),
       el('a', { class: 'entry-sys', href: 'devblog-' + e.system + '.html', text: systemName(e.system) }),
       el('time', { datetime: e.date, text: e.date }),
-      e.branch ? el('span', { text: e.branch + (e.commit ? ' · ' + e.commit : '') }) : null
+      e.branch ? el('span', { text: e.branch }) : null,
+      e.commit ? el('span', { text: e.commit }) : null
     ]);
     var facts = el('dl', { class: 'facts-list' }, [
       el('div', {}, [el('dt', { text: L.verified }), el('dd', { text: e.verified })]),

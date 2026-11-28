@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css?v=2aae09d86a">
+<link rel="stylesheet" href="../style.css?v=d1f2fb5002">
 </head>
 <body>
 <header class="top">
@@ -59,7 +59,7 @@
   <span class="hl-key">&quot;skyIntensity&quot;</span>: <span class="hl-num">0</span>
 }</code></pre>
 <p><code>auto</code> использует вычисления на GPU, только если это позволяют устройство и сцена; иначе вся геометрия остаётся на CPU. <code>gpu</code> явно завершится ошибкой, если GPU-путь недоступен; <code>cpu</code> принудительно включает переносимый путь. Источники не обрезаются молча. Точечные источники рецепта переводятся из хранимого рендером sRGB обратно в линейный цвет. Цвета окружения выше уже линейные и влияют только на непрямой свет; настройки прямого солнца и неба неявно не копируются.</p>
-<p>Геометрия делится на пространственные блоки размером примерно с <code>distance</code>. На GPU резидентны только блоки, до которых может дотянуться луч GI (<code>GiGpuResidencyPlanner</code>), поэтому мир больше бюджета в 8192 треугольника остаётся на GPU, пока достижимая часть в него помещается. <code>cascades</code> (1..3, только GPU) добавляет вложенные решётки вокруг того же центра: каскад k имеет шаг <code>spacing</code>·2^k и дальность <code>distance</code>·2^k. Все каскады делят один атлас GI (texture 13, U6 — девять float4). Точка берёт самый мелкий каскад, в который попадает, и плавно переходит в следующий у его края.</p>
+<p>Геометрия делится на пространственные блоки размером примерно с <code>distance</code>. На GPU резидентны только блоки, до которых может дотянуться луч GI (<code>GiGpuResidencyPlanner</code>), поэтому мир больше бюджета в 8192 треугольника остаётся на GPU, пока достижимая часть в него помещается. <code>cascades</code> (1..3, только GPU) добавляет вложенные решётки вокруг того же центра: каскад k имеет шаг <code>spacing</code> 2^k и дальность <code>distance</code> 2^k. Все каскады делят один атлас GI (texture 13, U6 — девять float4). Точка берёт самый мелкий каскад, в который попадает, и плавно переходит в следующий у его края.</p>
 <p>Бенчмарк ждёт начальной сходимости перед замеряемыми кадрами и сообщает <code>dynamicGiBackend</code>, <code>dynamicGiFallback</code>, <code>dynamicGiTriangles</code> и <code>dynamicGiConvergenceMs</code>. GI подключается заново для каждого вида камеры.</p>
 <p>Бенчмарк не допускает одновременно <code>probeGI</code>/<code>staticPointBounce</code>: эти рецепты используют те же источники. Его экранный диффузный отскок выключен, пока активен dynamicGI. Прямое освещение и постобработка остаются независимыми. Анимированные ассеты используют одну позу на рендер, непрямой GI и тени LUMA. Проверочный хост держит эту позу, пока GI не сойдётся, и не претендует на задержку переноса света для анимации в реальном времени. Тайминги отправленных кадров не включают обновления только ради сходимости (см. <code>lightingCadence</code>). Интеграция в редактор — отдельный этап.</p>
 <h2 id="проверка-и-ограничения">Проверка и ограничения<a class="anchor" href="#проверка-и-ограничения" aria-label="#">#</a></h2>
@@ -88,7 +88,7 @@
 <div><span>Сайт</span><a href="./">Главная</a><a href="roadmap.html">Роадмап</a><a href="releases.html">Релизы</a><a href="catalog.html">Каталог</a><a href="devlog.html">Ход разработки</a><a href="docs.html">Документация</a></div>
 <div><span>Сообщество</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </footer>
 <script>window.DS_L={"none": "Ничего не нашлось"};</script><script>
@@ -109,5 +109,5 @@ else if(e.key==='Enter'){var h=hs[sel>=0?sel:0];if(h){e.preventDefault();locatio
 document.addEventListener('click',function(e){if(!box.contains(e.target))res.hidden=true;});});
 document.addEventListener('keydown',function(e){if(e.key==='/'&&!/input|textarea/i.test((document.activeElement||{}).tagName||'')){e.preventDefault();boxes[0].querySelector('.ds-input').focus();}});})();
 </script>
-</body>
+<script src="../demo-player.js?v=39814628ef" defer></script></body>
 </html>

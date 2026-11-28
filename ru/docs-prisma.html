@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css?v=2aae09d86a">
+<link rel="stylesheet" href="../style.css?v=d1f2fb5002">
 </head>
 <body>
 <header class="top">
@@ -281,7 +281,7 @@ prisma.<span class="hl-fn">collectGpuRetirements</span>();          <span class=
 <p>В редакторе <code>Editor::frame</code> отслеживает, какой вид <strong>действительно отрисовал постобработку</strong> в этом GUI-кадре. Когда вкладка Scene или Game скрыта, закрыта, переключена в диагностический режим без постобработки или перестаёт рендерить, редактор <strong>однократно</strong> выводит из работы состояние PRISMA этой камеры и её цели движения Renderer3D, а затем продолжает собирать подтверждённые бэкендом завершения на GPU в последующих кадрах редактора, даже если ни один 3D-вьюпорт не рендерится. Повторное открытие вида начинает новую временную историю вместо повторного использования устаревшей экспозиции после долгого скрытия.</p>
 <p>Вид Scene использует стабильный ID <code>1</code>, а Game — <code>2</code>. Ранее редактор использовал ID Game <code>2</code>, даже когда вкладка Scene повторно использовала игровой рендерер во время игры; этап 34 передаёт явный ID <code>1</code> в этом пути, чтобы предотвратить одновременное загрязнение движения и экспозиции Scene/Game одинакового разрешения. Размещённый автономный игровой клиент использует собственный экземпляр PRISMA и ID вида <code>3</code>.</p>
 <p>Нативный <code>GameClient</code> аналогично выводит из работы вид <code>3</code> при новом матче до замены камеры и карты и продолжает проверять ожидающую работу GPU в кадрах меню/загрузки, когда 3D-рендерер не рендерит.</p>
-<p>Вкладка <strong>Statistics</strong> редактора теперь показывает новый раздел <code>PRISMA · GPU resource retirement</code> с завершённым fence GPU, активными/выведенными из работы контекстами размеров, историями видов, числом текстур с fence и без fence, незавершёнными выделениями графа и <strong>минимальным известным объёмом в MiB</strong>, удерживаемым PRISMA и Renderer3D. Это только наблюдение, оно не создаёт обратного чтения с GPU или синхронизирующего ожидания GPU.</p>
+<p>Вкладка <strong>Statistics</strong> редактора теперь показывает новый раздел <code>PRISMA, GPU resource retirement</code> с завершённым fence GPU, активными/выведенными из работы контекстами размеров, историями видов, числом текстур с fence и без fence, незавершёнными выделениями графа и <strong>минимальным известным объёмом в MiB</strong>, удерживаемым PRISMA и Renderer3D. Это только наблюдение, оно не создаёт обратного чтения с GPU или синхронизирующего ожидания GPU.</p>
 <h3 id="перезагрузка-ассетов-проекта">Перезагрузка ассетов проекта<a class="anchor" href="#перезагрузка-ассетов-проекта" aria-label="#">#</a></h3>
 <p><code>Prisma::setImageLoader</code> теперь освобождает по GPU-fence заменённые текстуры LUT и пользовательских ShaderGraph, а не уничтожает их немедленно, пока на них ещё может ссылаться другой кадр. Общие шейдерные конвейеры и графы сохраняют существующее владение; меняется только политика освобождения текстур.</p>
 <h3 id="ограничения-совместимость">Ограничения / совместимость<a class="anchor" href="#ограничения-совместимость" aria-label="#">#</a></h3>
@@ -672,7 +672,7 @@ prisma.<span class="hl-fn">clearViewManualExposure</span>(stableViewId); <span c
 <div><span>Сайт</span><a href="./">Главная</a><a href="roadmap.html">Роадмап</a><a href="releases.html">Релизы</a><a href="catalog.html">Каталог</a><a href="devlog.html">Ход разработки</a><a href="docs.html">Документация</a></div>
 <div><span>Сообщество</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
 </div>
-<small>MIT License · AIVERSE</small>
+<small>AIVERSE, MIT License</small>
 </div>
 </footer>
 <script>window.DS_L={"none": "Ничего не нашлось"};</script><script>
@@ -693,5 +693,5 @@ else if(e.key==='Enter'){var h=hs[sel>=0?sel:0];if(h){e.preventDefault();locatio
 document.addEventListener('click',function(e){if(!box.contains(e.target))res.hidden=true;});});
 document.addEventListener('keydown',function(e){if(e.key==='/'&&!/input|textarea/i.test((document.activeElement||{}).tagName||'')){e.preventDefault();boxes[0].querySelector('.ds-input').focus();}});})();
 </script>
-</body>
+<script src="../demo-player.js?v=39814628ef" defer></script></body>
 </html>
