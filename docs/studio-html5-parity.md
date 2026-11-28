@@ -2,6 +2,8 @@
 
 Linux GTK Studio saved shared 1024 x 768 settings and a fixed 960 x 540 Linux override. A separate AiverseGame launch on the saved project created a visible 960 x 540 X11 window with both minimum and maximum size set to 960 x 540. After resetting the override in Studio, a second launch restored the shared fixed 1024 x 768 size and limits. A Linux Release export of a minimal scene project also launched from its packaged binary and content.rpak in a clean container without the original project or staging directory. X11 confirmed 960 x 540 with matching fixed limits. On macOS the detached Build panel saved shared fixed 960 x 540 settings in game.json. A separate player launch measured 960 x 568 including the title bar. A system resize request to 1100 x 760 kept those bounds. The same request succeeded on a copied project configured as windowed and resizable. [macOS player capture](handoff/studio-html5/captures/mac-player-fixed-window.png). Windows runtime verification remains open.
 
+On macOS the Build panel saved a platform override of 1024 x 768. The launched player measured 1024 x 796 including its title bar. Selecting Use desktop defaults removed the macos entry from game.json and restored the shared fixed size of 960 x 540. A fresh player launch measured 960 x 568. [Build panel after reset](handoff/studio-html5/captures/mac-build-restore-desktop.png) · [Player after reset](handoff/studio-html5/captures/mac-player-restored-window.png).
+
 ## SpectraFX legacy layout
 
 Exercise full-graph source edits, invalid input, undo and draft persistence.
