@@ -10,9 +10,9 @@ import type { WindDebugView, StudioGraphDocumentScope } from '../types';
 import './SceneToolbar.css';
 
 export type SceneTool = 'view' | 'move' | 'rotate' | 'scale';
-export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; modelDebugMode:number; strataColor:number; strataBounds:boolean; strataWire:boolean; strataFill:boolean; strataRoutes:boolean; natureRadius:number; natureSpacing:number; mapRoutes:boolean; playerStarts:boolean; resourceFields:boolean; rampTiles:boolean; regionBorders:boolean; triggerAreas:boolean; erosionZones:boolean; terraTreeWind:boolean; terraSlope:boolean; terraSlopeAtTarget:boolean; nereidFlow:boolean; nereidAllWater:boolean; physisLayer:number; physisHeatmap:boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
+export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; modelDebugMode:number; strataColor:number; strataBounds:boolean; strataWire:boolean; strataFill:boolean; strataRoutes:boolean; natureRadius:number; natureSpacing:number; mapRoutes:boolean; playerStarts:boolean; resourceFields:boolean; rampTiles:boolean; regionBorders:boolean; triggerAreas:boolean; erosionZones:boolean; terraTreeWind:boolean; terraSlope:boolean; terraSlopeAtTarget:boolean; nereidFlow:boolean; nereidAllWater:boolean; physisRadius:number; physisStride:number; physisLayer:number; physisHeatmap:boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
 const KEY = 'aiverse.studio.sceneTools';
-const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, modelDebugMode:0, strataColor:0, strataBounds:false, strataWire:false, strataFill:false, strataRoutes:false, natureRadius:48, natureSpacing:6, mapRoutes:true, playerStarts:true, resourceFields:true, rampTiles:false, regionBorders:false, triggerAreas:true, erosionZones:true, terraTreeWind:true, terraSlope:true, terraSlopeAtTarget:false, nereidFlow:true, nereidAllWater:false, physisLayer:0, physisHeatmap:false, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
+const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, modelDebugMode:0, strataColor:0, strataBounds:false, strataWire:false, strataFill:false, strataRoutes:false, natureRadius:48, natureSpacing:6, mapRoutes:true, playerStarts:true, resourceFields:true, rampTiles:false, regionBorders:false, triggerAreas:true, erosionZones:true, terraTreeWind:true, terraSlope:true, terraSlopeAtTarget:false, nereidFlow:true, nereidAllWater:false, physisRadius:9, physisStride:1, physisLayer:0, physisHeatmap:false, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
 const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Hand }> = [
   { id: 'view', key: 'Q', label: 'Hand — drag to pan', icon: Hand },
   { id: 'move', key: 'W', label: 'Move', icon: Move3d },
@@ -22,6 +22,9 @@ const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Han
 export const SCENE_TOOL_KEYS: Record<string, SceneTool> = { q: 'view', w: 'move', e: 'rotate', r: 'scale' };
 const MODEL_VIEWS = ['Shaded','Draw calls','Normals','UV','Depth','Albedo','Roughness','Metallic','Emissive','World position'];
 const isModelView = (value:unknown):value is number => typeof value==='number' && Number.isInteger(value) && value>=0 && value<MODEL_VIEWS.length;
+function readSampling(value:unknown,min:number,max:number,fallback:number) {
+  return typeof value==='number' && Number.isInteger(value) && value>=min && value<=max ? value : fallback;
+}
 const MOVE_STEPS = [0.25, 0.5, 1, 2, 5];
 const ROTATE_STEPS = [5, 15, 45, 90];
 
@@ -30,7 +33,7 @@ export function readSceneTools(): SceneToolState {
     const v = JSON.parse(window.localStorage.getItem(KEY) ?? '{}') as Partial<SceneToolState>;
     const tool = TOOLS.some(t => t.id === v.tool) ? v.tool as SceneTool : DEFAULTS.tool;
     const num = (x: unknown, d: number) => typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : d;
-    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, modelDebugMode:isModelView(v.modelDebugMode)?v.modelDebugMode:0, strataColor:[0,1,2,3].includes(v.strataColor??-1)?v.strataColor!:0, strataBounds:v.strataBounds===true, strataWire:v.strataWire===true, strataFill:v.strataFill===true, strataRoutes:v.strataRoutes===true, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), mapRoutes:v.mapRoutes!==false, playerStarts:v.playerStarts!==false, resourceFields:v.resourceFields!==false, rampTiles:v.rampTiles===true, regionBorders:v.regionBorders===true, triggerAreas:v.triggerAreas!==false, erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, physisLayer:isPhysisLayer(v.physisLayer)?v.physisLayer:0, physisHeatmap:v.physisHeatmap===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
+    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, modelDebugMode:isModelView(v.modelDebugMode)?v.modelDebugMode:0, strataColor:[0,1,2,3].includes(v.strataColor??-1)?v.strataColor!:0, strataBounds:v.strataBounds===true, strataWire:v.strataWire===true, strataFill:v.strataFill===true, strataRoutes:v.strataRoutes===true, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), mapRoutes:v.mapRoutes!==false, playerStarts:v.playerStarts!==false, resourceFields:v.resourceFields!==false, rampTiles:v.rampTiles===true, regionBorders:v.regionBorders===true, triggerAreas:v.triggerAreas!==false, erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, physisRadius:readSampling(v.physisRadius,6,24,9), physisStride:readSampling(v.physisStride,1,4,1), physisLayer:isPhysisLayer(v.physisLayer)?v.physisLayer:0, physisHeatmap:v.physisHeatmap===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
       snapMove: num(v.snapMove, 1), snapRotate: num(v.snapRotate, 15), snapScale: num(v.snapScale, 0.1) };
   } catch { return DEFAULTS; }
 }
@@ -171,6 +174,10 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
         }
         const mode=(payload as Record<string,unknown>).modelDebugMode;
         if(isModelView(mode))patch.modelDebugMode=mode;
+        for(const [key,min,max] of [['physisRadius',6,24],['physisStride',1,4]] as const){
+          const value=readSampling((payload as Record<string,unknown>)[key],min,max,0);
+          if(value)patch[key]=value;
+        }
         const layer=(payload as Record<string,unknown>).physisLayer;
         if(isPhysisLayer(layer))patch.physisLayer=layer;
         const color=(payload as Record<string,unknown>).strataColor;
@@ -239,10 +246,14 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
          ['PHYSIS · play-test',[['physisHeatmap','Field heatmap'],['natureWind','Wind field'],['natureFire','Fire spread']]],
          ['TerraWeave',[['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones'],['terraSlope','Slope at selected tile'],['terraSlopeAtTarget','Slope at camera target']]],
        ] as const).map(([name,items])=><fieldset key={name}><legend>{name}</legend>{items.map(([key,label])=>
-         <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}{name==='PHYSIS · play-test' && state.physisHeatmap && <label>Field
+         <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}{name==='PHYSIS · play-test' && state.physisHeatmap && <><label>Field
            <StudioSelect value={state.physisLayer} onChange={e=>set({physisLayer:Number(e.currentTarget.value)})}>
              {physisLayers.map((label,value)=><option key={label} value={value}>{label}</option>)}
-           </StudioSelect></label>}{name==='STRATA'&&<label>Color by
+           </StudioSelect></label>
+           {([['physisRadius','Sampling radius',6,24],['physisStride','Sample stride',1,4]] as const).map(([key,label,min,max])=>
+             <label key={key}>{label}<output>{state[key]} {state[key]===1?'cell':'cells'}</output>
+               <input aria-label={label} type="range" min={min} max={max} value={state[key]} onChange={e=>set({[key]:e.currentTarget.valueAsNumber})}/>
+             </label>)}</>}{name==='STRATA'&&<label>Color by
            <StudioSelect value={state.strataColor} onChange={e=>set({strataColor:Number(e.currentTarget.value)})}>
              {['Cluster','LOD depth','Geometric error','Material'].map((label,value)=><option key={label} value={value}>{label}</option>)}
            </StudioSelect></label>}{name==='TerraWeave' && state.erosionZones && documentScope && <ErosionZoneHighlight key={JSON.stringify([documentScope.projectPath,documentScope.mapPath,documentScope.epoch,documentScope.revision])} scope={documentScope}/>}</fieldset>)}

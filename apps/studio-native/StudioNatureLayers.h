@@ -16,6 +16,7 @@ struct StudioNatureLayers {
     unsigned char modelDebugMode=0;
     int strataColor=0;
     int physisLayer=0;
+    int physisRadius=9,physisStride=1;
     float radius=48,spacing=6;
     bool operator==(const StudioNatureLayers&) const = default;
 
@@ -57,6 +58,16 @@ struct StudioNatureLayers {
                 throw std::runtime_error("Invalid Scene model visualization");
             next.modelDebugMode=static_cast<unsigned char>(value);
         }
+        const auto cellCount=[&](const char* key,int current,int min,int max){
+            if(!input.has(key))return current;
+            const auto& field=input[key];
+            const double value=field.toDouble(-1);
+            if(!field.isNumber() || !(value>=min && value<=max && std::floor(value)==value))
+                throw std::runtime_error(std::string("Invalid PHYSIS sampling parameter: ")+key);
+            return int(value);
+        };
+        next.physisRadius=cellCount("physisRadius",physisRadius,6,24);
+        next.physisStride=cellCount("physisStride",physisStride,1,4);
         if(input.has("physisLayer")){
             const auto& field=input["physisLayer"];
             const double layer=field.toDouble(-1);
@@ -84,6 +95,8 @@ struct StudioNatureLayers {
         Json out=Json::object();
         for(const auto& flag:flags)out.set(agent?flag.agent:flag.toolbar,Json::fromBool(this->*flag.member));
         out.set("modelDebugMode",Json::number(int64_t(modelDebugMode)));
+        out.set("physisRadius",Json::number(int64_t(physisRadius)));
+        out.set("physisStride",Json::number(int64_t(physisStride)));
         out.set("physisLayer",Json::number(int64_t(physisLayer)));
         out.set("strataColor",Json::number(int64_t(strataColor)));
         out.set(agent?"radius":"natureRadius",Json::number(double(radius),6));
