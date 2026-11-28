@@ -4,6 +4,16 @@ Linux GTK Studio saved shared 1024 x 768 settings and a fixed 960 x 540 Linux ov
 
 On macOS the Build panel saved a platform override of 1024 x 768. The launched player measured 1024 x 796 including its title bar. Selecting Use desktop defaults removed the macos entry from game.json and restored the shared fixed size of 960 x 540. A fresh player launch measured 960 x 568. [Build panel after reset](handoff/studio-html5/captures/mac-build-restore-desktop.png) · [Player after reset](handoff/studio-html5/captures/mac-player-restored-window.png).
 
+## Detached Shader Graph previews on macOS
+
+With Scene closed, the integrated HTML5 Studio rendered red and green constant graphs in the same detached window. In the 408 × 108 interior sample all 44,064 post-processing pixels changed channel. For particles, 1,326 pixels changed from red to green at the same coordinates. Material captures show the illuminated mesh in each color.
+
+| Shader domain | Red graph | Green graph |
+|---|---|---|
+| Material | [Red](handoff/studio-html5/captures/mac-shader-proof-red.png) | [Green](handoff/studio-html5/captures/mac-shader-proof-green.png) |
+| Post-processing | [Red](handoff/studio-html5/captures/mac-shader-postfx-red.png) | [Green](handoff/studio-html5/captures/mac-shader-postfx-green.png) |
+| Particles | [Red](handoff/studio-html5/captures/mac-shader-particle-red.png) | [Green](handoff/studio-html5/captures/mac-shader-particle-green.png) |
+
 ## SpectraFX legacy layout
 
 Exercise full-graph source edits, invalid input, undo and draft persistence.
