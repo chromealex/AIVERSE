@@ -46,3 +46,23 @@ The next scheduled map frame draws into a separate color and depth target.
 Camera arguments apply to the export projection. The interactive orbit still
 belongs to the Scene panel. A changed document, closed panel or expired
 capture returns an error. A later ordinary frame resumes the drawable.
+
+## Capture live PHYSIS fields in Scene
+
+Open Scene and start a local play-test of the same flat map with PHYSIS enabled.
+Pause the simulation to compare captures at the same tick. In Scene overlays,
+enable **Field heatmap** and choose the field, or enable **Field outlines** to
+see wind zones, active storms and gravity fields. The PHYSIS preview window has
+its own display settings.
+
+For linked Studio sessions, call `view_gizmos` with an empty object and keep
+the returned `layers` settings before changing the view. For example, these
+arguments show wind speed with a radius of nine cells and one sample per cell.
+
+```json
+{"physisHeatmap":true,"physisLayer":8,"physisRadius":9,"physisStride":1,"physisOutlines":true}
+```
+
+Call `view_screenshot` with `{"window":"scene","clean":false}` to capture the
+overlays. Restore the saved settings with `view_gizmos` after the comparison.
+`physisRadius` accepts 6 to 24 cells and `physisStride` accepts 1 to 4 cells.
