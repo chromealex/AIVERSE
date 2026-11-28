@@ -53,7 +53,7 @@ function DebugLayersMenu({children}:{children:ReactNode}) {
         const matchesQuery=(text:string)=>terms.every(term=>text.toLowerCase().includes(term));
         let visible=matchesQuery(heading);
         for(const row of group.querySelectorAll('label')){
-          const show=matchesQuery(heading+' '+(row.textContent??''));
+          const show=matchesQuery([heading,row.textContent,row.dataset.debugKeywords].join(' '));
           row.toggleAttribute('hidden',!show);
           visible ||= show;
         }
@@ -246,7 +246,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
          ['PHYSIS · play-test',[['physisHeatmap','Field heatmap'],['physisOutlines','Field outlines'],['natureWind','Wind field'],['natureFire','Fire spread']]],
          ['TerraWeave',[['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones'],['terraSlope','Slope at selected tile'],['terraSlopeAtTarget','Slope at camera target']]],
        ] as const).map(([name,items])=><fieldset key={name}><legend>{name}</legend>{items.map(([key,label])=>
-         <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}{name==='PHYSIS · play-test' && state.physisHeatmap && <><label>Field
+         <label key={key} data-debug-keywords={key==='physisHeatmap' ? physisLayers.join(' ')+' Sampling radius Sample stride' : undefined}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}{name==='PHYSIS · play-test' && state.physisHeatmap && <><label>Field
            <StudioSelect value={state.physisLayer} onChange={e=>set({physisLayer:Number(e.currentTarget.value)})}>
              {physisLayers.map((label,value)=><option key={label} value={value}>{label}</option>)}
            </StudioSelect></label>
