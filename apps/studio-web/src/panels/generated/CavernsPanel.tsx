@@ -34,6 +34,7 @@ const int = (s:string) => s.trim()!=='' && Number.isSafeInteger(Number(s));
 export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot)=>void }) {
   const project = snapshot?.project.path ?? '';
   const [doc,setDoc] = useState<Document|null>(null);
+  const [deleteTarget,setDeleteTarget] = useState<Document|null>(null);
   const [map,setMap] = useState('');
   const [error,setError] = useState('');
   const [status,setStatus] = useState('');
@@ -171,7 +172,16 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
       {project && !doc && <StudioButton disabled={busy} onClick={()=>void refresh()}>Load cave document</StudioButton>}
       {doc?.planetary && <StudioSection title="Planetary regions">
         <StudioField label="Active region" htmlFor="cave-region"><StudioSelect id="cave-region" value={doc.activeRegionId} disabled={!regionEditable||armed} onChange={e=>void edit({mode:'planet_select_region',regionId:e.target.value})}><option value="" disabled>Choose chart</option>{doc.planetRegions.map(r=><option key={r.id} value={r.id}>#{r.id} · {r.anchor.body} · face {r.anchor.face}</option>)}</StudioSelect></StudioField>
-        {doc.activeRegionId && <StudioButton variant="danger" disabled={!editable||armed} onClick={()=>{if(window.confirm('Delete the selected region and all its cave edits? You can undo this action.'))void edit({mode:'planet_delete_region',regionId:doc.activeRegionId});}}>Delete selected region</StudioButton>}
+        {doc.activeRegionId && (deleteTarget === doc ? <div className="au-stack">
+          <StudioAlert tone="warning">Delete region #{doc.activeRegionId} and all its cave edits? You can undo this action.</StudioAlert>
+          <div className="au-row">
+            <StudioButton onClick={()=>setDeleteTarget(null)}>Cancel</StudioButton>
+            <StudioButton variant="danger" disabled={!editable||armed} onClick={()=>{
+              setDeleteTarget(null);
+              void edit({mode:'planet_delete_region',regionId:doc.activeRegionId});
+            }}>Delete region #{doc.activeRegionId}</StudioButton>
+          </div>
+        </div> : <StudioButton variant="danger" disabled={!editable||armed} onClick={()=>setDeleteTarget(doc)}>Delete selected region</StudioButton>)}
         <div>{doc.planetRegions.length} / 32 regions · one active native preview</div>
         {doc.planetAnchor ? <StudioAlert title={doc.planetAnchor.body+' · face '+doc.planetAnchor.face}>Local tangent chart ±{doc.planetAnchor.halfExtentCm} cm. Coordinates are relative to the reference radius, not the orbit centre. Anchor immutable.</StudioAlert> : null}
         <>
