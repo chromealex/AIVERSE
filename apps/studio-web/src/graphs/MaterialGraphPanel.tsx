@@ -79,7 +79,7 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
   <div className="material-dependency-canvas">
    <GraphCanvas view={view} selected={selected} label="Material dependency graph" enhancedNavigation readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
-  {typeof reference==='string' && reference && <StudioButton size="sm" onClick={()=>void revealTexture(reference)}>Show texture in Assets</StudioButton>}
+  {typeof reference==='string' && reference && <div className="material-texture-reference"><code>{reference}</code><StudioButton size="sm" onClick={()=>void revealTexture(reference)}>Show texture in Assets</StudioButton></div>}
   {revealError&&<StudioAlert tone="danger">{revealError}</StudioAlert>}
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>

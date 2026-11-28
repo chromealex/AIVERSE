@@ -49,6 +49,8 @@
 .materials-detail--graph .materials-graph-host{flex:1;overflow:auto}
 .materials-graph-host[hidden],.material-graph-modes>[hidden],.materials-fields[hidden]{display:none!important}
 .material-dependency-view,.material-quick-view{padding:12px}
+.material-texture-reference{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.material-texture-reference code{min-width:0;overflow-wrap:anywhere;user-select:text}
 .material-dependency-canvas{height:420px;display:flex;flex-direction:column}
 .material-dependency-view .au-row>.au-button,.material-quick-view .au-row>.au-button{flex:0 1 auto}
 
