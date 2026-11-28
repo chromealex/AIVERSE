@@ -30,6 +30,12 @@
 #include <chrono>
 
 namespace {
+// Temporary fixture cleanup is best effort: on Windows a session that is still
+// alive in the same scope keeps its SQLite catalog and journal lock open.
+void removeFixtureRoot(const std::filesystem::path& root) {
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
 // Fixture text participates in byte-exact conflict and history checks on every OS.
 // Never let the host CRT rewrite newline bytes while preparing test input.
 std::ofstream fixtureFile(const std::filesystem::path& path,
@@ -162,7 +168,7 @@ void mapHistoryPersistenceContract(){
     AIVERSE_TEST_CHECK(authored.save(authoredFile,&error));
     MapDoc authoredReopen;AIVERSE_TEST_CHECK(authoredReopen.load(authoredFile,&error)&&authoredReopen.canUndo());
     authoredReopen.undo();AIVERSE_TEST_CHECK(authoredReopen.data.worldSpace&&authoredReopen.data.extra["custom"].getInt("value")==7);
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void projectFileEditContract(){
     using namespace aiverse::editor;namespace fs=std::filesystem;
@@ -183,7 +189,7 @@ void projectFileEditContract(){
     fixtureFile(b)<<"external B";
     refused=false;try{applyProjectFileEdits(root,{{a,"before A","after A"},{b,"before B","before B"}});}catch(const std::exception&){refused=true;}
     AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A");
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void projectDocumentJournalContract(){
     using namespace aiverse::editor;namespace fs=std::filesystem;
@@ -238,7 +244,7 @@ void projectDocumentJournalContract(){
     AIVERSE_TEST_CHECK(readProjectFileBytes(a)==beforeA&&readProjectFileBytes(b)==beforeB);
     ProjectHistory other;
     AIVERSE_TEST_CHECK(project.documentHistory.versionToken()!=other.versionToken());
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void projectOwnerSaveContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
@@ -281,7 +287,7 @@ void projectOwnerSaveContract(){
     script.set("path",Json::string("scripts/view/hud.lua"));
     AIVERSE_TEST_CHECK(!ws.call("script_write",script).has("error"));
     AIVERSE_TEST_CHECK(ws.project.rulesJson["viewScripts"][0].str()=="scripts/view/hud.lua");
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void projectHistoryContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
@@ -350,7 +356,7 @@ void projectHistoryContract(){
     AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("historyVersion")==result["result"].getStr("version"));
     AIVERSE_TEST_CHECK(result["result"].getStr("version")!=hs.getStr("version"));
     AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["tree"]["health"]["max"].integer()==200);
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void projectHistoryPersistenceContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
@@ -408,7 +414,7 @@ void projectHistoryPersistenceContract(){
         AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==beforeManifest&&readProjectFileBytes(checkpoint)==beforeCheckpoint);
         AIVERSE_TEST_CHECK(ws.project.historyStatus().getBool("canUndo"));
     }
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void assetHistorySessionContract(){
     using namespace aiverse;namespace fs=std::filesystem;
@@ -442,7 +448,7 @@ void assetHistorySessionContract(){
     req.find("params")->set("expectedVersion",Json::string(restored.getStr("version")));
     AIVERSE_TEST_CHECK(!session.dispatch(req).has("error"));
     AIVERSE_TEST_CHECK(Json::parseFile((root/"content"/"Texture.png.meta").string())["settings"].getStr("compression")=="high");
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void agentScopedHistoryContract(){
     using namespace aiverse;namespace fs=std::filesystem;
@@ -666,7 +672,7 @@ void agentScopedHistoryContract(){
 
     client.close();session.openProject(root.string());
     AIVERSE_TEST_CHECK(step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void projectHistoryBudgetContract(){
     using namespace aiverse::editor;
@@ -765,7 +771,7 @@ void projectFileRecoveryWorkflow() {
         AIVERSE_TEST_CHECK(fs::exists(original) && !fs::exists(moved));
         AIVERSE_TEST_CHECK(!fs::exists(project/".aiverse-cache"/"studio-move-journal"));
     }
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void planetWorldProcessAuthoringWorkflow(){
     using namespace aiverse;namespace fs=std::filesystem;
@@ -868,7 +874,7 @@ void planetWorldProcessAuthoringWorkflow(){
     AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"MorphNode","key":"gravityRelative","value":false})").has("error"));
     AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].extra["components"]["MorphNode"].has("gravityImpulseMilli"));
     AIVERSE_TEST_CHECK(call("studio.worldProcessAreaBatchMove",R"({"entityIds":["entity:@region"],"axis":"x","deltaCm":100})").has("error"));
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 
 void caveGraphCaptureWorkflow() {
@@ -947,7 +953,7 @@ void caveGraphCaptureWorkflow() {
         AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
         AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",beforeReopen).has("error"));
     }
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 void authoredEntityWorkflow() {
    using namespace aiverse;namespace fs=std::filesystem;
@@ -2128,7 +2134,7 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(doc.data.roads.size()==1 && doc.data.entities[size_t(doc.data.roads[0].first)].id==a &&
                           doc.data.entities[size_t(doc.data.roads[0].second)].id==b);
    }
-   fs::remove_all(root);
+   removeFixtureRoot(root);
 }
 void entityWorkflow() {
     using namespace aiverse;
@@ -2581,7 +2587,7 @@ void entityWorkflow() {
         AIVERSE_TEST_CHECK(session.workspace().map.toJson()==restored);
 
     }
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 }
 
@@ -2678,7 +2684,7 @@ static void worldSceneInspectorProperties() {
         AIVERSE_TEST_CHECK(call("studio.setProperties",oriented).has("error")&&session.workspace().map.toJson()==expectedPose);
         AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
     }
-    fs::remove_all(root);
+    removeFixtureRoot(root);
 }
 
 static void actorProjectMapSelection() {
