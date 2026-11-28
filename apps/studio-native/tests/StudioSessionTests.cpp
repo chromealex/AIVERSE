@@ -2639,7 +2639,7 @@ static void worldSceneInspectorProperties() {
         for(const char* method:{"studio.redo","studio.save"}){
             const auto reply=call(method);
             // Print the owner's message: the Windows runner exposes only stdout.
-            if(reply.has("error"))std::printf("%s failed: %s\n",method,reply["error"].dump().c_str());
+            if(reply.has("error")){std::printf("%s failed: %s\n",method,reply["error"].dump().c_str());std::fflush(stdout);}
             AIVERSE_TEST_CHECK(!reply.has("error"));
         }
         editor::MapDoc disk;std::string error;Json expected=original;expected.set("name",Json::string("Harbor terminal"));
